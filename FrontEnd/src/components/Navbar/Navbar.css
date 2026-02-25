@@ -1,0 +1,210 @@
+/* Navbar styling (inspired by the vtgc.net header) */
+
+.navbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--nav-height);
+  z-index: 1000;
+
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: saturate(180%) blur(10px);
+
+  transform: translateY(0);
+  transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+
+  /* Default: no line/shadow, so it blends into the page at the top. */
+  border-bottom: 2px solid transparent;
+  box-shadow: none;
+}
+
+.navbar--hidden {
+  transform: translateY(-110%);
+}
+
+/* When the user scrolls up and the bar is revealed, match the screenshot behavior:
+   gold line under the bar + a subtle drop shadow. */
+.navbar--pinned {
+  border-bottom-color: var(--gold);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Top-of-page state: blend into content (no shadow/line). */
+.navbar--top {
+  border-bottom-color: transparent;
+  box-shadow: none;
+}
+
+.navbar__inner {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.navbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.navbar__logo {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+}
+
+.navbar__title {
+  font-family: var(--font-smallcaps);
+  color: var(--deep-purple);
+  font-size: 18px;
+  line-height: 1.05;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.navbar__links {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  margin: 0;
+}
+
+.navbar__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 14px;
+
+  font-family: var(--font-smallcaps);
+  font-size: 20px;
+  color: var(--deep-purple);
+
+  transition: color 150ms ease;
+}
+
+.navbar__link:hover {
+  color: var(--gold);
+}
+
+.navbar__link--active {
+  position: relative;
+}
+
+.navbar__link--active::after {
+  content: '';
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 6px;
+  height: 2px;
+  background: var(--gold);
+}
+
+/* Mobile */
+.navbar__hamburger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--deep-purple);
+  cursor: pointer;
+}
+
+.navbar__hamburger:focus-visible {
+  outline: 3px solid rgba(198, 162, 74, 0.45);
+  outline-offset: 2px;
+}
+
+@media (max-width: 900px) {
+  .navbar__links {
+    display: none;
+  }
+
+  .navbar__hamburger {
+    display: inline-flex;
+  }
+
+  .navbar__title {
+    font-size: 16px;
+  }
+}
+
+/* Mobile drawer */
+.navbar__mobile {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+}
+
+.navbar__mobileOverlay {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.navbar__mobilePanel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: min(360px, 88vw);
+  background: #fff;
+  box-shadow: var(--shadow-md);
+  display: flex;
+  flex-direction: column;
+}
+
+.navbar__mobileHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  border-bottom: 1px solid #e7e7e7;
+}
+
+.navbar__mobileTitle {
+  font-family: var(--font-display);
+  font-size: 18px;
+  color: var(--deep-purple);
+}
+
+.navbar__mobileClose {
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  color: var(--deep-purple);
+}
+
+.navbar__mobileLinks {
+  list-style: none;
+  padding: 12px;
+  margin: 0;
+}
+
+.navbar__mobileLink {
+  display: block;
+  padding: 12px 12px;
+  border-radius: 8px;
+
+  font-family: var(--font-smallcaps);
+  font-size: 20px;
+  color: var(--deep-purple);
+}
+
+.navbar__mobileLink:hover {
+  background: rgba(42, 24, 70, 0.06);
+}
+
+.navbar__mobileLink--active {
+  color: var(--gold);
+}
