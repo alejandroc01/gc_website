@@ -22,6 +22,11 @@ export default function PlaceholderPage({ title }) {
           This page is a placeholder. The route is already wired up — you can now build the real content
           and keep the navbar/buttons working without changing your links.
         </p>
+        {title === 'Composites' && (
+          <p style={{ marginTop: 12, color: 'var(--muted)' }}>
+            Link to a demo member page: <a href="/member">/member</a>
+          </p>
+        )}
       </div>
     </section>
   );

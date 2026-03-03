@@ -1,33 +1,33 @@
-import { Link } from 'react-router-dom';
-import './ActionCards.css';
+import { Link } from "react-router-dom";
+import "./ActionCards.css";
 
 const CARDS = [
   {
-    key: 'composites',
-    imageSrc: '/images/2025.jpeg',
-    imageAlt: 'Composites preview',
-    title: 'Composites',
-    description: 'Browse class composites by year and view member details.',
-    buttonText: 'View Composites',
-    to: '/composites',
+    key: "composites",
+    imageSrc: "/images/2025.jpeg",
+    imageAlt: "Composites preview",
+    title: "Composites",
+    description: "Browse class composites by year and view member details.",
+    buttonText: "View Composites",
+    to: "/composites",
   },
   {
-    key: 'scrapbooks',
-    imageSrc: '/images/1983ScrapB-P26.jpg',
-    imageAlt: 'Scrapbooks preview',
-    title: 'Scrapbooks',
-    description: 'Flip through scrapbook pages and open scanned photos.',
-    buttonText: 'Open Scrapbooks',
-    to: '/scrapbooks',
+    key: "scrapbooks",
+    imageSrc: "/images/1983ScrapB-P26.jpg",
+    imageAlt: "Scrapbooks preview",
+    title: "Scrapbooks",
+    description: "Flip through scrapbook pages and open scanned photos.",
+    buttonText: "Open Scrapbooks",
+    to: "/scrapbooks",
   },
   {
-    key: 'oral-histories',
-    imageSrc: '/images/doug_oral_history_thumbnail.png',
-    imageAlt: 'Oral histories preview',
-    title: 'Oral Histories',
-    description: 'Watch alumni interviews and themed video clips.',
-    buttonText: 'Watch Oral Histories',
-    to: '/oral-histories',
+    key: "oral-histories",
+    imageSrc: "/images/doug_oral_history_thumbnail.png",
+    imageAlt: "Oral histories preview",
+    title: "Oral Histories",
+    description: "Watch alumni interviews and themed video clips.",
+    buttonText: "Watch Oral Histories",
+    to: "/oral-histories",
   },
 ];
 
@@ -43,20 +43,24 @@ export default function ActionCards() {
       <div className="container">
         <div className="actionCards__grid">
           {CARDS.map((card) => (
-            <article key={card.key} className="actionCard">
-              <img className="actionCard__image" src={card.imageSrc} alt={card.imageAlt} />
-
-              <div className="actionCard__body">
-                <h2 className="actionCard__title">{card.title}</h2>
-                <p className="actionCard__description">{card.description}</p>
-
-                <div className="actionCard__buttonRow">
-                  <Link className="button actionCard__button" to={card.to}>
-                    {card.buttonText}
-                  </Link>
+            <a href={card.to} style={{ cursor: "default" }}>
+              <article key={card.key} className="actionCard">
+                <img
+                  className="actionCard__image"
+                  src={card.imageSrc}
+                  alt={card.imageAlt}
+                />
+                <div className="actionCard__body">
+                  <h2 className="actionCard__title">{card.title}</h2>
+                  <p className="actionCard__description">{card.description}</p>
+                  <div className="actionCard__buttonRow">
+                    <Link className="button actionCard__button" to={card.to}>
+                      {card.buttonText}
+                    </Link>
+                  </div>
                 </div>
-              </div>
-            </article>
+              </article>
+            </a>
           ))}
         </div>
       </div>

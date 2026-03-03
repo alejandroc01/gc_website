@@ -6,6 +6,7 @@ import ScrollToTop from './components/ScrollToTop.jsx';
 
 import HomePage from './pages/HomePage.jsx';
 import PlaceholderPage from './pages/PlaceholderPage.jsx';
+import MemberPage from './pages/MemberPage.jsx';
 
 /**
  * App
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/scrapbooks" element={<PlaceholderPage title="Scrapbooks" />} />
           <Route path="/oral-histories" element={<PlaceholderPage title="Oral Histories" />} />
           <Route path="/search" element={<PlaceholderPage title="Search" />} />
+          <Route path="/member" element={<MemberPage title="Member" />} />
 
           {/* Fallback */}
           <Route path="*" element={<PlaceholderPage title="Page Not Found" />} />

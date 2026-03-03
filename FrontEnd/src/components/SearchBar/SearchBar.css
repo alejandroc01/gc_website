@@ -43,3 +43,61 @@
   border-color: rgba(42, 24, 70, 0.5);
   box-shadow: 0 0 0 4px rgba(198, 162, 74, 0.25);
 }
+
+.search__dropdown {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% - 1px);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-top: none;
+  box-shadow: var(--shadow-md);
+  z-index: 2;
+}
+
+.search__list {
+  list-style: none;
+  margin: 0;
+  padding: 6px;
+}
+
+.search__item + .search__item {
+  margin-top: 2px;
+}
+
+.search__item button {
+  width: 100%;
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+
+.search__item button:hover,
+.search__item button:focus-visible {
+  background: var(--surface-muted);
+  outline: none;
+}
+
+.search__itemName {
+  font-weight: 600;
+  color: #111;
+}
+
+.search__itemMeta {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.search__empty {
+  margin: 0;
+  padding: 12px;
+  color: var(--muted);
+  font-size: 14px;
+}

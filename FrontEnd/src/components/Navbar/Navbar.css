@@ -38,10 +38,12 @@
 
 .navbar__inner {
   height: 100%;
+  max-width: 98vw !important;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 16px;
+  margin: 0 1.2vw !important;
 }
 
 .navbar__brand {
@@ -52,15 +54,15 @@
 }
 
 .navbar__logo {
-  width: 44px;
-  height: 44px;
+  width: 4vw;
+  height: 4vw;
   object-fit: contain;
 }
 
 .navbar__title {
   font-family: var(--font-smallcaps);
   color: var(--deep-purple);
-  font-size: 18px;
+  font-size: 1.5rem;
   line-height: 1.05;
   letter-spacing: 0.02em;
   white-space: nowrap;
@@ -82,7 +84,7 @@
   padding: 10px 14px;
 
   font-family: var(--font-smallcaps);
-  font-size: 20px;
+  font-size: 1.5rem;
   color: var(--deep-purple);
 
   transition: color 150ms ease;
