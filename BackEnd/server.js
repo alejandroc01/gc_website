@@ -1,21 +1,24 @@
 // Starter js file that handles imports and starts the server
 
-//import express framework and mysql communciation package
+// Import express framework and mysql communication package
 const express = require("express");
-const mysql = require("mysql");
+const mysql = require("mysql2");
 
-//Create express app instance
+// Create express app instance
 const app = express();
 
-// parse incoming JSON requests
+// Parse incoming JSON requests
 app.use(express.json());
 
-//Test route for now
+// Test route for now
 app.get("/api/test", (req, res) => {
     res.json({ message: "Hello from the server!" });
 });
 
-//Start server on port 3000
-app.listen(3000, () => {
-    console.log("Server is running on port 3000");
+// Use environment variable or default to 3000
+const PORT = process.env.PORT || 3000;
+
+// Start server
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });
