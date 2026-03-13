@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom'
-import './ActionCards.css'
+import { Link } from 'react-router-dom';
+import './ActionCards.css';
 
 const CARDS = [
   {
@@ -9,7 +9,7 @@ const CARDS = [
     title: 'Composites',
     description: 'Browse class composites by year and view member details.',
     buttonText: 'View Composites',
-    to: '/composites'
+    to: '/composites',
   },
   {
     key: 'scrapbooks',
@@ -18,7 +18,7 @@ const CARDS = [
     title: 'Scrapbooks',
     description: 'Flip through scrapbook pages and open scanned photos.',
     buttonText: 'Open Scrapbooks',
-    to: '/scrapbooks'
+    to: '/scrapbooks',
   },
   {
     key: 'oral-histories',
@@ -27,9 +27,9 @@ const CARDS = [
     title: 'Oral Histories',
     description: 'Watch alumni interviews and themed video clips.',
     buttonText: 'Watch Oral Histories',
-    to: '/oral-histories'
-  }
-]
+    to: '/oral-histories',
+  },
+];
 
 /**
  * ActionCards
@@ -37,24 +37,28 @@ const CARDS = [
  * A 3-card grid using a "news card" style (image, title, description, button).
  * Buttons use client-side navigation (react-router) so hooking up future pages is easy.
  */
-export default function ActionCards () {
+export default function ActionCards({ cards = CARDS, ariaLabel = 'Main actions' }) {
+  const gridClassName = ['actionCards__grid', cards.length === 1 ? 'actionCards__grid--single' : '']
+    .filter(Boolean)
+    .join(' ');
+
   return (
-    <section className='actionCards section' aria-label='Main actions'>
-      <div className='container'>
-        <div className='actionCards__grid'>
-          {CARDS.map(card => (
-            <article key={card.key} className='actionCard'>
+    <section className="actionCards section" aria-label={ariaLabel}>
+      <div className="container">
+        <div className={gridClassName}>
+          {cards.map((card) => (
+            <article key={card.key} className="actionCard">
               <img
-                className='actionCard__image'
+                className="actionCard__image"
                 src={card.imageSrc}
                 alt={card.imageAlt}
               />
-              <div className='actionCard__body'>
-                <h2 className='actionCard__title'>{card.title}</h2>
-                <p className='actionCard__description'>{card.description}</p>
+              <div className="actionCard__body">
+                <h2 className="actionCard__title">{card.title}</h2>
+                <p className="actionCard__description">{card.description}</p>
 
-                <div className='actionCard__buttonRow'>
-                  <Link className='button actionCard__button' to={card.to}>
+                <div className="actionCard__buttonRow">
+                  <Link className="button actionCard__button" to={card.to}>
                     {card.buttonText}
                   </Link>
                 </div>
@@ -64,5 +68,5 @@ export default function ActionCards () {
         </div>
       </div>
     </section>
-  )
+  );
 }

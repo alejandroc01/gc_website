@@ -8,6 +8,11 @@
   gap: 24px;
 }
 
+.actionCards__grid--single {
+  grid-template-columns: minmax(280px, 420px);
+  justify-content: center;
+}
+
 .actionCard {
   display: flex;
   flex-direction: column;
