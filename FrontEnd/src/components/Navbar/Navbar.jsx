@@ -9,6 +9,7 @@ const NAV_ITEMS = [
   { label: 'Scrapbooks', to: '/scrapbooks' },
   { label: 'Oral Histories', to: '/oral-histories' },
   { label: 'Search', to: '/search' },
+  { label: 'Upload', to: '/upload' },
 ];
 
 /**

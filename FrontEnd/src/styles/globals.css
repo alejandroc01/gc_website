@@ -27,7 +27,7 @@
   /* Layout */
   --container-max: 1455px;
   --container-pad: 24px;
-  --nav-height: 104px;
+  --nav-height: 80px;
 
   /* Effects */
   --shadow-sm: 0 2px 10px rgba(0, 0, 0, 0.08);

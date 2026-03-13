@@ -38,12 +38,14 @@
 
 .navbar__inner {
   height: 100%;
-  max-width: 98vw !important;
+  /*max-width: 98vw !important;
+  undid b/c the navbar on the original does not stretch to the edge */
   display: flex;
   align-items: center;
   justify-content: space-between;
+  /*margin: 0 1.2vw !important;
+  undid b/c the navbar on the original does not stretch to the edge */
   gap: 16px;
-  margin: 0 1.2vw !important;
 }
 
 .navbar__brand {
@@ -54,18 +56,28 @@
 }
 
 .navbar__logo {
-  width: 4vw;
-  height: 4vw;
+  width: 58px;
+  height: 58px;
   object-fit: contain;
 }
 
 .navbar__title {
-  font-family: var(--font-smallcaps);
+  display: none;
+  font-family: var(--font-display);
   color: var(--deep-purple);
-  font-size: 1.5rem;
-  line-height: 1.05;
-  letter-spacing: 0.02em;
+  font-size: 1.125rem;
+  font-weight: 1000;
+  font-variant: bold;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-transform: none;
   white-space: nowrap;
+}
+
+@media (min-width: 640px) {
+  .navbar__title {
+    display: block;
+  }
 }
 
 .navbar__links {
@@ -84,7 +96,7 @@
   padding: 10px 14px;
 
   font-family: var(--font-smallcaps);
-  font-size: 1.5rem;
+  font-size: 18px;
   color: var(--deep-purple);
 
   transition: color 150ms ease;
@@ -132,10 +144,6 @@
 
   .navbar__hamburger {
     display: inline-flex;
-  }
-
-  .navbar__title {
-    font-size: 16px;
   }
 }
 
