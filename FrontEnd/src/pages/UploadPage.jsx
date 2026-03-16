@@ -1,4 +1,6 @@
 import ActionCards from '../components/ActionCards/ActionCards.jsx';
+import ProfileImportPanel from '../components/ProfileImportPanel/ProfileImportPanel.jsx';
+import '../styles/composites.css';
 
 const UPLOAD_CARDS = [
   {
@@ -29,6 +31,10 @@ export default function UploadPage() {
           <p style={{ margin: 0, color: 'var(--muted)', maxWidth: 720 }}>
             Choose an archive type below to begin adding new materials.
           </p>
+
+          <div style={{ marginTop: '28px' }}>
+            <ProfileImportPanel />
+          </div>
         </div>
       </section>
 

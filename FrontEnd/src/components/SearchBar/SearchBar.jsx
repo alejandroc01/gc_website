@@ -1,39 +1,42 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { getProfiles } from '../../api/composites.js';
 import './SearchBar.css';
 
-const DUMMY_RECORDS = [
-  { name: 'Michael Krause', city: 'Richmond', state: 'VA' },
-  { name: 'Alex Fischer', city: 'Richmond', state: 'VA' },
-  { name: 'Rachel Nguyen', city: 'Norfolk', state: 'VA' },
-  { name: 'Sarah Ellis', city: 'Charlotte', state: 'NC' },
-  { name: 'Jordan Kim', city: 'Washington', state: 'DC' },
-  { name: 'Marcus Lopez', city: 'Roanoke', state: 'VA' },
-  { name: 'Emily Chen', city: 'Atlanta', state: 'GA' },
-  { name: 'Tyler Brooks', city: 'Chicago', state: 'IL' },
-  { name: 'Priya Patel', city: 'Blacksburg', state: 'VA' },
-  { name: 'Hannah Ward', city: 'Charleston', state: 'SC' },
-  { name: 'James Nolan', city: 'Philadelphia', state: 'PA' },
-];
-
-/**
- * SearchBar
- *
- * Simple autocomplete using a dummy list of names/cities/states.
- *
- * Requirements:
- * - Centered full-width search input
- * - Placeholder text exactly: "Search by name, city, or state...."
- * - Small search icon inside the input on the left
- * - Not rounded
- * - Nice focus ring
- */
 export default function SearchBar() {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const [profiles, setProfiles] = useState([]);
+  const [loadError, setLoadError] = useState('');
   const blurTimer = useRef(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadProfiles = async () => {
+      try {
+        const profileResults = await getProfiles();
+
+        if (!isActive) {
+          return;
+        }
+
+        setProfiles(Array.isArray(profileResults) ? profileResults : []);
+      } catch (error) {
+        if (isActive) {
+          setLoadError(error.message);
+        }
+      }
+    };
+
+    loadProfiles();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   const clearBlurTimer = () => {
     if (blurTimer.current) {
@@ -44,12 +47,25 @@ export default function SearchBar() {
 
   const results = useMemo(() => {
     const value = query.trim().toLowerCase();
-    if (!value) return [];
 
-    return DUMMY_RECORDS.filter(({ name, city, state }) =>
-      [name, city, state].some((field) => field.toLowerCase().includes(value)),
-    );
-  }, [query]);
+    if (!value) {
+      return [];
+    }
+
+    return profiles
+      .filter((profile) => (
+        [
+          profile.displayName,
+          profile.firstName,
+          profile.lastName,
+          profile.preferredName,
+          profile.city,
+          profile.stateProvince,
+          profile.graduationYear ? String(profile.graduationYear) : '',
+        ].some((field) => String(field || '').toLowerCase().includes(value))
+      ))
+      .slice(0, 12);
+  }, [profiles, query]);
 
   const handleFocus = () => {
     clearBlurTimer();
@@ -60,11 +76,11 @@ export default function SearchBar() {
     blurTimer.current = setTimeout(() => setOpen(false), 120);
   };
 
-  const handleSelect = (record) => {
+  const handleSelect = (profile) => {
     clearBlurTimer();
-    setQuery(`${record.name} — ${record.city}, ${record.state}`);
+    setQuery(profile.displayName);
     setOpen(false);
-    setTimeout(() => navigate('/member'), 100); // Small delay to allow click event to finish before navigating
+    setTimeout(() => navigate(`/member/${profile.id}`), 100);
   };
 
   return (
@@ -75,7 +91,7 @@ export default function SearchBar() {
             Search
           </label>
 
-          <form className="search__inputWrap" onSubmit={(e) => e.preventDefault()} role="search">
+          <form className="search__inputWrap" onSubmit={(event) => event.preventDefault()} role="search">
             <svg
               className="search__icon"
               width="18"
@@ -99,26 +115,26 @@ export default function SearchBar() {
               placeholder="Search by name, city, or state...."
               autoComplete="off"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(event) => setQuery(event.target.value)}
               onFocus={handleFocus}
               onBlur={handleBlur}
             />
 
             {open && (
               <div className="search__dropdown" role="listbox" aria-label="Search suggestions">
-                {query.trim().length === 0 ? (
+                {loadError ? (
+                  <p className="search__empty">{loadError}</p>
+                ) : query.trim().length === 0 ? (
                   <p className="search__empty">Start typing to see matches.</p>
                 ) : results.length === 0 ? (
                   <p className="search__empty">No matching results.</p>
                 ) : (
                   <ul className="search__list">
-                    {results.map((record) => (
-                      <li key={`${record.name}-${record.city}`} className="search__item">
-                        <button type="button" onMouseDown={() => handleSelect(record)}>
-                          <span className="search__itemName">{record.name}</span>
-                          <span className="search__itemMeta">
-                            {record.city}, {record.state}
-                          </span>
+                    {results.map((profile) => (
+                      <li key={profile.id} className="search__item">
+                        <button type="button" onMouseDown={() => handleSelect(profile)}>
+                          <span className="search__itemName">{profile.displayName}</span>
+                          <span className="search__itemMeta">{buildSearchMeta(profile)}</span>
                         </button>
                       </li>
                     ))}
@@ -131,4 +147,22 @@ export default function SearchBar() {
       </div>
     </section>
   );
+}
+
+function buildSearchMeta(profile) {
+  const location = [profile.city, profile.stateProvince].filter(Boolean).join(', ');
+
+  if (location && profile.graduationYear) {
+    return `${location} | Class of ${profile.graduationYear}`;
+  }
+
+  if (location) {
+    return location;
+  }
+
+  if (profile.graduationYear) {
+    return `Class of ${profile.graduationYear}`;
+  }
+
+  return 'Member profile';
 }

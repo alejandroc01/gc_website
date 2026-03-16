@@ -25,6 +25,19 @@
   display: block;
 }
 
+.member__photo--composite {
+  position: relative;
+  overflow: hidden;
+  min-height: 360px;
+  background: #fff;
+}
+
+.member__compositeImage {
+  position: absolute;
+  display: block;
+  max-width: none;
+}
+
 .member__tag {
   position: absolute;
   top: 12px;
@@ -35,6 +48,7 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
   padding: 6px 10px;
+  z-index: 1;
 }
 
 .member__body {
@@ -127,6 +141,13 @@
   margin: 0 0 18px;
   color: var(--text);
   line-height: 1.7;
+}
+
+.member__photoNote {
+  margin: 12px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+  font-size: 14px;
 }
 
 .member__highlights {
@@ -229,6 +250,13 @@
   margin: 0;
   color: var(--muted);
   line-height: 1.4;
+}
+
+.member__emptyState {
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  padding: 28px;
 }
 
 @media (max-width: 960px) {

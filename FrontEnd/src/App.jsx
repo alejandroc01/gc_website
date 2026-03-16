@@ -8,6 +8,8 @@ import HomePage from './pages/HomePage.jsx';
 import PlaceholderPage from './pages/PlaceholderPage.jsx';
 import MemberPage from './pages/MemberPage.jsx';
 import UploadPage from './pages/UploadPage.jsx';
+import CompositeUploadPage from './pages/CompositeUploadPage.jsx';
+import CompositeEditorPage from './pages/CompositeEditorPage.jsx';
 
 /**
  * App
@@ -31,8 +33,10 @@ export default function App() {
           <Route path="/oral-histories" element={<PlaceholderPage title="Oral Histories" />} />
           <Route path="/search" element={<PlaceholderPage title="Search" />} />
           <Route path="/upload" element={<UploadPage />} />
-          <Route path="/upload/composites" element={<PlaceholderPage title="Composite Upload" />} />
-          <Route path="/member" element={<MemberPage title="Member" />} />
+          <Route path="/upload/composites" element={<CompositeUploadPage />} />
+          <Route path="/upload/composites/:compositeId" element={<CompositeEditorPage />} />
+          <Route path="/member" element={<MemberPage />} />
+          <Route path="/member/:profileId" element={<MemberPage />} />
 
           {/* Fallback */}
           <Route path="*" element={<PlaceholderPage title="Page Not Found" />} />

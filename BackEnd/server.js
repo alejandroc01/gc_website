@@ -1,24 +1,50 @@
-// Starter js file that handles imports and starts the server
-
-// Import express framework and mysql communication package
 const express = require("express");
-const mysql = require("mysql2");
+const cors = require("cors");
+const path = require("path");
 
-// Create express app instance
+const compositeRoutes = require("./routes/composites");
+const profileRoutes = require("./routes/profiles");
+const { ensureCompositeStore } = require("./utils/compositeStore");
+const { ensureProfileStore } = require("./utils/profileStore");
+const { ensureCompositeUploadsDirectory } = require("./utils/uploadConfig");
+
 const app = express();
 
-// Parse incoming JSON requests
-app.use(express.json());
+app.use(cors());
+app.use(express.json({ limit: "2mb" }));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
-// Test route for now
-app.get("/api/test", (req, res) => {
-    res.json({ message: "Hello from the server!" });
+app.get("/api/test", (_req, res) => {
+    res.json({ message: "Hello from the composite archive server!" });
 });
 
-// Use environment variable or default to 3000
+app.use("/api/profiles", profileRoutes);
+app.use("/api/composites", compositeRoutes);
+
+app.use((error, _req, res, _next) => {
+    if (error && error.type === "entity.parse.failed") {
+        return res.status(400).json({ error: "Invalid JSON request body." });
+    }
+
+    const statusCode = error.statusCode || error.status || 500;
+    const message = error.message || "Unexpected server error.";
+
+    if (statusCode >= 500) {
+        console.error(error);
+    }
+
+    return res.status(statusCode).json({ error: message });
+});
+
 const PORT = process.env.PORT || 3000;
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+Promise.all([ensureCompositeStore(), ensureCompositeUploadsDirectory(), ensureProfileStore()])
+    .then(() => {
+        app.listen(PORT, () => {
+            console.log(`Server is running on port ${PORT}`);
+        });
+    })
+    .catch((error) => {
+        console.error("Failed to initialize composite archive storage:", error);
+        process.exit(1);
+    });

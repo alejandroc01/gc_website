@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 480 640">
+  <defs>
+    <linearGradient id="plank-bg" x1="0%" x2="100%" y1="0%" y2="100%">
+      <stop offset="0%" stop-color="#ead8b1"/>
+      <stop offset="50%" stop-color="#cda46f"/>
+      <stop offset="100%" stop-color="#8f653f"/>
+    </linearGradient>
+  </defs>
+  <rect width="480" height="640" fill="url(#plank-bg)"/>
+  <rect x="26" y="26" width="428" height="588" rx="14" fill="none" stroke="#5d3f22" stroke-width="12"/>
+  <path d="M44 134h392M44 250h392M44 372h392M44 500h392" stroke="#7a5634" stroke-opacity="0.24" stroke-width="10"/>
+  <text x="240" y="282" text-anchor="middle" font-family="Georgia, serif" font-size="54" fill="#3d2511" letter-spacing="7">VTGC</text>
+  <text x="240" y="342" text-anchor="middle" font-family="Arial, sans-serif" font-size="26" fill="#4e3117" letter-spacing="5">PORTRAIT PENDING</text>
+</svg>
