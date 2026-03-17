@@ -148,6 +148,12 @@ export default function AnnotationStage({
             annotationId: newAnnotationId,
             compositeId: currentComposite.compositeId,
             profileId: null,
+            source: 'manual',
+            detectedName: null,
+            matchedProfileId: null,
+            matchConfidence: null,
+            needsReview: false,
+            captionBox: null,
             x: nextAnnotationRect.x,
             y: nextAnnotationRect.y,
             width: nextAnnotationRect.width,
@@ -469,6 +475,8 @@ export default function AnnotationStage({
                     className={[
                       'annotationStage__box',
                       isSelected ? 'annotationStage__box--selected' : '',
+                      annotation.source === 'auto' ? 'annotationStage__box--auto' : '',
+                      annotation.needsReview ? 'annotationStage__box--review' : '',
                       annotation.profileId ? '' : 'annotationStage__box--unassigned',
                     ].filter(Boolean).join(' ')}
                     style={displayRect}

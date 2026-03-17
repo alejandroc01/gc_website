@@ -449,6 +449,15 @@
   background: rgba(244, 76, 76, 0.05);
 }
 
+.annotationStage__box--auto {
+  border-style: dashed;
+}
+
+.annotationStage__box--review {
+  border-color: rgba(223, 150, 48, 0.78);
+  background: rgba(223, 150, 48, 0.08);
+}
+
 .annotationStage__box--selected {
   border-color: rgba(126, 240, 255, 0.72);
   background: rgba(126, 240, 255, 0.08);
@@ -697,6 +706,14 @@
   transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
+.annotationList__item--auto {
+  border-color: rgba(38, 21, 56, 0.18);
+}
+
+.annotationList__item--review {
+  background: rgba(223, 150, 48, 0.06);
+}
+
 .annotationList__item:hover {
   border-color: rgba(38, 21, 56, 0.35);
   box-shadow: var(--shadow-sm);
@@ -708,15 +725,70 @@
   box-shadow: var(--shadow-sm);
 }
 
+.annotationList__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.annotationList__badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  border: 1px solid rgba(38, 21, 56, 0.12);
+  background: rgba(38, 21, 56, 0.05);
+  color: var(--deep-purple);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.annotationList__badge--auto {
+  background: rgba(38, 21, 56, 0.08);
+}
+
+.annotationList__badge--manual {
+  background: rgba(30, 111, 61, 0.08);
+  color: #1e6f3d;
+}
+
+.annotationList__badge--review {
+  background: rgba(223, 150, 48, 0.15);
+  color: #7a5600;
+  border-color: rgba(223, 150, 48, 0.22);
+}
+
 .annotationList__content {
   display: grid;
   grid-template-columns: 78px minmax(0, 1fr) 36px;
   gap: 12px;
-  align-items: center;
+  align-items: start;
 }
 
 .annotationList__main {
   min-width: 0;
+}
+
+.annotationList__helper {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.annotationList__suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.annotationList__suggestionButton {
+  min-height: 34px;
+  padding: 8px 12px;
+  font-size: 12px;
 }
 
 .annotationList__previewButton {

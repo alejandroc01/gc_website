@@ -5,6 +5,7 @@ import trashIcon from '../assets/icons/trash.svg';
 import AnnotationStage from '../components/Composite/AnnotationStage.jsx';
 import ProfileSearchSelect from '../components/Composite/ProfileSearchSelect.jsx';
 import {
+  autoDetectCompositeAnnotations,
   getComposite,
   getProfiles,
   saveCompositeAnnotations,
@@ -29,6 +30,9 @@ export default function CompositeEditorPage() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [saveStatus, setSaveStatus] = useState('idle');
   const [saveError, setSaveError] = useState('');
+  const [autoDetectStatus, setAutoDetectStatus] = useState('idle');
+  const [autoDetectMessage, setAutoDetectMessage] = useState('');
+  const [autoDetectError, setAutoDetectError] = useState('');
   const [pageError, setPageError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [annotationPanelHeight, setAnnotationPanelHeight] = useState(null);
@@ -72,6 +76,9 @@ export default function CompositeEditorPage() {
         currentSignatureRef.current = latestSavedSignatureRef.current;
         setSaveStatus('idle');
         setSaveError('');
+        setAutoDetectStatus('idle');
+        setAutoDetectMessage('');
+        setAutoDetectError('');
       } catch (error) {
         if (isActive) {
           setPageError(error.message);
@@ -272,6 +279,7 @@ export default function CompositeEditorPage() {
               {
                 ...annotation,
                 profileId,
+                needsReview: profileId ? false : annotation.source === 'auto' ? true : annotation.needsReview,
                 updatedAt: new Date().toISOString(),
               },
               composite,
@@ -359,6 +367,42 @@ export default function CompositeEditorPage() {
   const handleManualSave = async () => {
     window.clearTimeout(saveTimeoutRef.current);
     await persistAnnotations(annotations);
+  };
+
+  const handleAutoDetect = async () => {
+    if (!composite || autoDetectStatus === 'detecting') {
+      return;
+    }
+
+    const preservedAnnotations = annotations.filter((annotation) => annotation.source !== 'auto');
+
+    setAutoDetectStatus('detecting');
+    setAutoDetectMessage('');
+    setAutoDetectError('');
+
+    try {
+      const detectionResult = await autoDetectCompositeAnnotations(
+        composite.compositeId,
+        preservedAnnotations.map(toAnnotationPayload),
+      );
+      const detectedAnnotations = (detectionResult.detectedAnnotations || []).map((annotation) =>
+        syncAnnotationForDisplay(annotation, composite),
+      );
+      const mergedAnnotations = [...preservedAnnotations, ...detectedAnnotations];
+
+      setAnnotations(mergedAnnotations);
+      setLastBoxSize(getReusableBoxSize(mergedAnnotations, lastBoxSize));
+      setSelectedAnnotationId(detectedAnnotations[0]?.annotationId || preservedAnnotations[0]?.annotationId || null);
+      setAutoDetectStatus(detectedAnnotations.length > 0 ? 'done' : 'empty');
+      setAutoDetectMessage(
+        detectedAnnotations.length > 0
+          ? `Loaded ${detectedAnnotations.length} auto-detected portraits into the editor. Review the suggested names and profile matches before finalizing.`
+          : 'No likely portraits were detected for this composite.',
+      );
+    } catch (error) {
+      setAutoDetectStatus('error');
+      setAutoDetectError(error.message);
+    }
   };
 
   if (isLoading) {
@@ -450,6 +494,15 @@ export default function CompositeEditorPage() {
 
             <button
               type="button"
+              className="button compositeButton compositeButton--subtle"
+              onClick={handleAutoDetect}
+              disabled={autoDetectStatus === 'detecting'}
+            >
+              {autoDetectStatus === 'detecting' ? 'Detecting...' : 'Auto-detect portraits'}
+            </button>
+
+            <button
+              type="button"
               className="button compositeButton compositeButton--filled"
               onClick={handleManualSave}
             >
@@ -459,6 +512,15 @@ export default function CompositeEditorPage() {
         </header>
 
         {saveError ? <p className="compositeMessage compositeMessage--error">{saveError}</p> : null}
+        {autoDetectError ? <p className="compositeMessage compositeMessage--error">{autoDetectError}</p> : null}
+        {autoDetectMessage ? (
+          <p className={[
+            'compositeMessage',
+            autoDetectStatus === 'done' ? 'compositeMessage--success' : 'compositeMessage--warning',
+          ].join(' ')}>
+            {autoDetectMessage}
+          </p>
+        ) : null}
 
         <div className="compositeEditor__content">
           <article ref={canvasPanelRef} className="compositePanel compositePanel--canvas">
@@ -478,7 +540,11 @@ export default function CompositeEditorPage() {
               onAnnotationsChange={handleAnnotationListChange}
               onSelectAnnotation={handleSelectAnnotation}
               onLastBoxSizeChange={(nextSize) => setLastBoxSize(normalizeBoxSize(nextSize))}
-              resolveAnnotationLabel={(annotation) => profileMap.get(annotation.profileId)?.displayName || 'Unassigned'}
+              resolveAnnotationLabel={(annotation) => (
+                profileMap.get(annotation.profileId)?.displayName
+                || annotation.detectedName
+                || 'Unassigned'
+              )}
             />
           </article>
 
@@ -507,11 +573,29 @@ export default function CompositeEditorPage() {
                       }}
                       className={[
                         'annotationList__item',
+                        annotation.source === 'auto' ? 'annotationList__item--auto' : 'annotationList__item--manual',
+                        annotation.needsReview ? 'annotationList__item--review' : '',
                         annotation.annotationId === selectedAnnotationId ? 'annotationList__item--selected' : '',
                       ].filter(Boolean).join(' ')}
                       onPointerDown={() => handleSelectAnnotation(annotation.annotationId)}
                       onFocusCapture={() => handleSelectAnnotation(annotation.annotationId)}
                     >
+                      <div className="annotationList__meta">
+                        <span className={[
+                          'annotationList__badge',
+                          annotation.source === 'auto'
+                            ? 'annotationList__badge--auto'
+                            : 'annotationList__badge--manual',
+                        ].join(' ')}>
+                          {annotation.source === 'auto' ? 'Auto' : 'Manual'}
+                        </span>
+                        {annotation.needsReview ? (
+                          <span className="annotationList__badge annotationList__badge--review">
+                            Needs review
+                          </span>
+                        ) : null}
+                      </div>
+
                       <div className="annotationList__content">
                         <button
                           type="button"
@@ -536,10 +620,38 @@ export default function CompositeEditorPage() {
                             selectedProfileId={annotation.profileId}
                             onSelectProfile={(profileId) => handleProfileSelect(annotation.annotationId, profileId)}
                             inputId={`annotation-profile-${annotation.annotationId}`}
-                            placeholder="Assign profile"
+                            placeholder={
+                              annotation.detectedName
+                                ? `Search profiles for ${annotation.detectedName}`
+                                : 'Assign profile'
+                            }
                             hideLabel
                             invalid={!annotation.profileId}
                           />
+
+                          {annotation.detectedName ? (
+                            <p className="annotationList__helper">
+                              Detected name: <strong>{annotation.detectedName}</strong>
+                            </p>
+                          ) : null}
+
+                          {annotation.matchedProfileId && annotation.profileId !== annotation.matchedProfileId ? (
+                            <div className="annotationList__suggestion">
+                              <p className="annotationList__helper">
+                                Suggested profile: <strong>{profileMap.get(annotation.matchedProfileId)?.displayName || 'Unknown profile'}</strong>
+                                {annotation.matchConfidence
+                                  ? ` (${formatConfidence(annotation.matchConfidence)})`
+                                  : ''}
+                              </p>
+                              <button
+                                type="button"
+                                className="button compositeButton compositeButton--subtle annotationList__suggestionButton"
+                                onClick={() => handleProfileSelect(annotation.annotationId, annotation.matchedProfileId)}
+                              >
+                                Use suggestion
+                              </button>
+                            </div>
+                          ) : null}
 
                           {annotation.profileId && duplicateProfileIds.has(annotation.profileId) ? (
                             <p className="compositeMessage compositeMessage--warning">
@@ -615,6 +727,19 @@ function toAnnotationPayload(annotation) {
   return {
     annotationId: annotation.annotationId,
     profileId: annotation.profileId ?? null,
+    source: annotation.source === 'auto' ? 'auto' : 'manual',
+    detectedName: annotation.detectedName ?? null,
+    matchedProfileId: annotation.matchedProfileId ?? null,
+    matchConfidence: annotation.matchConfidence ?? null,
+    needsReview: Boolean(annotation.needsReview),
+    captionBox: annotation.captionBox
+      ? {
+          x: annotation.captionBox.x,
+          y: annotation.captionBox.y,
+          width: annotation.captionBox.width,
+          height: annotation.captionBox.height,
+        }
+      : null,
     x: annotation.x,
     y: annotation.y,
     width: annotation.width,
@@ -627,6 +752,19 @@ function createAnnotationSignature(annotations) {
     annotations.map((annotation) => ({
       annotationId: annotation.annotationId,
       profileId: annotation.profileId ?? null,
+      source: annotation.source === 'auto' ? 'auto' : 'manual',
+      detectedName: annotation.detectedName ?? null,
+      matchedProfileId: annotation.matchedProfileId ?? null,
+      matchConfidence: annotation.matchConfidence ?? null,
+      needsReview: Boolean(annotation.needsReview),
+      captionBox: annotation.captionBox
+        ? {
+            x: Math.round(annotation.captionBox.x),
+            y: Math.round(annotation.captionBox.y),
+            width: Math.round(annotation.captionBox.width),
+            height: Math.round(annotation.captionBox.height),
+          }
+        : null,
       x: Math.round(annotation.x),
       y: Math.round(annotation.y),
       width: Math.round(annotation.width),
@@ -711,4 +849,8 @@ function isEditableElement(target) {
     || tagName === 'textarea'
     || tagName === 'select'
   );
+}
+
+function formatConfidence(confidence) {
+  return `${Math.round(confidence * 100)}% match`;
 }

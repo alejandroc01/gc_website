@@ -77,6 +77,16 @@ export function saveCompositeAnnotations(compositeId, annotations) {
   });
 }
 
+export function autoDetectCompositeAnnotations(compositeId, existingAnnotations = []) {
+  return requestJson(`/api/composites/${compositeId}/auto-detect`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ existingAnnotations }),
+  });
+}
+
 export function deleteComposite(compositeId) {
   return requestJson(`/api/composites/${compositeId}`, {
     method: 'DELETE',

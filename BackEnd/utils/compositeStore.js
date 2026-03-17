@@ -226,11 +226,35 @@ function sanitizeAnnotation(annotation, composite, validProfileIds, existingAnno
         ? existingAnnotations.get(String(annotation.annotationId))
         : null;
     const now = new Date().toISOString();
+    const source = sanitizeAnnotationSource(annotation?.source || existingAnnotation?.source);
+    const detectedName = sanitizeDetectedName(annotation?.detectedName ?? existingAnnotation?.detectedName);
+    const matchedProfileId = sanitizeSuggestedProfileId(
+        annotation?.matchedProfileId ?? existingAnnotation?.matchedProfileId,
+        validProfileIds,
+    );
+    const matchConfidence = sanitizeMatchConfidence(
+        annotation?.matchConfidence ?? existingAnnotation?.matchConfidence,
+    );
+    const needsReview = Boolean(
+        annotation?.needsReview
+        ?? existingAnnotation?.needsReview
+        ?? (source === "auto"),
+    );
+    const captionBox = sanitizeCaptionBox(
+        annotation?.captionBox ?? existingAnnotation?.captionBox,
+        composite,
+    );
 
     return {
         annotationId: existingAnnotation?.annotationId || crypto.randomUUID(),
         compositeId: composite.compositeId,
         profileId,
+        source,
+        detectedName,
+        matchedProfileId,
+        matchConfidence,
+        needsReview,
+        captionBox,
         x: Math.round(clampedLeft),
         y: Math.round(clampedTop),
         width: pixelWidth,
@@ -241,6 +265,69 @@ function sanitizeAnnotation(annotation, composite, validProfileIds, existingAnno
         normalizedHeight: roundNormalized(pixelHeight / imageHeight),
         createdAt: existingAnnotation?.createdAt || now,
         updatedAt: now,
+    };
+}
+
+function sanitizeAnnotationSource(source) {
+    return String(source || "").toLowerCase() === "auto" ? "auto" : "manual";
+}
+
+function sanitizeDetectedName(value) {
+    const normalizedValue = String(value || "").trim();
+
+    return normalizedValue ? normalizedValue.slice(0, 120) : null;
+}
+
+function sanitizeSuggestedProfileId(profileId, validProfileIds) {
+    if (profileId === null || profileId === undefined || profileId === "") {
+        return null;
+    }
+
+    const normalizedProfileId = String(profileId);
+
+    return validProfileIds.has(normalizedProfileId) ? normalizedProfileId : null;
+}
+
+function sanitizeMatchConfidence(value) {
+    const numericValue = toFiniteNumber(value);
+
+    if (numericValue === null) {
+        return null;
+    }
+
+    return clamp(Number(numericValue.toFixed(3)), 0, 1);
+}
+
+function sanitizeCaptionBox(captionBox, composite) {
+    if (!captionBox || typeof captionBox !== "object") {
+        return null;
+    }
+
+    const imageWidth = Number(composite.imageWidth);
+    const imageHeight = Number(composite.imageHeight);
+    const x = toFiniteNumber(captionBox.x);
+    const y = toFiniteNumber(captionBox.y);
+    const width = toFiniteNumber(captionBox.width);
+    const height = toFiniteNumber(captionBox.height);
+
+    if ([imageWidth, imageHeight, x, y, width, height].some((value) => value === null)) {
+        return null;
+    }
+
+    const left = clamp(Math.round(x), 0, imageWidth);
+    const top = clamp(Math.round(y), 0, imageHeight);
+    const boxWidth = clamp(Math.round(width), 0, imageWidth - left);
+    const boxHeight = clamp(Math.round(height), 0, imageHeight - top);
+
+    if (boxWidth <= 0 || boxHeight <= 0) {
+        return null;
+    }
+
+    return {
+        x: left,
+        y: top,
+        width: boxWidth,
+        height: boxHeight,
     };
 }
 
