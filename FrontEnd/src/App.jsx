@@ -10,6 +10,7 @@ import MemberPage from './pages/MemberPage.jsx';
 import UploadPage from './pages/UploadPage.jsx';
 import CompositeUploadPage from './pages/CompositeUploadPage.jsx';
 import CompositeEditorPage from './pages/CompositeEditorPage.jsx';
+import ProfileUploadPage from './pages/ProfileUploadPage.jsx';
 
 /**
  * App
@@ -34,6 +35,7 @@ export default function App() {
           <Route path="/search" element={<PlaceholderPage title="Search" />} />
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/upload/composites" element={<CompositeUploadPage />} />
+          <Route path="/upload/profiles" element={<ProfileUploadPage />} />
           <Route path="/upload/composites/:compositeId" element={<CompositeEditorPage />} />
           <Route path="/member" element={<MemberPage />} />
           <Route path="/member/:profileId" element={<MemberPage />} />

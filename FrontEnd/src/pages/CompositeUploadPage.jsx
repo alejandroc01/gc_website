@@ -4,30 +4,22 @@ import { Link, useNavigate } from 'react-router-dom';
 import {
   deleteComposite as deleteCompositeRequest,
   getComposites,
-  getProfiles,
-  importProfilesCsv,
   uploadComposite,
 } from '../api/composites.js';
 import '../styles/composites.css';
 
 const acceptedTypes = '.jpg,.jpeg,.png,.webp';
-const acceptedCsvTypes = '.csv';
 
 export default function CompositeUploadPage() {
   const navigate = useNavigate();
   const [selectedFile, setSelectedFile] = useState(null);
-  const [selectedCsvFile, setSelectedCsvFile] = useState(null);
   const [compositeYear, setCompositeYear] = useState('');
   const [composites, setComposites] = useState([]);
-  const [profileCount, setProfileCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
-  const [isImportingProfiles, setIsImportingProfiles] = useState(false);
   const [deletingCompositeId, setDeletingCompositeId] = useState(null);
   const [listError, setListError] = useState('');
   const [uploadError, setUploadError] = useState('');
-  const [profileImportError, setProfileImportError] = useState('');
-  const [profileImportSummary, setProfileImportSummary] = useState('');
 
   useEffect(() => {
     let isActive = true;
@@ -37,17 +29,13 @@ export default function CompositeUploadPage() {
       setListError('');
 
       try {
-        const [compositeRecords, profiles] = await Promise.all([
-          getComposites(),
-          getProfiles(),
-        ]);
+        const compositeRecords = await getComposites();
 
         if (!isActive) {
           return;
         }
 
         setComposites(compositeRecords);
-        setProfileCount(Array.isArray(profiles) ? profiles.length : 0);
       } catch (error) {
         if (isActive) {
           setListError(error.message);
@@ -121,33 +109,6 @@ export default function CompositeUploadPage() {
     }
   };
 
-  const handleProfileImportSubmit = async (event) => {
-    event.preventDefault();
-
-    if (!selectedCsvFile) {
-      setProfileImportError('Choose the DA member CSV before importing.');
-      return;
-    }
-
-    setProfileImportError('');
-    setProfileImportSummary('');
-    setIsImportingProfiles(true);
-
-    try {
-      const importSummary = await importProfilesCsv(selectedCsvFile);
-
-      setProfileCount(importSummary.totalProfiles || profileCount);
-      setProfileImportSummary(
-        `Imported ${importSummary.importedCount} profiles, updated ${importSummary.updatedCount}, skipped ${importSummary.skippedCount}. Total profiles: ${importSummary.totalProfiles}.`,
-      );
-      setSelectedCsvFile(null);
-    } catch (error) {
-      setProfileImportError(error.message);
-    } finally {
-      setIsImportingProfiles(false);
-    }
-  };
-
   return (
     <section className="section compositeAdmin">
       <div className="container">
@@ -158,6 +119,12 @@ export default function CompositeUploadPage() {
             Upload a class composite, then annotate each portrait manually. The archive stores only the
             original image and portrait coordinates for licensing compliance.
           </p>
+        </div>
+
+        <div style={{ marginBottom: '24px' }}>
+          <Link className="button compositeButton" to="/upload">
+            Back to upload options
+          </Link>
         </div>
 
         <article className="compositePanel compositePanel--spacious">
@@ -222,66 +189,6 @@ export default function CompositeUploadPage() {
             </div>
 
             {uploadError ? <p className="compositeMessage compositeMessage--error">{uploadError}</p> : null}
-          </form>
-        </article>
-
-        <article className="compositePanel compositePanel--spacious">
-          <div className="compositePanel__header">
-            <div>
-              <h2 className="compositePanel__title">Import Member Profiles</h2>
-              <p className="compositePanel__description">
-                Upload the DA membership CSV to create or update backend member profiles. Imported
-                members start with the shared plank placeholder image until a composite annotation
-                links them to portrait coordinates.
-              </p>
-            </div>
-          </div>
-
-          <form className="compositeUploadForm" onSubmit={handleProfileImportSubmit}>
-            <div className="compositeUploadForm__grid compositeUploadForm__grid--single">
-              <label className="compositeField">
-                <span className="compositeField__label">Membership CSV</span>
-                <input
-                  className="compositeField__input compositeField__input--file"
-                  type="file"
-                  accept={acceptedCsvTypes}
-                  onChange={(event) => {
-                    setSelectedCsvFile(event.target.files?.[0] || null);
-                    setProfileImportError('');
-                    setProfileImportSummary('');
-                  }}
-                />
-              </label>
-            </div>
-
-            <div className="compositeUploadForm__actions">
-              <button
-                type="submit"
-                className="button compositeButton compositeButton--filled"
-                disabled={isImportingProfiles}
-              >
-                {isImportingProfiles ? 'Importing...' : 'Import Profiles'}
-              </button>
-
-              <p className="compositeUploadForm__fileMeta">
-                {selectedCsvFile ? (
-                  <>
-                    Selected CSV: <strong>{selectedCsvFile.name}</strong>
-                  </>
-                ) : (
-                  <>
-                    Currently loaded profiles: <strong>{profileCount}</strong>
-                  </>
-                )}
-              </p>
-            </div>
-
-            {profileImportSummary ? (
-              <p className="compositeMessage compositeMessage--success">{profileImportSummary}</p>
-            ) : null}
-            {profileImportError ? (
-              <p className="compositeMessage compositeMessage--error">{profileImportError}</p>
-            ) : null}
           </form>
         </article>
 

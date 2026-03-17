@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" role="img" aria-labelledby="title desc">
+  <title id="title">Person icon</title>
+  <desc id="desc">Member profile upload illustration using the provided person SVG icon.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f6f0dc" />
+      <stop offset="100%" stop-color="#e2d1a5" />
+    </linearGradient>
+    <linearGradient id="shadow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.95" />
+      <stop offset="100%" stop-color="#f2e6c3" stop-opacity="0.82" />
+    </linearGradient>
+    <linearGradient id="figure" x1="50%" y1="0%" x2="50%" y2="100%">
+      <stop offset="0%" stop-color="#3f2d5f" />
+      <stop offset="100%" stop-color="#251538" />
+    </linearGradient>
+    <clipPath id="portrait-circle">
+      <circle cx="600" cy="450" r="270" />
+    </clipPath>
+  </defs>
+  <rect width="1200" height="900" fill="url(#bg)" />
+  <circle cx="600" cy="450" r="270" fill="url(#shadow)" />
+  <g clip-path="url(#portrait-circle)">
+    <g transform="translate(220 86) scale(0.74)">
+      <path
+        d="M512 597.994667q108.010667 0 225.002667 46.997333t116.992 123.008l0 85.994667-684.010667 0 0-85.994667q0-76.010667 116.992-123.008t225.002667-46.997333zM512 512q-69.994667 0-120-50.005333t-50.005333-120 50.005333-121.002667 120-51.008 120 51.008 50.005333 121.002667-50.005333 120-120 50.005333z"
+        fill="url(#figure)"
+      />
+    </g>
+  </g>
+</svg>

@@ -1,5 +1,4 @@
 import ActionCards from '../components/ActionCards/ActionCards.jsx';
-import ProfileImportPanel from '../components/ProfileImportPanel/ProfileImportPanel.jsx';
 import '../styles/composites.css';
 
 const UPLOAD_CARDS = [
@@ -11,6 +10,15 @@ const UPLOAD_CARDS = [
     description: 'Start the upload flow for new class composites and related archive materials.',
     buttonText: 'Open Composite Upload',
     to: '/upload/composites',
+  },
+  {
+    key: 'upload-profiles',
+    imageSrc: '/images/person-icon.svg',
+    imageAlt: 'Member profile upload icon',
+    title: 'Member Profile Upload',
+    description: 'Import the DA membership CSV on a dedicated page before matching members to composites.',
+    buttonText: 'Open Member Upload',
+    to: '/upload/profiles',
   },
 ];
 
@@ -29,12 +37,8 @@ export default function UploadPage() {
             Upload
           </h1>
           <p style={{ margin: 0, color: 'var(--muted)', maxWidth: 720 }}>
-            Choose an archive type below to begin adding new materials.
+            Choose an upload flow below to begin adding new archive materials.
           </p>
-
-          <div style={{ marginTop: '28px' }}>
-            <ProfileImportPanel />
-          </div>
         </div>
       </section>
 

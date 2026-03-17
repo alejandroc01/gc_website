@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 
 import trashIcon from '../assets/icons/trash.svg';
@@ -40,6 +40,7 @@ export default function CompositeEditorPage() {
   const latestSavedSignatureRef = useRef('[]');
   const currentSignatureRef = useRef('[]');
   const canvasPanelRef = useRef(null);
+  const annotationItemRefs = useRef(new Map());
 
   useEffect(() => {
     let isActive = true;
@@ -280,15 +281,39 @@ export default function CompositeEditorPage() {
     );
   };
 
-  const handleDeleteAnnotation = (annotationToDelete) => {
+  const scrollAnnotationIntoView = useCallback((annotationId, behavior = 'smooth') => {
+    if (!annotationId) {
+      return;
+    }
+
+    const annotationElement = annotationItemRefs.current.get(annotationId);
+
+    if (!annotationElement) {
+      return;
+    }
+
+    annotationElement.scrollIntoView({
+      block: 'nearest',
+      behavior,
+    });
+  }, []);
+
+  const handleSelectAnnotation = useCallback((annotationId) => {
+    setSelectedAnnotationId(annotationId);
+    scrollAnnotationIntoView(annotationId);
+  }, [scrollAnnotationIntoView]);
+
+  const handleDeleteAnnotation = useCallback((annotationToDelete, { requireConfirmation = true } = {}) => {
     if (!annotationToDelete) {
       return;
     }
 
-    const confirmed = window.confirm('Delete this annotation box? This removes the saved coordinates.');
+    if (requireConfirmation) {
+      const confirmed = window.confirm('Delete this annotation box? This removes the saved coordinates.');
 
-    if (!confirmed) {
-      return;
+      if (!confirmed) {
+        return;
+      }
     }
 
     setAnnotations((currentAnnotations) => {
@@ -303,7 +328,33 @@ export default function CompositeEditorPage() {
       ));
       return nextAnnotations;
     });
-  };
+  }, []);
+
+  useEffect(() => {
+    scrollAnnotationIntoView(selectedAnnotationId, 'smooth');
+  }, [scrollAnnotationIntoView, selectedAnnotationId]);
+
+  useEffect(() => {
+    const handleWindowKeyDown = (event) => {
+      if (event.key !== 'Delete' || isEditableElement(event.target)) {
+        return;
+      }
+
+      const selectedAnnotation = annotations.find(
+        (annotation) => annotation.annotationId === selectedAnnotationId,
+      );
+
+      if (!selectedAnnotation) {
+        return;
+      }
+
+      event.preventDefault();
+      handleDeleteAnnotation(selectedAnnotation, { requireConfirmation: false });
+    };
+
+    window.addEventListener('keydown', handleWindowKeyDown);
+    return () => window.removeEventListener('keydown', handleWindowKeyDown);
+  }, [annotations, handleDeleteAnnotation, selectedAnnotationId]);
 
   const handleManualSave = async () => {
     window.clearTimeout(saveTimeoutRef.current);
@@ -423,8 +474,9 @@ export default function CompositeEditorPage() {
               selectedAnnotationId={selectedAnnotationId}
               zoom={zoomLevel}
               lastBoxSize={lastBoxSize}
+              onZoomChange={(nextZoom) => setZoomLevel(clampZoom(nextZoom))}
               onAnnotationsChange={handleAnnotationListChange}
-              onSelectAnnotation={setSelectedAnnotationId}
+              onSelectAnnotation={handleSelectAnnotation}
               onLastBoxSizeChange={(nextSize) => setLastBoxSize(normalizeBoxSize(nextSize))}
               resolveAnnotationLabel={(annotation) => profileMap.get(annotation.profileId)?.displayName || 'Unassigned'}
             />
@@ -446,18 +498,25 @@ export default function CompositeEditorPage() {
                   {annotations.map((annotation, index) => (
                     <article
                       key={annotation.annotationId}
+                      ref={(node) => {
+                        if (node) {
+                          annotationItemRefs.current.set(annotation.annotationId, node);
+                        } else {
+                          annotationItemRefs.current.delete(annotation.annotationId);
+                        }
+                      }}
                       className={[
                         'annotationList__item',
                         annotation.annotationId === selectedAnnotationId ? 'annotationList__item--selected' : '',
                       ].filter(Boolean).join(' ')}
-                      onPointerDown={() => setSelectedAnnotationId(annotation.annotationId)}
-                      onFocusCapture={() => setSelectedAnnotationId(annotation.annotationId)}
+                      onPointerDown={() => handleSelectAnnotation(annotation.annotationId)}
+                      onFocusCapture={() => handleSelectAnnotation(annotation.annotationId)}
                     >
                       <div className="annotationList__content">
                         <button
                           type="button"
                           className="annotationList__previewButton"
-                          onClick={() => setSelectedAnnotationId(annotation.annotationId)}
+                          onClick={() => handleSelectAnnotation(annotation.annotationId)}
                           aria-label={`Highlight annotation ${index + 1} on the composite image`}
                         >
                           <span className="annotationList__previewFrame">
@@ -637,4 +696,19 @@ function buildPreviewStyle(annotation, composite, { maxWidth, maxHeight }) {
     backgroundSize: `${composite.imageWidth * previewScale}px ${composite.imageHeight * previewScale}px`,
     backgroundPosition: `${-annotation.x * previewScale}px ${-annotation.y * previewScale}px`,
   };
+}
+
+function isEditableElement(target) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const tagName = target.tagName.toLowerCase();
+
+  return (
+    target.isContentEditable
+    || tagName === 'input'
+    || tagName === 'textarea'
+    || tagName === 'select'
+  );
 }

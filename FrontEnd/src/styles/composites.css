@@ -399,6 +399,10 @@
   padding: 10px;
 }
 
+.annotationStage__viewport--panning {
+  cursor: grabbing;
+}
+
 .annotationStage__scaledCanvas {
   position: relative;
   min-width: 100%;
@@ -428,29 +432,30 @@
 
 .annotationStage__box {
   position: absolute;
-  border: 2px solid rgba(255, 215, 102, 0.86);
-  background: rgba(255, 215, 102, 0.1);
+  border: 2px solid rgba(255, 215, 102, 0.52);
+  background: rgba(255, 215, 102, 0.06);
   cursor: move;
+  overflow: visible;
   padding: 0;
   appearance: none;
   box-shadow:
-    0 0 0 1px rgba(21, 15, 37, 0.72),
-    inset 0 0 0 1px rgba(21, 15, 37, 0.48),
-    0 0 16px rgba(0, 0, 0, 0.2);
+    0 0 0 1px rgba(21, 15, 37, 0.44),
+    inset 0 0 0 1px rgba(21, 15, 37, 0.28),
+    0 0 14px rgba(0, 0, 0, 0.14);
 }
 
 .annotationStage__box--unassigned {
-  border-color: rgba(244, 76, 76, 0.86);
-  background: rgba(244, 76, 76, 0.08);
+  border-color: rgba(244, 76, 76, 0.5);
+  background: rgba(244, 76, 76, 0.05);
 }
 
 .annotationStage__box--selected {
-  border-color: #7ef0ff;
-  background: rgba(126, 240, 255, 0.12);
+  border-color: rgba(126, 240, 255, 0.72);
+  background: rgba(126, 240, 255, 0.08);
   box-shadow:
-    0 0 0 1px rgba(11, 77, 90, 0.86),
-    inset 0 0 0 1px rgba(11, 77, 90, 0.58),
-    0 0 18px rgba(11, 77, 90, 0.24);
+    0 0 0 1px rgba(11, 77, 90, 0.58),
+    inset 0 0 0 1px rgba(11, 77, 90, 0.36),
+    0 0 16px rgba(11, 77, 90, 0.18);
 }
 
 .annotationStage__box--draft {
@@ -462,35 +467,86 @@
 
 .annotationStage__handle {
   position: absolute;
-  width: 12px;
-  height: 12px;
-  border: 2px solid #fff;
+  border: 1.5px solid #fff;
   background: #12b2c3;
   box-shadow: 0 0 0 1px rgba(18, 13, 31, 0.6);
+  z-index: 2;
+}
+
+.annotationStage__handle--corner {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+}
+
+.annotationStage__handle--edge {
+  border-radius: 999px;
+}
+
+.annotationStage__handle--n,
+.annotationStage__handle--s {
+  width: 14px;
+  height: 5px;
+  left: 50%;
+  transform: translateX(-50%);
+  cursor: ns-resize;
+}
+
+.annotationStage__handle--e,
+.annotationStage__handle--w {
+  width: 5px;
+  height: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  cursor: ew-resize;
+}
+
+.annotationStage__handle--nw,
+.annotationStage__handle--se {
+  cursor: nwse-resize;
+}
+
+.annotationStage__handle--ne,
+.annotationStage__handle--sw {
+  cursor: nesw-resize;
 }
 
 .annotationStage__handle--nw {
-  top: -6px;
-  left: -6px;
-  cursor: nwse-resize;
+  top: -4px;
+  left: -4px;
+}
+
+.annotationStage__handle--n {
+  top: -4px;
 }
 
 .annotationStage__handle--ne {
-  top: -6px;
-  right: -6px;
-  cursor: nesw-resize;
+  top: -4px;
+  right: -4px;
 }
 
-.annotationStage__handle--sw {
-  bottom: -6px;
-  left: -6px;
-  cursor: nesw-resize;
+.annotationStage__handle--e {
+  top: 50%;
+  right: -3px;
 }
 
 .annotationStage__handle--se {
-  right: -6px;
-  bottom: -6px;
-  cursor: nwse-resize;
+  right: -4px;
+  bottom: -4px;
+}
+
+.annotationStage__handle--s {
+  bottom: -4px;
+}
+
+.annotationStage__handle--sw {
+  bottom: -4px;
+  left: -4px;
+}
+
+.annotationStage__handle--w {
+  top: 50%;
+  left: -3px;
 }
 
 .compositeSidebar {

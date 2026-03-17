@@ -6,7 +6,10 @@ const DEFAULT_BOX_SIZE = {
   width: 72,
   height: 90,
 };
-const RESIZE_HANDLES = ['nw', 'ne', 'sw', 'se'];
+const MIN_ZOOM_LEVEL = 1;
+const MAX_ZOOM_LEVEL = 4;
+const WHEEL_ZOOM_STEP = 0.25;
+const RESIZE_HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
 export default function AnnotationStage({
   composite,
@@ -14,12 +17,14 @@ export default function AnnotationStage({
   selectedAnnotationId,
   zoom = 1,
   lastBoxSize = DEFAULT_BOX_SIZE,
+  onZoomChange,
   onAnnotationsChange,
   onSelectAnnotation,
   onLastBoxSizeChange,
   resolveAnnotationLabel,
 }) {
   const imageRef = useRef(null);
+  const viewportRef = useRef(null);
   const interactionRef = useRef(null);
   const listenersAttachedRef = useRef(false);
   const annotationsRef = useRef(annotations);
@@ -28,8 +33,10 @@ export default function AnnotationStage({
   const onAnnotationsChangeRef = useRef(onAnnotationsChange);
   const onSelectAnnotationRef = useRef(onSelectAnnotation);
   const onLastBoxSizeChangeRef = useRef(onLastBoxSizeChange);
+  const pendingZoomFocusRef = useRef(null);
   const [baseDisplaySize, setBaseDisplaySize] = useState({ width: 0, height: 0 });
   const [draftRect, setDraftRect] = useState(null);
+  const [isPanning, setIsPanning] = useState(false);
   const draftRectRef = useRef(draftRect);
 
   annotationsRef.current = annotations;
@@ -42,9 +49,26 @@ export default function AnnotationStage({
 
   const handleWindowPointerMove = useCallback((event) => {
     const activeInteraction = interactionRef.current;
+
+    if (!activeInteraction) {
+      return;
+    }
+
+    if (activeInteraction.type === 'pan') {
+      const viewportElement = viewportRef.current;
+
+      if (!viewportElement) {
+        return;
+      }
+
+      viewportElement.scrollLeft = activeInteraction.startScrollLeft - (event.clientX - activeInteraction.startClientX);
+      viewportElement.scrollTop = activeInteraction.startScrollTop - (event.clientY - activeInteraction.startClientY);
+      return;
+    }
+
     const currentComposite = compositeRef.current;
 
-    if (!activeInteraction || !currentComposite) {
+    if (!currentComposite) {
       return;
     }
 
@@ -153,6 +177,10 @@ export default function AnnotationStage({
       }
     }
 
+    if (activeInteraction?.type === 'pan') {
+      setIsPanning(false);
+    }
+
     interactionRef.current = null;
     setDraftRect(null);
     detachWindowListeners(
@@ -196,6 +224,25 @@ export default function AnnotationStage({
   }, [composite?.imageUrl, updateBaseDisplaySize]);
 
   useEffect(() => {
+    const pendingZoomFocus = pendingZoomFocusRef.current;
+    const viewportElement = viewportRef.current;
+
+    if (!pendingZoomFocus || !viewportElement) {
+      return;
+    }
+
+    viewportElement.scrollLeft = Math.max(
+      0,
+      (pendingZoomFocus.imageX * zoom) - pendingZoomFocus.offsetX,
+    );
+    viewportElement.scrollTop = Math.max(
+      0,
+      (pendingZoomFocus.imageY * zoom) - pendingZoomFocus.offsetY,
+    );
+    pendingZoomFocusRef.current = null;
+  }, [zoom]);
+
+  useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.key !== 'Escape' || interactionRef.current?.type !== 'draw') {
         return;
@@ -223,7 +270,7 @@ export default function AnnotationStage({
   }, [handleWindowPointerMove, handleWindowPointerUp]);
 
   const handleOverlayPointerDown = (event) => {
-    if (event.target !== event.currentTarget || !composite) {
+    if (event.button !== 0 || event.target !== event.currentTarget || !composite) {
       return;
     }
 
@@ -252,7 +299,68 @@ export default function AnnotationStage({
     );
   };
 
+  const handleViewportPointerDown = (event) => {
+    if (event.button !== 2) {
+      return;
+    }
+
+    const viewportElement = viewportRef.current;
+
+    if (!viewportElement) {
+      return;
+    }
+
+    event.preventDefault();
+    interactionRef.current = {
+      type: 'pan',
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startScrollLeft: viewportElement.scrollLeft,
+      startScrollTop: viewportElement.scrollTop,
+    };
+    setIsPanning(true);
+    attachWindowListeners(
+      listenersAttachedRef,
+      handleWindowPointerMove,
+      handleWindowPointerUp,
+    );
+  };
+
+  const handleViewportWheel = (event) => {
+    if (typeof onZoomChange !== 'function') {
+      return;
+    }
+
+    const viewportElement = viewportRef.current;
+    const viewportRect = viewportElement?.getBoundingClientRect();
+
+    if (!viewportElement || !viewportRect) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const zoomDirection = event.deltaY < 0 ? 1 : -1;
+    const nextZoom = clampZoom(zoom + (zoomDirection * WHEEL_ZOOM_STEP));
+
+    if (nextZoom === zoom) {
+      return;
+    }
+
+    pendingZoomFocusRef.current = {
+      imageX: (viewportElement.scrollLeft + (event.clientX - viewportRect.left)) / zoom,
+      imageY: (viewportElement.scrollTop + (event.clientY - viewportRect.top)) / zoom,
+      offsetX: event.clientX - viewportRect.left,
+      offsetY: event.clientY - viewportRect.top,
+    };
+    onZoomChange(nextZoom);
+  };
+
   const handleBoxPointerDown = (event, annotation) => {
+    if (event.button !== 0) {
+      return;
+    }
+
     event.stopPropagation();
     event.preventDefault();
 
@@ -278,6 +386,10 @@ export default function AnnotationStage({
   };
 
   const handleResizePointerDown = (event, annotation, handle) => {
+    if (event.button !== 0) {
+      return;
+    }
+
     event.stopPropagation();
     event.preventDefault();
 
@@ -312,7 +424,16 @@ export default function AnnotationStage({
 
   return (
     <div className="annotationStage">
-      <div className="annotationStage__viewport">
+      <div
+        ref={viewportRef}
+        className={[
+          'annotationStage__viewport',
+          isPanning ? 'annotationStage__viewport--panning' : '',
+        ].filter(Boolean).join(' ')}
+        onContextMenu={(event) => event.preventDefault()}
+        onPointerDown={handleViewportPointerDown}
+        onWheel={handleViewportWheel}
+      >
         <div
           className="annotationStage__scaledCanvas"
           style={{
@@ -354,13 +475,23 @@ export default function AnnotationStage({
                     onPointerDown={(event) => handleBoxPointerDown(event, annotation)}
                     aria-label={label}
                   >
-                    {isSelected && RESIZE_HANDLES.map((handle) => (
-                      <span
-                        key={handle}
-                        className={`annotationStage__handle annotationStage__handle--${handle}`}
-                        onPointerDown={(event) => handleResizePointerDown(event, annotation, handle)}
-                      />
-                    ))}
+                    {isSelected && RESIZE_HANDLES.map((handle) => {
+                      const isCornerHandle = handle.length === 2;
+
+                      return (
+                        <span
+                          key={handle}
+                          className={[
+                            'annotationStage__handle',
+                            isCornerHandle
+                              ? 'annotationStage__handle--corner'
+                              : 'annotationStage__handle--edge',
+                            `annotationStage__handle--${handle}`,
+                          ].join(' ')}
+                          onPointerDown={(event) => handleResizePointerDown(event, annotation, handle)}
+                        />
+                      );
+                    })}
                   </button>
                 );
               })}
@@ -523,4 +654,8 @@ function normalizeBoxSize(size) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function clampZoom(value) {
+  return clamp(Number(value.toFixed(2)), MIN_ZOOM_LEVEL, MAX_ZOOM_LEVEL);
 }
