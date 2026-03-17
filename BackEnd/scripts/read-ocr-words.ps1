@@ -24,7 +24,7 @@ $script:AsTaskMethod = [System.WindowsRuntimeSystemExtensions].GetMethods() | Wh
         -and $_.GetParameters().Count -eq 1
 } | Select-Object -First 1
 
-function Await-WinRt {
+function AwaitWinRt {
     param(
         [Parameter(Mandatory = $true)]
         [object]$Operation,
@@ -45,11 +45,11 @@ if (-not $ocrEngine) {
     throw "Windows OCR is unavailable on this machine."
 }
 
-$file = Await-WinRt ([Windows.Storage.StorageFile]::GetFileFromPathAsync($resolvedImagePath)) ([Windows.Storage.StorageFile])
-$stream = Await-WinRt ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
-$decoder = Await-WinRt ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
-$bitmap = Await-WinRt ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
-$ocrResult = Await-WinRt ($ocrEngine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
+$file = AwaitWinRt ([Windows.Storage.StorageFile]::GetFileFromPathAsync($resolvedImagePath)) ([Windows.Storage.StorageFile])
+$stream = AwaitWinRt ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
+$decoder = AwaitWinRt ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+$bitmap = AwaitWinRt ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+$ocrResult = AwaitWinRt ($ocrEngine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
 
 $words = New-Object System.Collections.Generic.List[object]
 $lineIndex = 0
