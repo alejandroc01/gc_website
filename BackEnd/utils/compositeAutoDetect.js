@@ -6,54 +6,122 @@ const { readOcrWords } = require("./windowsOcr");
 const MIN_CAPTION_HEIGHT = 10;
 const MAX_CAPTION_HEIGHT = 22;
 const ROW_JOIN_TOLERANCE = 18;
-const SEGMENT_GAP_MIN = 28;
+const SEGMENT_GAP_MIN = 8;
+const SEGMENT_MERGE_GAP_MIN = 12;
+const PARTIAL_NAME_TOKEN_MIN_LENGTH = 4;
 const SAME_YEAR_MATCH_BONUS = 0.035;
 const STRONG_MATCH_THRESHOLD = 0.78;
 const PROFILE_SUGGESTION_THRESHOLD = 0.86;
-const ROW_SPACING_TO_PORTRAIT_HEIGHT = 0.82;
-const PORTRAIT_HEIGHT_TO_WIDTH = 1.27;
-const GAP_TO_PORTRAIT_WIDTH = 0.94;
+const PARTIAL_PROFILE_SUGGESTION_THRESHOLD = 0.92;
+const PARTIAL_PROFILE_MARGIN = 0.08;
 const MIN_PORTRAIT_WIDTH = 96;
 const MIN_PORTRAIT_HEIGHT = 128;
+const NON_NAME_TOKENS = new Set([
+    "AND",
+    "BOARD",
+    "CLUB",
+    "COMMITTEE",
+    "EXECUTIVE",
+    "FELLOWSHIP",
+    "FELLOWSHIP",
+    "FOUNDED",
+    "FOR",
+    "GERMAN",
+    "LEADERSHIP",
+    "OF",
+    "PRESIDENT",
+    "SECRETARY",
+    "SERVICE",
+    "STATE",
+    "TREASURER",
+    "UNIVERSITY",
+    "VICE",
+    "VIRGINIA",
+    "VIRGINIAN",
+    "VIRGINIANPOLYTECHNIC",
+    "VIRGINIAPOLYTECHNIC",
+    "POLYTECHNIC",
+    "INSTITUTE",
+]);
+
+async function detectCompositeTextBoxes({ composite, profiles }) {
+    const imagePath = path.join(__dirname, "..", composite.storedFilePath);
+    const ocrWords = await readOcrWords(imagePath);
+    const preparedWords = prepareOcrWords(ocrWords);
+    const wordRows = groupWordsIntoRows(preparedWords);
+    const profileEntries = buildProfileEntries(profiles, composite.compositeYear);
+    const mergedSegments = wordRows
+        .flatMap((row, rowIndex) => mergeRowSegments(
+            splitRowIntoSegments(row.words, rowIndex),
+            profileEntries,
+        ))
+        .map((segment) => evaluateSegment(segment, profileEntries));
+    const textBoxes = buildVisibleTextBoxes(mergedSegments);
+
+    return {
+        textBoxes,
+        generatedAt: new Date().toISOString(),
+    };
+}
 
 async function detectCompositeAnnotations({
     composite,
     profiles,
     existingAnnotations = [],
+    referenceAnnotation,
 }) {
-    const imagePath = path.join(__dirname, "..", composite.storedFilePath);
-    const ocrWords = await readOcrWords(imagePath);
+    if (!referenceAnnotation) {
+        const error = new Error("Draw and select a reference portrait box before running auto-fill.");
+        error.statusCode = 400;
+        throw error;
+    }
 
-    const preparedWords = prepareOcrWords(ocrWords);
-    const wordRows = groupWordsIntoRows(preparedWords);
-    const profileEntries = buildProfileEntries(profiles, composite.compositeYear);
-    const evaluatedSegments = wordRows
-        .flatMap((row, rowIndex) => splitRowIntoSegments(row.words, rowIndex))
-        .map((segment) => evaluateSegment(segment, profileEntries));
-
-    const keptSegments = selectCaptionSegments(evaluatedSegments);
-    const existingManualAnnotations = normalizeExistingAnnotations(existingAnnotations)
-        .filter((annotation) => annotation.source !== "auto");
-    const portraitSizing = inferPortraitSizing(keptSegments, existingManualAnnotations);
-    const detectedAnnotations = buildDetectedAnnotations(
-        keptSegments,
-        portraitSizing,
+    const { textBoxes, generatedAt } = await detectCompositeTextBoxes({
         composite,
-        existingManualAnnotations,
-    );
+        profiles,
+    });
+    const normalizedReferenceAnnotation = normalizeReferenceAnnotation(referenceAnnotation, composite);
+
+    if (!normalizedReferenceAnnotation) {
+        const error = new Error("The selected reference box is not valid.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const anchorCandidates = textBoxes.filter((textBox) => textBox.isAnchorCandidate);
+    const placementCandidates = textBoxes.filter((textBox) => textBox.isPlacementCandidate);
+    const anchorTextBox = findReferenceAnchorTextBox(normalizedReferenceAnnotation, anchorCandidates)
+        || findReferenceAnchorTextBox(normalizedReferenceAnnotation, placementCandidates);
+
+    if (!anchorTextBox) {
+        const error = new Error("No OCR name box could be matched under the selected reference portrait.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const reservedAnnotations = normalizeExistingAnnotations(existingAnnotations);
+    const detectedAnnotations = buildReferenceBasedAnnotations({
+        textBoxes: placementCandidates,
+        anchorTextBox,
+        referenceAnnotation: normalizedReferenceAnnotation,
+        composite,
+        reservedAnnotations,
+    });
 
     dedupeSuggestedProfileMatches(detectedAnnotations);
 
     return {
+        textBoxes,
+        referenceTextBoxId: anchorTextBox.textBoxId,
         detectedAnnotations,
         detectedCount: detectedAnnotations.length,
         reviewCount: detectedAnnotations.filter((annotation) => annotation.needsReview).length,
-        generatedAt: new Date().toISOString(),
+        generatedAt,
     };
 }
 
 function prepareOcrWords(words) {
-    return (Array.isArray(words) ? words : [])
+    return dedupeOcrWords((Array.isArray(words) ? words : [])
         .map((word) => ({
             lineIndex: Number(word.lineIndex) || 0,
             text: cleanDisplayText(word.text),
@@ -75,10 +143,10 @@ function prepareOcrWords(words) {
             centerX: word.x + (word.width / 2),
             centerY: word.y + (word.height / 2),
         }))
-        .sort((leftWord, rightWord) => (
-            leftWord.centerY - rightWord.centerY
-            || leftWord.x - rightWord.x
-        ));
+    ).sort((leftWord, rightWord) => (
+        leftWord.centerY - rightWord.centerY
+        || leftWord.x - rightWord.x
+    ));
 }
 
 function groupWordsIntoRows(words) {
@@ -132,7 +200,7 @@ function splitRowIntoSegments(words, rowIndex) {
         const gap = nextWord.x - previousWord.right;
         const splitThreshold = Math.max(
             SEGMENT_GAP_MIN,
-            Math.round(Math.max(previousWord.height, nextWord.height) * 2.15),
+            Math.round(Math.max(previousWord.height, nextWord.height) * 1.1),
         );
 
         if (gap > splitThreshold) {
@@ -149,6 +217,83 @@ function splitRowIntoSegments(words, rowIndex) {
     }
 
     return segments;
+}
+
+function mergeRowSegments(segments, profileEntries) {
+    if (!Array.isArray(segments) || segments.length <= 1) {
+        return Array.isArray(segments) ? segments : [];
+    }
+
+    const mergedSegments = [];
+    let segmentIndex = 0;
+
+    while (segmentIndex < segments.length) {
+        let bestSegment = segments[segmentIndex];
+        let bestSegmentEndIndex = segmentIndex;
+
+        for (
+            let candidateEndIndex = segmentIndex + 1;
+            candidateEndIndex < Math.min(segments.length, segmentIndex + 3);
+            candidateEndIndex += 1
+        ) {
+            const segmentGroup = segments.slice(segmentIndex, candidateEndIndex + 1);
+
+            if (!canMergeSegmentGroup(segmentGroup)) {
+                break;
+            }
+
+            const candidateSegment = mergeSegmentGroup(segmentGroup);
+            const candidateEvaluation = evaluateSegment(candidateSegment, profileEntries);
+            const segmentEvaluations = segmentGroup.map((segment) => evaluateSegment(segment, profileEntries));
+
+            if (!shouldUseMergedSegment(segmentEvaluations, candidateEvaluation)) {
+                continue;
+            }
+
+            bestSegment = candidateSegment;
+            bestSegmentEndIndex = candidateEndIndex;
+        }
+
+        mergedSegments.push(bestSegment);
+        segmentIndex = bestSegmentEndIndex + 1;
+    }
+
+    return mergedSegments;
+}
+
+function canMergeSegmentGroup(segments) {
+    if (!Array.isArray(segments) || segments.length < 2 || segments.length > 3) {
+        return false;
+    }
+
+    const mergedSegment = mergeSegmentGroup(segments);
+    const mergeGapThreshold = Math.max(
+        SEGMENT_MERGE_GAP_MIN,
+        Math.round(Math.max(...segments.map((segment) => segment.height)) * 2.35),
+    );
+
+    if (mergedSegment.width > 220 || mergedSegment.height > 34) {
+        return false;
+    }
+
+    for (let index = 1; index < segments.length; index += 1) {
+        const previousSegment = segments[index - 1];
+        const nextSegment = segments[index];
+        const gap = nextSegment.x - (previousSegment.x + previousSegment.width);
+
+        if (gap > mergeGapThreshold) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+function mergeSegmentGroup(segments) {
+    return toSegment(
+        segments.flatMap((segment) => segment.words),
+        segments[0]?.rowIndex ?? 0,
+    );
 }
 
 function toSegment(words, rowIndex) {
@@ -174,8 +319,11 @@ function evaluateSegment(segment, profileEntries) {
     const normalizedText = normalizeForMatch(segment.text);
     const normalizedTokens = tokenizeNormalizedText(normalizedText);
     const bestProfileMatch = findBestProfileMatch(normalizedText, normalizedTokens, profileEntries);
-    const nameLike = looksLikeCaptionName(segment, normalizedTokens);
     const detectedName = formatDetectedName(segment.text);
+    const hasReliableProfileSuggestion = hasReliableProfileSuggestionForTokens(
+        normalizedTokens,
+        bestProfileMatch,
+    );
 
     return {
         ...segment,
@@ -183,12 +331,14 @@ function evaluateSegment(segment, profileEntries) {
         normalizedTokens,
         detectedName,
         matchedProfileDisplayName: bestProfileMatch.displayName || null,
-        matchedProfileId: bestProfileMatch.score >= PROFILE_SUGGESTION_THRESHOLD
+        matchedProfileId: hasReliableProfileSuggestion
             ? bestProfileMatch.profileId
             : null,
         matchConfidence: roundConfidence(bestProfileMatch.score),
-        nameLike,
-        strongMatch: bestProfileMatch.score >= STRONG_MATCH_THRESHOLD,
+        nameLike: looksLikeCaptionName(segment, normalizedTokens),
+        partialNameLike: looksLikePartialCaptionName(segment, normalizedTokens),
+        strongMatch: normalizedTokens.length >= 2 && bestProfileMatch.score >= STRONG_MATCH_THRESHOLD,
+        hasReliableProfileSuggestion,
     };
 }
 
@@ -220,15 +370,18 @@ function findBestProfileMatch(normalizedText, normalizedTokens, profileEntries) 
         profileId: null,
         displayName: "",
         score: 0,
+        runnerUpScore: 0,
     };
 
-    if (!normalizedText || normalizedTokens.length < 2) {
+    if (!normalizedText || normalizedTokens.length === 0) {
         return bestMatch;
     }
 
     for (const profileEntry of profileEntries) {
         for (const variant of profileEntry.variants) {
-            const baseScore = scoreNormalizedNames(normalizedText, normalizedTokens, variant);
+            const baseScore = normalizedTokens.length >= 2
+                ? scoreNormalizedNames(normalizedText, normalizedTokens, variant)
+                : scorePartialNameTokenMatch(normalizedTokens[0], variant);
             const adjustedScore = clamp(
                 baseScore + (profileEntry.isSameYear ? SAME_YEAR_MATCH_BONUS : 0),
                 0,
@@ -236,6 +389,9 @@ function findBestProfileMatch(normalizedText, normalizedTokens, profileEntries) 
             );
 
             if (adjustedScore <= bestMatch.score) {
+                if (adjustedScore > bestMatch.runnerUpScore) {
+                    bestMatch.runnerUpScore = adjustedScore;
+                }
                 continue;
             }
 
@@ -243,6 +399,7 @@ function findBestProfileMatch(normalizedText, normalizedTokens, profileEntries) 
                 profileId: profileEntry.profileId,
                 displayName: profileEntry.displayName,
                 score: adjustedScore,
+                runnerUpScore: bestMatch.score,
             };
         }
     }
@@ -282,7 +439,7 @@ function scoreNormalizedNames(leftText, leftTokens, rightText) {
     );
 }
 
-function selectCaptionSegments(segments) {
+function buildVisibleTextBoxes(segments) {
     const rowStats = new Map();
 
     for (const segment of segments) {
@@ -295,7 +452,7 @@ function selectCaptionSegments(segments) {
             currentStats.strongCount += 1;
         }
 
-        if (segment.nameLike) {
+        if (segment.nameLike || segment.partialNameLike || segment.hasReliableProfileSuggestion) {
             currentStats.plausibleCount += 1;
         }
 
@@ -303,25 +460,132 @@ function selectCaptionSegments(segments) {
     }
 
     return segments
-        .filter((segment) => {
-            const row = rowStats.get(segment.rowIndex);
-
-            if (!row) {
-                return false;
-            }
-
-            const rowLooksLikeCaptionBand = row.strongCount >= 3 || (row.strongCount >= 2 && row.plausibleCount >= 4);
-            const keepSegment = (
-                segment.strongMatch
-                || (rowLooksLikeCaptionBand && segment.nameLike && segment.matchConfidence >= 0.56)
-            );
-
-            return rowLooksLikeCaptionBand && keepSegment;
-        })
+        .filter((segment) => (
+            segment.text
+            && segment.width >= 16
+            && segment.width <= 900
+            && segment.height >= 8
+            && segment.height <= 60
+        ))
         .sort((leftSegment, rightSegment) => (
             leftSegment.y - rightSegment.y
             || leftSegment.x - rightSegment.x
+        ))
+        .map((segment, index) => {
+            const row = rowStats.get(segment.rowIndex) || { strongCount: 0, plausibleCount: 0 };
+            const rowLooksLikeCaptionBand = row.plausibleCount >= 3 || row.strongCount >= 1;
+            const isPlacementCandidate = rowLooksLikeCaptionBand && (
+                segment.nameLike
+                || segment.partialNameLike
+                || segment.strongMatch
+                || segment.hasReliableProfileSuggestion
+                || segment.matchConfidence >= 0.42
+            );
+            const isAnchorCandidate = rowLooksLikeCaptionBand && (
+                segment.nameLike
+                || segment.strongMatch
+                || segment.hasReliableProfileSuggestion
+                || segment.matchConfidence >= 0.56
+            );
+
+            return {
+                textBoxId: `text-${segment.rowIndex}-${index}`,
+                rowIndex: segment.rowIndex,
+                text: segment.detectedName || null,
+                rawText: segment.text,
+                x: Math.round(segment.x),
+                y: Math.round(segment.y),
+                width: Math.round(segment.width),
+                height: Math.round(segment.height),
+                centerX: segment.centerX,
+                centerY: segment.centerY,
+                isPlacementCandidate,
+                isAnchorCandidate,
+                matchedProfileId: segment.matchedProfileId,
+                matchedProfileDisplayName: segment.matchedProfileDisplayName,
+                matchConfidence: segment.matchConfidence || null,
+                needsReview: (
+                    !segment.matchedProfileId
+                    || segment.matchConfidence < 0.94
+                    || normalizeForMatch(segment.detectedName) !== normalizeForMatch(segment.matchedProfileDisplayName)
+                ),
+            };
+        });
+}
+
+function dedupeOcrWords(words) {
+    const dedupedWords = [];
+    const sortedWords = [...words].sort((leftWord, rightWord) => (
+        getOcrWordQualityScore(rightWord.text) - getOcrWordQualityScore(leftWord.text)
+        || rightWord.height - leftWord.height
+        || rightWord.width - leftWord.width
+        || leftWord.y - rightWord.y
+        || leftWord.x - rightWord.x
+    ));
+
+    for (const word of sortedWords) {
+        const normalizedText = normalizeForMatch(word.text);
+
+        if (!normalizedText) {
+            continue;
+        }
+
+        const alreadySeen = dedupedWords.some((existingWord) => (
+            wordOverlapRatio(existingWord, word) >= 0.55
+            && Math.abs(existingWord.centerX - word.centerX) <= Math.max(10, word.width * 0.4)
+            && Math.abs(existingWord.centerY - word.centerY) <= Math.max(8, word.height * 0.5)
         ));
+
+        if (alreadySeen) {
+            continue;
+        }
+
+        dedupedWords.push(word);
+    }
+
+    return dedupedWords;
+}
+
+function getOcrWordQualityScore(text) {
+    const normalizedText = cleanDisplayText(text);
+    const letterCount = (normalizedText.match(/[A-Za-z]/g) || []).length;
+    const uppercaseCount = (normalizedText.match(/[A-Z]/g) || []).length;
+    const lowercaseCount = (normalizedText.match(/[a-z]/g) || []).length;
+    const digitCount = (normalizedText.match(/\d/g) || []).length;
+    const symbolCount = (normalizedText.match(/[^A-Za-z0-9 .'-]/g) || []).length;
+    const punctuationPenalty = (normalizedText.match(/[.](?=[A-Za-z])/g) || []).length;
+
+    return (
+        (letterCount * 2)
+        + digitCount
+        - (symbolCount * 6)
+        + (/^[A-Za-z0-9 .'-]+$/.test(normalizedText) ? 6 : 0)
+        + (normalizedText.length >= 3 ? 3 : 0)
+        + (lowercaseCount === 0 && uppercaseCount >= 2 ? 6 : 0)
+        - (uppercaseCount > 0 && lowercaseCount > 0 ? 8 : 0)
+        - (punctuationPenalty * 4)
+    );
+}
+
+function wordOverlapRatio(leftWord, rightWord) {
+    const overlapWidth = Math.max(
+        0,
+        Math.min(leftWord.right, rightWord.right) - Math.max(leftWord.x, rightWord.x),
+    );
+    const overlapHeight = Math.max(
+        0,
+        Math.min(leftWord.bottom, rightWord.bottom) - Math.max(leftWord.y, rightWord.y),
+    );
+    const overlapArea = overlapWidth * overlapHeight;
+
+    if (overlapArea === 0) {
+        return 0;
+    }
+
+    const leftArea = leftWord.width * leftWord.height;
+    const rightArea = rightWord.width * rightWord.height;
+
+    return overlapArea / Math.min(leftArea, rightArea);
 }
 
 function looksLikeCaptionName(segment, normalizedTokens) {
@@ -333,129 +597,177 @@ function looksLikeCaptionName(segment, normalizedTokens) {
         return false;
     }
 
-    if (normalizedTokens.length < 2 || normalizedTokens.length > 4) {
+    const contentTokens = normalizedTokens.filter((token) => !/^(II|III|IV|V|JR|SR)$/.test(token));
+
+    if (contentTokens.length < 2 || contentTokens.length > 4) {
         return false;
     }
 
-    if (normalizedTokens.some((token) => /\d/.test(token) || token.length > 18)) {
+    if (contentTokens.some((token) => /\d/.test(token) || token.length > 18 || NON_NAME_TOKENS.has(token))) {
         return false;
     }
 
-    return /^[A-Z .'-]+$/i.test(segment.text);
+    return contentTokens.every((token) => /^[A-Z]+(?:-[A-Z]+)*$/.test(token));
 }
 
-function inferPortraitSizing(segments, existingAnnotations) {
-    const trustedAnnotations = existingAnnotations.length > 0 ? existingAnnotations : [];
-    const existingWidths = trustedAnnotations.map((annotation) => annotation.width).filter((width) => width >= 16);
-    const existingHeights = trustedAnnotations.map((annotation) => annotation.height).filter((height) => height >= 16);
-    const rowTops = Array.from(new Set(segments.map((segment) => segment.y))).sort((leftValue, rightValue) => leftValue - rightValue);
-    const rowSpacings = [];
-
-    for (let index = 1; index < rowTops.length; index += 1) {
-        const difference = rowTops[index] - rowTops[index - 1];
-
-        if (difference >= 120) {
-            rowSpacings.push(difference);
-        }
+function looksLikePartialCaptionName(segment, normalizedTokens) {
+    if (segment.height < MIN_CAPTION_HEIGHT - 3 || segment.height > MAX_CAPTION_HEIGHT + 8) {
+        return false;
     }
 
-    const inferredHeightFromRows = rowSpacings.length > 0
-        ? Math.round(median(rowSpacings) * ROW_SPACING_TO_PORTRAIT_HEIGHT)
-        : null;
-    const portraitHeight = Math.max(
-        MIN_PORTRAIT_HEIGHT,
-        Math.round(median(existingHeights) || inferredHeightFromRows || 300),
-    );
-    const inferredWidth = Math.round(portraitHeight / PORTRAIT_HEIGHT_TO_WIDTH);
-    const portraitWidth = Math.max(
-        MIN_PORTRAIT_WIDTH,
-        Math.round(median(existingWidths) || inferredWidth || 235),
-    );
+    if (segment.width < 24 || segment.width > 180) {
+        return false;
+    }
+
+    if (normalizedTokens.length !== 1) {
+        return false;
+    }
+
+    const [token] = normalizedTokens;
+
+    if (
+        !token
+        || token.length < PARTIAL_NAME_TOKEN_MIN_LENGTH
+        || token.length > 18
+        || NON_NAME_TOKENS.has(token)
+        || /\d/.test(token)
+    ) {
+        return false;
+    }
+
+    return /^[A-Z]+(?:-[A-Z]+)*$/.test(token);
+}
+
+function normalizeReferenceAnnotation(annotation, composite) {
+    const x = toFiniteNumber(annotation?.x);
+    const y = toFiniteNumber(annotation?.y);
+    const width = toFiniteNumber(annotation?.width);
+    const height = toFiniteNumber(annotation?.height);
+
+    if ([x, y, width, height].some((value) => value === null)) {
+        return null;
+    }
+
+    const normalizedWidth = Math.round(Math.abs(width));
+    const normalizedHeight = Math.round(Math.abs(height));
+
+    if (normalizedWidth < 16 || normalizedHeight < 16) {
+        return null;
+    }
+
+    const clampedWidth = clamp(normalizedWidth, MIN_PORTRAIT_WIDTH, composite.imageWidth);
+    const clampedHeight = clamp(normalizedHeight, MIN_PORTRAIT_HEIGHT, composite.imageHeight);
 
     return {
-        portraitWidth,
-        portraitHeight,
+        annotationId: annotation.annotationId || null,
+        x: clamp(Math.round(x), 0, composite.imageWidth - clampedWidth),
+        y: clamp(Math.round(y), 0, composite.imageHeight - clampedHeight),
+        width: clampedWidth,
+        height: clampedHeight,
     };
 }
 
-function buildDetectedAnnotations(segments, sizing, composite, reservedAnnotations) {
-    const rowGroups = new Map();
+function findReferenceAnchorTextBox(referenceAnnotation, textBoxes) {
+    const referenceCenterX = referenceAnnotation.x + (referenceAnnotation.width / 2);
+    const referenceBottom = referenceAnnotation.y + referenceAnnotation.height;
 
-    for (const segment of segments) {
-        const currentRow = rowGroups.get(segment.rowIndex) || [];
-        currentRow.push(segment);
-        rowGroups.set(segment.rowIndex, currentRow);
-    }
+    const candidates = textBoxes
+        .map((textBox) => {
+            const verticalGap = textBox.y - referenceBottom;
+            const horizontalOverlap = Math.max(
+                0,
+                Math.min(referenceAnnotation.x + referenceAnnotation.width, textBox.x + textBox.width) - Math.max(referenceAnnotation.x, textBox.x),
+            );
+            const centerDistance = Math.abs(textBox.centerX - referenceCenterX);
 
+            return {
+                ...textBox,
+                verticalGap,
+                horizontalOverlap,
+                centerDistance,
+            };
+        })
+        .filter((textBox) => (
+            textBox.verticalGap >= -8
+            && textBox.verticalGap <= Math.max(referenceAnnotation.height * 0.8, 160)
+            && (
+                textBox.horizontalOverlap >= Math.max(12, textBox.width * 0.25)
+                || textBox.centerDistance <= Math.max(referenceAnnotation.width * 0.75, 160)
+            )
+        ))
+        .sort((leftCandidate, rightCandidate) => (
+            leftCandidate.verticalGap - rightCandidate.verticalGap
+            || leftCandidate.centerDistance - rightCandidate.centerDistance
+        ));
+
+    return candidates[0] || null;
+}
+
+function buildReferenceBasedAnnotations({
+    textBoxes,
+    anchorTextBox,
+    referenceAnnotation,
+    composite,
+    reservedAnnotations,
+}) {
+    const referenceCenterX = referenceAnnotation.x + (referenceAnnotation.width / 2);
+    const portraitWidth = clamp(referenceAnnotation.width, MIN_PORTRAIT_WIDTH, composite.imageWidth);
+    const portraitHeight = clamp(referenceAnnotation.height, MIN_PORTRAIT_HEIGHT, composite.imageHeight);
+    const anchorBottomOffset = referenceAnnotation.y - (anchorTextBox.y + anchorTextBox.height);
+    const maxHorizontalShift = Math.max(8, Math.round(portraitWidth * 0.12));
+    const rawAnchorCenterOffset = referenceCenterX - anchorTextBox.centerX;
+    const anchorCenterOffset = clamp(
+        Math.round(rawAnchorCenterOffset * getAnchorCenterOffsetWeight(anchorTextBox)),
+        -maxHorizontalShift,
+        maxHorizontalShift,
+    );
     const detectedAnnotations = [];
 
-    for (const rowSegments of rowGroups.values()) {
-        const orderedSegments = [...rowSegments].sort((leftSegment, rightSegment) => leftSegment.centerX - rightSegment.centerX);
+    for (const textBox of textBoxes) {
+        if (textBox.textBoxId === anchorTextBox.textBoxId) {
+            continue;
+        }
 
-        orderedSegments.forEach((segment, index) => {
-            const previousSegment = orderedSegments[index - 1] || null;
-            const nextSegment = orderedSegments[index + 1] || null;
-            const maxWidthFromNeighbors = [
-                previousSegment ? Math.round(segment.centerX - previousSegment.centerX - 10) : null,
-                nextSegment ? Math.round(nextSegment.centerX - segment.centerX - 10) : null,
-            ]
-                .filter((value) => Number.isFinite(value) && value > 0);
+        const x = clamp(
+            Math.round(textBox.centerX + anchorCenterOffset - (portraitWidth / 2)),
+            0,
+            composite.imageWidth - portraitWidth,
+        );
+        const y = clamp(
+            Math.round(textBox.y + textBox.height + anchorBottomOffset),
+            0,
+            composite.imageHeight - portraitHeight,
+        );
+        const nextAnnotation = {
+            annotationId: `auto-${crypto.randomUUID()}`,
+            compositeId: composite.compositeId,
+            profileId: null,
+            source: "auto",
+            detectedName: textBox.text || null,
+            matchedProfileId: textBox.matchedProfileId,
+            matchConfidence: textBox.matchConfidence || null,
+            needsReview: Boolean(textBox.needsReview),
+            captionBox: {
+                x: Math.round(textBox.x),
+                y: Math.round(textBox.y),
+                width: Math.round(textBox.width),
+                height: Math.round(textBox.height),
+            },
+            x,
+            y,
+            width: portraitWidth,
+            height: portraitHeight,
+        };
 
-            const portraitWidth = clamp(
-                Math.min(
-                    sizing.portraitWidth,
-                    ...(maxWidthFromNeighbors.length > 0 ? maxWidthFromNeighbors : [sizing.portraitWidth]),
-                ),
-                MIN_PORTRAIT_WIDTH,
-                composite.imageWidth,
-            );
-            const portraitHeight = clamp(sizing.portraitHeight, MIN_PORTRAIT_HEIGHT, composite.imageHeight);
-            const captionGap = Math.max(8, Math.round(segment.height * 0.65));
-            const x = clamp(
-                Math.round(segment.centerX - (portraitWidth / 2)),
-                0,
-                composite.imageWidth - portraitWidth,
-            );
-            const y = clamp(
-                Math.round(segment.y - captionGap - portraitHeight),
-                0,
-                composite.imageHeight - portraitHeight,
-            );
-            const nextAnnotation = {
-                annotationId: `auto-${crypto.randomUUID()}`,
-                compositeId: composite.compositeId,
-                profileId: null,
-                source: "auto",
-                detectedName: segment.detectedName || null,
-                matchedProfileId: segment.matchedProfileId,
-                matchConfidence: segment.matchConfidence || null,
-                needsReview: (
-                    !segment.matchedProfileId
-                    || segment.matchConfidence < 0.94
-                    || normalizeForMatch(segment.detectedName) !== normalizeForMatch(segment.matchedProfileDisplayName)
-                ),
-                captionBox: {
-                    x: Math.round(segment.x),
-                    y: Math.round(segment.y),
-                    width: Math.round(segment.width),
-                    height: Math.round(segment.height),
-                },
-                x,
-                y,
-                width: portraitWidth,
-                height: portraitHeight,
-            };
+        if (overlapsReservedAnnotation(nextAnnotation, reservedAnnotations)) {
+            continue;
+        }
 
-            if (overlapsReservedAnnotation(nextAnnotation, reservedAnnotations)) {
-                return;
-            }
+        if (overlapsReservedAnnotation(nextAnnotation, detectedAnnotations)) {
+            continue;
+        }
 
-            if (overlapsReservedAnnotation(nextAnnotation, detectedAnnotations)) {
-                return;
-            }
-
-            detectedAnnotations.push(nextAnnotation);
-        });
+        detectedAnnotations.push(nextAnnotation);
     }
 
     return detectedAnnotations;
@@ -488,6 +800,18 @@ function dedupeSuggestedProfileMatches(annotations) {
         annotation.matchedProfileId = null;
         annotation.needsReview = true;
     }
+}
+
+function getAnchorCenterOffsetWeight(anchorTextBox) {
+    if (anchorTextBox?.matchedProfileId && (anchorTextBox.matchConfidence || 0) >= 0.95) {
+        return 0.65;
+    }
+
+    if (anchorTextBox?.isAnchorCandidate) {
+        return 0.45;
+    }
+
+    return 0.25;
 }
 
 function normalizeExistingAnnotations(annotations) {
@@ -535,6 +859,22 @@ function cleanDisplayText(text) {
         .trim();
 }
 
+function hasReliableProfileSuggestionForTokens(normalizedTokens, bestProfileMatch) {
+    if (!bestProfileMatch.profileId) {
+        return false;
+    }
+
+    if (normalizedTokens.length >= 2) {
+        return bestProfileMatch.score >= PROFILE_SUGGESTION_THRESHOLD;
+    }
+
+    return (
+        normalizedTokens.length === 1
+        && bestProfileMatch.score >= PARTIAL_PROFILE_SUGGESTION_THRESHOLD
+        && (bestProfileMatch.score - bestProfileMatch.runnerUpScore) >= PARTIAL_PROFILE_MARGIN
+    );
+}
+
 function normalizeForMatch(text) {
     return cleanDisplayText(text)
         .toUpperCase()
@@ -576,6 +916,81 @@ function formatDetectedName(text) {
     }).join(" ");
 }
 
+function shouldUseMergedSegment(segmentEvaluations, mergedEvaluation) {
+    const mergedTokenCount = mergedEvaluation.normalizedTokens.length;
+
+    if (mergedTokenCount < 2 || mergedTokenCount > 4 || !mergedEvaluation.nameLike) {
+        return false;
+    }
+
+    const bestSingleScore = Math.max(...segmentEvaluations.map((segment) => segment.matchConfidence || 0), 0);
+    const bestSingleTokenCount = Math.max(...segmentEvaluations.map((segment) => segment.normalizedTokens.length), 0);
+    const hasIncompleteSegment = segmentEvaluations.some((segment) => (
+        segment.normalizedTokens.length === 1
+        || (!segment.nameLike && !segment.strongMatch)
+    ));
+    const hasStrongStandaloneCaption = segmentEvaluations.every((segment) => (
+        segment.nameLike
+        && segment.normalizedTokens.length >= 2
+        && (segment.matchConfidence || 0) >= Math.max(mergedEvaluation.matchConfidence - 0.06, 0.84)
+    ));
+    const mergedImprovesConfidence = (mergedEvaluation.matchConfidence || 0) >= (bestSingleScore + 0.08);
+
+    if (hasStrongStandaloneCaption) {
+        return false;
+    }
+
+    return (
+        (
+            hasIncompleteSegment
+            && mergedTokenCount > bestSingleTokenCount
+            && (
+                mergedEvaluation.strongMatch
+                || mergedEvaluation.hasReliableProfileSuggestion
+                || mergedImprovesConfidence
+            )
+        )
+        || mergedEvaluation.strongMatch
+        || (mergedEvaluation.matchConfidence || 0) >= (bestSingleScore + 0.14)
+    );
+}
+
+function scorePartialNameTokenMatch(token, variant) {
+    if (!token || token.length < PARTIAL_NAME_TOKEN_MIN_LENGTH) {
+        return 0;
+    }
+
+    const variantTokens = tokenizeNormalizedText(variant);
+    let bestScore = 0;
+
+    for (const variantToken of variantTokens) {
+        if (!variantToken || variantToken.length < PARTIAL_NAME_TOKEN_MIN_LENGTH) {
+            continue;
+        }
+
+        if (token === variantToken) {
+            bestScore = Math.max(bestScore, 0.9);
+            continue;
+        }
+
+        if (variantToken.startsWith(token) || token.startsWith(variantToken)) {
+            bestScore = Math.max(bestScore, 0.84);
+            continue;
+        }
+
+        const maxLength = Math.max(token.length, variantToken.length) || 1;
+        const editScore = 1 - (levenshteinDistance(token, variantToken) / maxLength);
+        const bigramScore = diceCoefficient(token, variantToken);
+        const tokenScore = clamp((editScore * 0.65) + (bigramScore * 0.35), 0, 1);
+
+        if (tokenScore >= 0.8) {
+            bestScore = Math.max(bestScore, tokenScore);
+        }
+    }
+
+    return bestScore;
+}
+
 function roundConfidence(value) {
     return Number.isFinite(value) ? Number(value.toFixed(3)) : null;
 }
@@ -586,24 +1001,6 @@ function average(values) {
     }
 
     return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-function median(values) {
-    const preparedValues = (Array.isArray(values) ? values : [])
-        .filter((value) => Number.isFinite(value))
-        .sort((leftValue, rightValue) => leftValue - rightValue);
-
-    if (preparedValues.length === 0) {
-        return null;
-    }
-
-    const middleIndex = Math.floor(preparedValues.length / 2);
-
-    if (preparedValues.length % 2 === 1) {
-        return preparedValues[middleIndex];
-    }
-
-    return (preparedValues[middleIndex - 1] + preparedValues[middleIndex]) / 2;
 }
 
 function multisetDiceCoefficient(leftTokens, rightTokens) {
@@ -713,10 +1110,17 @@ function normalizeYear(value) {
     return Number(normalizedValue);
 }
 
+function toFiniteNumber(value) {
+    const numericValue = Number(value);
+
+    return Number.isFinite(numericValue) ? numericValue : null;
+}
+
 function clamp(value, min, max) {
     return Math.min(Math.max(value, min), max);
 }
 
 module.exports = {
     detectCompositeAnnotations,
+    detectCompositeTextBoxes,
 };

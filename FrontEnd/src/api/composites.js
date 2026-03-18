@@ -38,6 +38,10 @@ export function getComposite(compositeId) {
   return requestJson(`/api/composites/${compositeId}`);
 }
 
+export function getCompositeTextBoxes(compositeId) {
+  return requestJson(`/api/composites/${compositeId}/text-boxes`);
+}
+
 export function getProfiles() {
   return requestJson('/api/profiles');
 }
@@ -77,13 +81,17 @@ export function saveCompositeAnnotations(compositeId, annotations) {
   });
 }
 
-export function autoDetectCompositeAnnotations(compositeId, existingAnnotations = []) {
+export function autoDetectCompositeAnnotations(
+  compositeId,
+  existingAnnotations = [],
+  referenceAnnotation = null,
+) {
   return requestJson(`/api/composites/${compositeId}/auto-detect`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ existingAnnotations }),
+    body: JSON.stringify({ existingAnnotations, referenceAnnotation }),
   });
 }
 

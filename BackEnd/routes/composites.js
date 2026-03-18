@@ -12,7 +12,10 @@ const {
     listComposites,
     replaceAnnotations,
 } = require("../utils/compositeStore");
-const { detectCompositeAnnotations } = require("../utils/compositeAutoDetect");
+const {
+    detectCompositeAnnotations,
+    detectCompositeTextBoxes,
+} = require("../utils/compositeAutoDetect");
 const { listProfiles } = require("../utils/profileStore");
 const {
     allowedMimeTypes,
@@ -166,6 +169,29 @@ router.delete("/:compositeId", async (req, res, next) => {
     }
 });
 
+router.get("/:compositeId/text-boxes", async (req, res, next) => {
+    try {
+        const composite = await getCompositeById(req.params.compositeId);
+
+        if (!composite) {
+            return res.status(404).json({ error: "Composite not found." });
+        }
+
+        const profiles = await listProfiles();
+        const textBoxResult = await detectCompositeTextBoxes({
+            composite,
+            profiles,
+        });
+
+        return res.json({
+            compositeId: composite.compositeId,
+            ...textBoxResult,
+        });
+    } catch (error) {
+        return next(error);
+    }
+});
+
 router.post("/:compositeId/auto-detect", async (req, res, next) => {
     try {
         const composite = await getCompositeById(req.params.compositeId);
@@ -178,10 +204,12 @@ router.post("/:compositeId/auto-detect", async (req, res, next) => {
         const existingAnnotations = Array.isArray(req.body?.existingAnnotations)
             ? req.body.existingAnnotations
             : composite.annotations || [];
+        const referenceAnnotation = req.body?.referenceAnnotation || null;
         const detectionResult = await detectCompositeAnnotations({
             composite,
             profiles,
             existingAnnotations,
+            referenceAnnotation,
         });
 
         return res.json({

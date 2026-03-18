@@ -7,6 +7,7 @@ import ProfileSearchSelect from '../components/Composite/ProfileSearchSelect.jsx
 import {
   autoDetectCompositeAnnotations,
   getComposite,
+  getCompositeTextBoxes,
   getProfiles,
   saveCompositeAnnotations,
 } from '../api/composites.js';
@@ -30,6 +31,10 @@ export default function CompositeEditorPage() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [saveStatus, setSaveStatus] = useState('idle');
   const [saveError, setSaveError] = useState('');
+  const [textBoxes, setTextBoxes] = useState([]);
+  const [showTextBoxes, setShowTextBoxes] = useState(true);
+  const [textBoxStatus, setTextBoxStatus] = useState('idle');
+  const [textBoxError, setTextBoxError] = useState('');
   const [autoDetectStatus, setAutoDetectStatus] = useState('idle');
   const [autoDetectMessage, setAutoDetectMessage] = useState('');
   const [autoDetectError, setAutoDetectError] = useState('');
@@ -76,6 +81,9 @@ export default function CompositeEditorPage() {
         currentSignatureRef.current = latestSavedSignatureRef.current;
         setSaveStatus('idle');
         setSaveError('');
+        setTextBoxes([]);
+        setTextBoxStatus('idle');
+        setTextBoxError('');
         setAutoDetectStatus('idle');
         setAutoDetectMessage('');
         setAutoDetectError('');
@@ -149,6 +157,44 @@ export default function CompositeEditorPage() {
       resizeObserver.disconnect();
     };
   }, [isStackedLayout, composite?.imageUrl]);
+
+  useEffect(() => {
+    if (!compositeId) {
+      return undefined;
+    }
+
+    let isActive = true;
+
+    const loadTextBoxes = async () => {
+      setTextBoxStatus('loading');
+      setTextBoxError('');
+
+      try {
+        const textBoxResult = await getCompositeTextBoxes(compositeId);
+
+        if (!isActive) {
+          return;
+        }
+
+        setTextBoxes(textBoxResult.textBoxes || []);
+        setTextBoxStatus('loaded');
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        setTextBoxes([]);
+        setTextBoxStatus('error');
+        setTextBoxError(error.message);
+      }
+    };
+
+    loadTextBoxes();
+
+    return () => {
+      isActive = false;
+    };
+  }, [compositeId]);
 
   const profileMap = useMemo(
     () => new Map(profiles.map((profile) => [profile.id, profile])),
@@ -374,7 +420,18 @@ export default function CompositeEditorPage() {
       return;
     }
 
-    const preservedAnnotations = annotations.filter((annotation) => annotation.source !== 'auto');
+    const referenceAnnotation = annotations.find(
+      (annotation) => annotation.annotationId === selectedAnnotationId,
+    );
+
+    if (!referenceAnnotation) {
+      setAutoDetectStatus('error');
+      setAutoDetectMessage('');
+      setAutoDetectError('Draw and select a reference portrait box first.');
+      return;
+    }
+
+    const preservedAnnotations = [...annotations];
 
     setAutoDetectStatus('detecting');
     setAutoDetectMessage('');
@@ -384,20 +441,24 @@ export default function CompositeEditorPage() {
       const detectionResult = await autoDetectCompositeAnnotations(
         composite.compositeId,
         preservedAnnotations.map(toAnnotationPayload),
+        toAnnotationPayload(referenceAnnotation),
       );
       const detectedAnnotations = (detectionResult.detectedAnnotations || []).map((annotation) =>
         syncAnnotationForDisplay(annotation, composite),
       );
       const mergedAnnotations = [...preservedAnnotations, ...detectedAnnotations];
 
+      setTextBoxes(detectionResult.textBoxes || []);
+      setTextBoxStatus('loaded');
+      setTextBoxError('');
       setAnnotations(mergedAnnotations);
       setLastBoxSize(getReusableBoxSize(mergedAnnotations, lastBoxSize));
-      setSelectedAnnotationId(detectedAnnotations[0]?.annotationId || preservedAnnotations[0]?.annotationId || null);
+      setSelectedAnnotationId(detectedAnnotations[0]?.annotationId || referenceAnnotation.annotationId || null);
       setAutoDetectStatus(detectedAnnotations.length > 0 ? 'done' : 'empty');
       setAutoDetectMessage(
         detectedAnnotations.length > 0
-          ? `Loaded ${detectedAnnotations.length} auto-detected portraits into the editor. Review the suggested names and profile matches before finalizing.`
-          : 'No likely portraits were detected for this composite.',
+          ? `Added ${detectedAnnotations.length} portrait boxes from the selected reference and OCR name anchors.`
+          : 'No new portrait boxes were added from the selected reference.',
       );
     } catch (error) {
       setAutoDetectStatus('error');
@@ -498,7 +559,7 @@ export default function CompositeEditorPage() {
               onClick={handleAutoDetect}
               disabled={autoDetectStatus === 'detecting'}
             >
-              {autoDetectStatus === 'detecting' ? 'Detecting...' : 'Auto-detect portraits'}
+              {autoDetectStatus === 'detecting' ? 'Filling...' : 'Auto-fill from reference'}
             </button>
 
             <button
@@ -512,6 +573,7 @@ export default function CompositeEditorPage() {
         </header>
 
         {saveError ? <p className="compositeMessage compositeMessage--error">{saveError}</p> : null}
+        {textBoxError ? <p className="compositeMessage compositeMessage--error">{textBoxError}</p> : null}
         {autoDetectError ? <p className="compositeMessage compositeMessage--error">{autoDetectError}</p> : null}
         {autoDetectMessage ? (
           <p className={[
@@ -528,11 +590,25 @@ export default function CompositeEditorPage() {
               <p className="compositeCanvasToolbar__hint">
                 Reusable box size: {Math.round(lastBoxSize.width)} x {Math.round(lastBoxSize.height)} px
               </p>
+              <p className="compositeCanvasToolbar__hint">
+                {textBoxStatus === 'loading'
+                  ? 'Reading OCR name boxes...'
+                  : `OCR name boxes: ${textBoxes.length}`}
+              </p>
+              <button
+                type="button"
+                className="button compositeButton compositeButton--subtle"
+                onClick={() => setShowTextBoxes((currentValue) => !currentValue)}
+                disabled={textBoxStatus === 'loading' || textBoxes.length === 0}
+              >
+                {showTextBoxes ? 'Hide OCR boxes' : 'Show OCR boxes'}
+              </button>
             </div>
 
             <AnnotationStage
               composite={composite}
               annotations={annotations}
+              textBoxes={showTextBoxes ? textBoxes : []}
               selectedAnnotationId={selectedAnnotationId}
               zoom={zoomLevel}
               lastBoxSize={lastBoxSize}
