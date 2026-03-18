@@ -445,6 +445,11 @@
   background: rgba(38, 21, 56, 0.03);
 }
 
+.annotationStage__textBox--subtext {
+  border: 1px dashed rgba(181, 103, 25, 0.82);
+  background: rgba(181, 103, 25, 0.08);
+}
+
 .annotationStage__textBox--review {
   border-color: rgba(223, 150, 48, 0.92);
   background: rgba(223, 150, 48, 0.08);

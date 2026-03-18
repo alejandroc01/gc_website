@@ -469,7 +469,9 @@ export default function AnnotationStage({
                   key={textBox.textBoxId}
                   className={[
                     'annotationStage__textBox',
-                    textBox.isAnchorCandidate ? 'annotationStage__textBox--anchor' : 'annotationStage__textBox--raw',
+                    textBox.isSubtext
+                      ? 'annotationStage__textBox--subtext'
+                      : (textBox.isAnchorCandidate ? 'annotationStage__textBox--anchor' : 'annotationStage__textBox--raw'),
                     textBox.needsReview ? 'annotationStage__textBox--review' : '',
                   ].filter(Boolean).join(' ')}
                   style={toDisplayRect(textBox, composite, baseDisplaySize)}

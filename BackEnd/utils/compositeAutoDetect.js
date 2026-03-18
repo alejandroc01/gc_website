@@ -16,6 +16,8 @@ const PARTIAL_PROFILE_SUGGESTION_THRESHOLD = 0.92;
 const PARTIAL_PROFILE_MARGIN = 0.08;
 const MIN_PORTRAIT_WIDTH = 96;
 const MIN_PORTRAIT_HEIGHT = 128;
+const CAPTION_STACK_VERTICAL_GAP_MAX = 28;
+const CAPTION_STACK_CENTER_DISTANCE_RATIO = 0.38;
 const NON_NAME_TOKENS = new Set([
     "AND",
     "BOARD",
@@ -42,6 +44,49 @@ const NON_NAME_TOKENS = new Set([
     "VIRGINIAPOLYTECHNIC",
     "POLYTECHNIC",
     "INSTITUTE",
+]);
+const TITLE_TOKENS = [
+    "ACADEMIC",
+    "ACT",
+    "ALUM",
+    "ALUMNI",
+    "BROTHERHOOD",
+    "CHAIR",
+    "CHAIRMAN",
+    "COMMITTEE",
+    "COMMUNITY",
+    "DIRECTOR",
+    "EDUCATION",
+    "EXECUTIVE",
+    "EXTERNAL",
+    "FACULTY",
+    "HISTORIAN",
+    "INTERNAL",
+    "MANAGEMENT",
+    "MANAGER",
+    "MEMBER",
+    "OFFICER",
+    "PHILANTHROPY",
+    "PRESIDENT",
+    "RECRUITMENT",
+    "RISK",
+    "RUSH",
+    "SECRETARY",
+    "SERVICE",
+    "SOCIAL",
+    "STANDARDS",
+    "STEWARD",
+    "TREASURER",
+    "VICE",
+];
+const TITLE_CONNECTOR_TOKENS = new Set([
+    "A",
+    "AN",
+    "AND",
+    "FOR",
+    "OF",
+    "THE",
+    "TO",
 ]);
 
 async function detectCompositeTextBoxes({ composite, profiles }) {
@@ -316,10 +361,15 @@ function toSegment(words, rowIndex) {
 }
 
 function evaluateSegment(segment, profileEntries) {
-    const normalizedText = normalizeForMatch(segment.text);
-    const normalizedTokens = tokenizeNormalizedText(normalizedText);
+    const fullNormalizedText = normalizeForMatch(segment.text);
+    const fullNormalizedTokens = tokenizeNormalizedText(fullNormalizedText);
+    const tokenClassification = classifySegmentTokens(fullNormalizedTokens);
+    const normalizedTokens = tokenClassification.nameTokens.length > 0
+        ? tokenClassification.nameTokens
+        : fullNormalizedTokens;
+    const normalizedText = normalizedTokens.join(" ");
     const bestProfileMatch = findBestProfileMatch(normalizedText, normalizedTokens, profileEntries);
-    const detectedName = formatDetectedName(segment.text);
+    const detectedName = formatDisplayTokens(normalizedTokens);
     const hasReliableProfileSuggestion = hasReliableProfileSuggestionForTokens(
         normalizedTokens,
         bestProfileMatch,
@@ -329,7 +379,10 @@ function evaluateSegment(segment, profileEntries) {
         ...segment,
         normalizedText,
         normalizedTokens,
+        fullNormalizedText,
+        fullNormalizedTokens,
         detectedName,
+        subtitleText: formatDisplayTokens(tokenClassification.subtitleTokens),
         matchedProfileDisplayName: bestProfileMatch.displayName || null,
         matchedProfileId: hasReliableProfileSuggestion
             ? bestProfileMatch.profileId
@@ -337,6 +390,9 @@ function evaluateSegment(segment, profileEntries) {
         matchConfidence: roundConfidence(bestProfileMatch.score),
         nameLike: looksLikeCaptionName(segment, normalizedTokens),
         partialNameLike: looksLikePartialCaptionName(segment, normalizedTokens),
+        hasTitleLikeTokens: tokenClassification.hasTitleLikeTokens,
+        isSubtitleOnly: tokenClassification.isSubtitleOnly,
+        hasEmbeddedSubtitle: tokenClassification.hasTitleLikeTokens && tokenClassification.nameTokens.length >= 2,
         strongMatch: normalizedTokens.length >= 2 && bestProfileMatch.score >= STRONG_MATCH_THRESHOLD,
         hasReliableProfileSuggestion,
     };
@@ -452,14 +508,19 @@ function buildVisibleTextBoxes(segments) {
             currentStats.strongCount += 1;
         }
 
-        if (segment.nameLike || segment.partialNameLike || segment.hasReliableProfileSuggestion) {
+        if (
+            segment.nameLike
+            || segment.partialNameLike
+            || segment.hasReliableProfileSuggestion
+            || segment.hasEmbeddedSubtitle
+        ) {
             currentStats.plausibleCount += 1;
         }
 
         rowStats.set(segment.rowIndex, currentStats);
     }
 
-    return segments
+    const textBoxes = segments
         .filter((segment) => (
             segment.text
             && segment.width >= 16
@@ -474,17 +535,19 @@ function buildVisibleTextBoxes(segments) {
         .map((segment, index) => {
             const row = rowStats.get(segment.rowIndex) || { strongCount: 0, plausibleCount: 0 };
             const rowLooksLikeCaptionBand = row.plausibleCount >= 3 || row.strongCount >= 1;
-            const isPlacementCandidate = rowLooksLikeCaptionBand && (
+            const isPlacementCandidate = rowLooksLikeCaptionBand && !segment.isSubtitleOnly && (
                 segment.nameLike
                 || segment.partialNameLike
                 || segment.strongMatch
                 || segment.hasReliableProfileSuggestion
+                || segment.hasEmbeddedSubtitle
                 || segment.matchConfidence >= 0.42
             );
-            const isAnchorCandidate = rowLooksLikeCaptionBand && (
+            const isAnchorCandidate = rowLooksLikeCaptionBand && !segment.isSubtitleOnly && (
                 segment.nameLike
                 || segment.strongMatch
                 || segment.hasReliableProfileSuggestion
+                || segment.hasEmbeddedSubtitle
                 || segment.matchConfidence >= 0.56
             );
 
@@ -501,6 +564,9 @@ function buildVisibleTextBoxes(segments) {
                 centerY: segment.centerY,
                 isPlacementCandidate,
                 isAnchorCandidate,
+                hasEmbeddedSubtitle: Boolean(segment.hasEmbeddedSubtitle),
+                isSubtext: Boolean(segment.isSubtitleOnly),
+                subtitleText: segment.subtitleText || null,
                 matchedProfileId: segment.matchedProfileId,
                 matchedProfileDisplayName: segment.matchedProfileDisplayName,
                 matchConfidence: segment.matchConfidence || null,
@@ -511,6 +577,8 @@ function buildVisibleTextBoxes(segments) {
                 ),
             };
         });
+
+    return decorateCaptionTextBoxes(textBoxes);
 }
 
 function dedupeOcrWords(words) {
@@ -589,6 +657,10 @@ function wordOverlapRatio(leftWord, rightWord) {
 }
 
 function looksLikeCaptionName(segment, normalizedTokens) {
+    if (normalizedTokens.some((token) => isLikelyTitleToken(token))) {
+        return false;
+    }
+
     if (segment.height < MIN_CAPTION_HEIGHT || segment.height > MAX_CAPTION_HEIGHT) {
         return false;
     }
@@ -611,6 +683,10 @@ function looksLikeCaptionName(segment, normalizedTokens) {
 }
 
 function looksLikePartialCaptionName(segment, normalizedTokens) {
+    if (normalizedTokens.some((token) => isLikelyTitleToken(token))) {
+        return false;
+    }
+
     if (segment.height < MIN_CAPTION_HEIGHT - 3 || segment.height > MAX_CAPTION_HEIGHT + 8) {
         return false;
     }
@@ -673,12 +749,15 @@ function findReferenceAnchorTextBox(referenceAnnotation, textBoxes) {
 
     const candidates = textBoxes
         .map((textBox) => {
-            const verticalGap = textBox.y - referenceBottom;
+            const verticalGap = (textBox.anchorTopY ?? textBox.y) - referenceBottom;
             const horizontalOverlap = Math.max(
                 0,
-                Math.min(referenceAnnotation.x + referenceAnnotation.width, textBox.x + textBox.width) - Math.max(referenceAnnotation.x, textBox.x),
+                Math.min(
+                    referenceAnnotation.x + referenceAnnotation.width,
+                    (textBox.fullCaptionBox?.x ?? textBox.x) + (textBox.fullCaptionBox?.width ?? textBox.width),
+                ) - Math.max(referenceAnnotation.x, textBox.fullCaptionBox?.x ?? textBox.x),
             );
-            const centerDistance = Math.abs(textBox.centerX - referenceCenterX);
+            const centerDistance = Math.abs((textBox.anchorCenterX ?? textBox.centerX) - referenceCenterX);
 
             return {
                 ...textBox,
@@ -713,9 +792,9 @@ function buildReferenceBasedAnnotations({
     const referenceCenterX = referenceAnnotation.x + (referenceAnnotation.width / 2);
     const portraitWidth = clamp(referenceAnnotation.width, MIN_PORTRAIT_WIDTH, composite.imageWidth);
     const portraitHeight = clamp(referenceAnnotation.height, MIN_PORTRAIT_HEIGHT, composite.imageHeight);
-    const anchorBottomOffset = referenceAnnotation.y - (anchorTextBox.y + anchorTextBox.height);
+    const anchorBottomOffset = referenceAnnotation.y - (anchorTextBox.anchorBottomY ?? (anchorTextBox.y + anchorTextBox.height));
     const maxHorizontalShift = Math.max(8, Math.round(portraitWidth * 0.12));
-    const rawAnchorCenterOffset = referenceCenterX - anchorTextBox.centerX;
+    const rawAnchorCenterOffset = referenceCenterX - (anchorTextBox.anchorCenterX ?? anchorTextBox.centerX);
     const anchorCenterOffset = clamp(
         Math.round(rawAnchorCenterOffset * getAnchorCenterOffsetWeight(anchorTextBox)),
         -maxHorizontalShift,
@@ -729,15 +808,21 @@ function buildReferenceBasedAnnotations({
         }
 
         const x = clamp(
-            Math.round(textBox.centerX + anchorCenterOffset - (portraitWidth / 2)),
+            Math.round((textBox.anchorCenterX ?? textBox.centerX) + anchorCenterOffset - (portraitWidth / 2)),
             0,
             composite.imageWidth - portraitWidth,
         );
         const y = clamp(
-            Math.round(textBox.y + textBox.height + anchorBottomOffset),
+            Math.round((textBox.anchorBottomY ?? (textBox.y + textBox.height)) + anchorBottomOffset),
             0,
             composite.imageHeight - portraitHeight,
         );
+        const captionBox = textBox.fullCaptionBox || {
+            x: Math.round(textBox.x),
+            y: Math.round(textBox.y),
+            width: Math.round(textBox.width),
+            height: Math.round(textBox.height),
+        };
         const nextAnnotation = {
             annotationId: `auto-${crypto.randomUUID()}`,
             compositeId: composite.compositeId,
@@ -747,12 +832,7 @@ function buildReferenceBasedAnnotations({
             matchedProfileId: textBox.matchedProfileId,
             matchConfidence: textBox.matchConfidence || null,
             needsReview: Boolean(textBox.needsReview),
-            captionBox: {
-                x: Math.round(textBox.x),
-                y: Math.round(textBox.y),
-                width: Math.round(textBox.width),
-                height: Math.round(textBox.height),
-            },
+            captionBox,
             x,
             y,
             width: portraitWidth,
@@ -814,6 +894,155 @@ function getAnchorCenterOffsetWeight(anchorTextBox) {
     return 0.25;
 }
 
+function decorateCaptionTextBoxes(textBoxes) {
+    const typicalNameLineHeight = getTypicalNameLineHeight(textBoxes);
+    const decoratedBoxes = (Array.isArray(textBoxes) ? textBoxes : []).map((textBox) => {
+        const effectiveLineHeight = getEffectiveNameLineHeight(textBox, typicalNameLineHeight);
+
+        return {
+            ...textBox,
+            captionGroupId: textBox.textBoxId,
+            captionRole: textBox.isSubtext ? "subtitle" : "primary",
+            hasSubtext: Boolean(textBox.hasEmbeddedSubtitle || textBox.isSubtext || textBox.subtitleText),
+            anchorCenterX: textBox.centerX,
+            anchorTopY: textBox.y,
+            anchorBottomY: Math.round(textBox.y + effectiveLineHeight),
+            fullCaptionBox: {
+                x: Math.round(textBox.x),
+                y: Math.round(textBox.y),
+                width: Math.round(textBox.width),
+                height: Math.round(textBox.height),
+            },
+        };
+    });
+    const primaryBoxes = decoratedBoxes.filter((textBox) => !textBox.isSubtext);
+
+    for (const textBox of decoratedBoxes) {
+        const parentTextBox = findCaptionParentTextBox(textBox, primaryBoxes, typicalNameLineHeight);
+
+        if (!parentTextBox || !shouldTreatAsSubtitleTextBox(textBox, parentTextBox, typicalNameLineHeight)) {
+            if (textBox.isSubtext) {
+                textBox.isPlacementCandidate = false;
+                textBox.isAnchorCandidate = false;
+            }
+            continue;
+        }
+
+        textBox.isSubtext = true;
+        textBox.captionGroupId = parentTextBox.textBoxId;
+        textBox.captionRole = "subtitle";
+        textBox.parentTextBoxId = parentTextBox.textBoxId;
+        textBox.anchorCenterX = parentTextBox.anchorCenterX;
+        textBox.anchorTopY = parentTextBox.anchorTopY;
+        textBox.anchorBottomY = parentTextBox.anchorBottomY;
+        textBox.isPlacementCandidate = false;
+        textBox.isAnchorCandidate = false;
+
+        parentTextBox.hasSubtext = true;
+        parentTextBox.subtitleText = joinDisplayText(parentTextBox.subtitleText, textBox.text || textBox.rawText);
+        parentTextBox.fullCaptionBox = mergeBoundingBoxes(parentTextBox.fullCaptionBox, textBox.fullCaptionBox);
+    }
+
+    return decoratedBoxes;
+}
+
+function getTypicalNameLineHeight(textBoxes) {
+    const likelyNameHeights = (Array.isArray(textBoxes) ? textBoxes : [])
+        .filter((textBox) => (
+            !textBox.isSubtext
+            && textBox.height >= 8
+            && textBox.height <= MAX_CAPTION_HEIGHT + 4
+            && (
+                textBox.isAnchorCandidate
+                || textBox.hasEmbeddedSubtitle
+                || (textBox.matchConfidence || 0) >= 0.5
+            )
+        ))
+        .map((textBox) => textBox.height)
+        .sort((leftHeight, rightHeight) => leftHeight - rightHeight);
+
+    if (likelyNameHeights.length === 0) {
+        return MAX_CAPTION_HEIGHT;
+    }
+
+    return likelyNameHeights[Math.floor(likelyNameHeights.length / 2)];
+}
+
+function getEffectiveNameLineHeight(textBox, typicalNameLineHeight) {
+    const normalizedTypicalHeight = Math.max(MIN_CAPTION_HEIGHT, Math.round(typicalNameLineHeight || MAX_CAPTION_HEIGHT));
+
+    if (textBox.isSubtext) {
+        return Math.min(textBox.height, normalizedTypicalHeight);
+    }
+
+    if (textBox.hasEmbeddedSubtitle || textBox.height > Math.round(normalizedTypicalHeight * 1.35)) {
+        return Math.min(textBox.height, normalizedTypicalHeight + 2);
+    }
+
+    return textBox.height;
+}
+
+function findCaptionParentTextBox(subtitleTextBox, primaryBoxes, typicalNameLineHeight) {
+    return primaryBoxes
+        .map((primaryTextBox) => {
+            if (primaryTextBox.textBoxId === subtitleTextBox.textBoxId) {
+                return null;
+            }
+
+            const verticalGap = subtitleTextBox.y - (primaryTextBox.y + primaryTextBox.height);
+            const overlapWidth = Math.max(
+                0,
+                Math.min(
+                    primaryTextBox.x + primaryTextBox.width,
+                    subtitleTextBox.x + subtitleTextBox.width,
+                ) - Math.max(primaryTextBox.x, subtitleTextBox.x),
+            );
+            const centerDistance = Math.abs(primaryTextBox.centerX - subtitleTextBox.centerX);
+
+            return {
+                primaryTextBox,
+                verticalGap,
+                overlapWidth,
+                centerDistance,
+            };
+        })
+        .filter(Boolean)
+        .filter((candidate) => (
+            candidate.verticalGap >= -2
+            && candidate.verticalGap <= Math.max(
+                CAPTION_STACK_VERTICAL_GAP_MAX,
+                Math.round((typicalNameLineHeight || MAX_CAPTION_HEIGHT) * 1.2),
+            )
+            && (
+                candidate.overlapWidth >= Math.min(candidate.primaryTextBox.width, subtitleTextBox.width) * 0.35
+                || candidate.centerDistance <= Math.max(candidate.primaryTextBox.width, subtitleTextBox.width) * CAPTION_STACK_CENTER_DISTANCE_RATIO
+            )
+        ))
+        .sort((leftCandidate, rightCandidate) => (
+            leftCandidate.verticalGap - rightCandidate.verticalGap
+            || leftCandidate.centerDistance - rightCandidate.centerDistance
+            || rightCandidate.overlapWidth - leftCandidate.overlapWidth
+        ))
+        .map((candidate) => candidate.primaryTextBox)[0] || null;
+}
+
+function shouldTreatAsSubtitleTextBox(textBox, parentTextBox, typicalNameLineHeight) {
+    if (!textBox || !parentTextBox || textBox.textBoxId === parentTextBox.textBoxId) {
+        return false;
+    }
+
+    if (textBox.isSubtext) {
+        return true;
+    }
+
+    const normalizedTypicalHeight = Math.max(MIN_CAPTION_HEIGHT, Math.round(typicalNameLineHeight || MAX_CAPTION_HEIGHT));
+    const smallerThanParent = textBox.height <= Math.max(normalizedTypicalHeight * 0.82, parentTextBox.height * 0.82);
+    const weakerThanParent = (textBox.matchConfidence || 0) <= Math.max(0.42, (parentTextBox.matchConfidence || 0) - 0.08);
+    const visiblyNarrower = textBox.width <= parentTextBox.width * 0.86;
+
+    return smallerThanParent && (weakerThanParent || visiblyNarrower);
+}
+
 function normalizeExistingAnnotations(annotations) {
     return (Array.isArray(annotations) ? annotations : [])
         .map((annotation) => ({
@@ -859,6 +1088,64 @@ function cleanDisplayText(text) {
         .trim();
 }
 
+function classifySegmentTokens(tokens) {
+    const normalizedTokens = Array.isArray(tokens) ? tokens.filter(Boolean) : [];
+    const hasTitleLikeTokens = normalizedTokens.some((token) => isLikelyTitleToken(token));
+
+    if (!hasTitleLikeTokens) {
+        return {
+            hasTitleLikeTokens: false,
+            isSubtitleOnly: false,
+            nameTokens: normalizedTokens,
+            subtitleTokens: [],
+        };
+    }
+
+    const nameTokens = normalizedTokens.filter((token) => (
+        !isLikelyTitleToken(token)
+        && !TITLE_CONNECTOR_TOKENS.has(token)
+        && !NON_NAME_TOKENS.has(token)
+        && token.length > 1
+    ));
+    const subtitleTokens = normalizedTokens.filter((token) => !nameTokens.includes(token));
+
+    return {
+        hasTitleLikeTokens: true,
+        isSubtitleOnly: nameTokens.length === 0,
+        nameTokens,
+        subtitleTokens,
+    };
+}
+
+function isLikelyTitleToken(token) {
+    const normalizedToken = String(token || "").trim();
+
+    if (!normalizedToken || normalizedToken.length < 3) {
+        return false;
+    }
+
+    if (NON_NAME_TOKENS.has(normalizedToken) || TITLE_TOKENS.includes(normalizedToken)) {
+        return true;
+    }
+
+    return TITLE_TOKENS.some((titleToken) => {
+        if (Math.abs(titleToken.length - normalizedToken.length) > 3) {
+            return false;
+        }
+
+        if (titleToken.startsWith(normalizedToken) || normalizedToken.startsWith(titleToken)) {
+            return normalizedToken.length >= 5;
+        }
+
+        const editDistance = levenshteinDistance(normalizedToken, titleToken);
+
+        return (
+            editDistance <= Math.max(1, Math.floor(titleToken.length * 0.22))
+            && diceCoefficient(normalizedToken, titleToken) >= 0.45
+        );
+    });
+}
+
 function hasReliableProfileSuggestionForTokens(normalizedTokens, bestProfileMatch) {
     if (!bestProfileMatch.profileId) {
         return false;
@@ -900,7 +1187,11 @@ function formatDetectedName(text) {
     const normalizedText = normalizeForMatch(text);
     const tokens = tokenizeNormalizedText(normalizedText);
 
-    return tokens.map((token) => {
+    return formatDisplayTokens(tokens);
+}
+
+function formatDisplayTokens(tokens) {
+    return (Array.isArray(tokens) ? tokens : []).map((token) => {
         if (/^(II|III|IV|V|JR|SR)$/.test(token)) {
             return token;
         }
@@ -913,7 +1204,37 @@ function formatDetectedName(text) {
                     : part
             ))
             .join("-");
-    }).join(" ");
+    }).join(" ").trim();
+}
+
+function joinDisplayText(leftText, rightText) {
+    return [leftText, rightText]
+        .map((text) => cleanDisplayText(text))
+        .filter(Boolean)
+        .join(" ")
+        .trim() || null;
+}
+
+function mergeBoundingBoxes(leftBox, rightBox) {
+    if (!leftBox) {
+        return rightBox || null;
+    }
+
+    if (!rightBox) {
+        return leftBox;
+    }
+
+    const left = Math.min(leftBox.x, rightBox.x);
+    const top = Math.min(leftBox.y, rightBox.y);
+    const right = Math.max(leftBox.x + leftBox.width, rightBox.x + rightBox.width);
+    const bottom = Math.max(leftBox.y + leftBox.height, rightBox.y + rightBox.height);
+
+    return {
+        x: left,
+        y: top,
+        width: right - left,
+        height: bottom - top,
+    };
 }
 
 function shouldUseMergedSegment(segmentEvaluations, mergedEvaluation) {
