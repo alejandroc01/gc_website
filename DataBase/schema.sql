@@ -21,5 +21,7 @@ CREATE TABLE IF NOT EXISTS members (
     candlelight_date VARCHAR(50),
     deceased VARCHAR(10),
     department VARCHAR(100),
-    emeritus VARCHAR(20)
+    emeritus VARCHAR(20),
+    year_id INT,
+    FOREIGN KEY (year_id) REFERENCES class_years(year_id)
 );
