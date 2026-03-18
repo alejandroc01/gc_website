@@ -46,6 +46,8 @@ export default function CompositeEditorPage() {
   ));
 
   const saveTimeoutRef = useRef(null);
+  const textBoxPollTimeoutRef = useRef(null);
+  const textBoxRequestSequenceRef = useRef(0);
   const latestSavedSignatureRef = useRef('[]');
   const currentSignatureRef = useRef('[]');
   const canvasPanelRef = useRef(null);
@@ -57,6 +59,12 @@ export default function CompositeEditorPage() {
     const loadEditorData = async () => {
       setIsLoading(true);
       setPageError('');
+      setTextBoxes([]);
+      setTextBoxStatus('idle');
+      setTextBoxError('');
+      setAutoDetectStatus('idle');
+      setAutoDetectMessage('');
+      setAutoDetectError('');
 
       try {
         const [loadedComposite, loadedProfiles] = await Promise.all([
@@ -81,12 +89,6 @@ export default function CompositeEditorPage() {
         currentSignatureRef.current = latestSavedSignatureRef.current;
         setSaveStatus('idle');
         setSaveError('');
-        setTextBoxes([]);
-        setTextBoxStatus('idle');
-        setTextBoxError('');
-        setAutoDetectStatus('idle');
-        setAutoDetectMessage('');
-        setAutoDetectError('');
       } catch (error) {
         if (isActive) {
           setPageError(error.message);
@@ -103,6 +105,8 @@ export default function CompositeEditorPage() {
     return () => {
       isActive = false;
       window.clearTimeout(saveTimeoutRef.current);
+      window.clearTimeout(textBoxPollTimeoutRef.current);
+      textBoxRequestSequenceRef.current += 1;
     };
   }, [compositeId]);
 
@@ -158,43 +162,56 @@ export default function CompositeEditorPage() {
     };
   }, [isStackedLayout, composite?.imageUrl]);
 
+  const refreshTextBoxes = useCallback(async () => {
+    if (!compositeId) {
+      return;
+    }
+
+    const requestSequence = ++textBoxRequestSequenceRef.current;
+    window.clearTimeout(textBoxPollTimeoutRef.current);
+    setTextBoxError('');
+
+    try {
+      const textBoxResult = await getCompositeTextBoxes(compositeId);
+
+      if (requestSequence !== textBoxRequestSequenceRef.current) {
+        return;
+      }
+
+      const nextTextBoxStatus = normalizeTextBoxStatus(textBoxResult.ocrStatus);
+
+      setTextBoxes(textBoxResult.textBoxes || []);
+      setTextBoxStatus(nextTextBoxStatus);
+      setTextBoxError(textBoxResult.error || '');
+
+      if (isOcrBusyStatus(nextTextBoxStatus)) {
+        textBoxPollTimeoutRef.current = window.setTimeout(() => {
+          void refreshTextBoxes();
+        }, 2500);
+      }
+    } catch (error) {
+      if (requestSequence !== textBoxRequestSequenceRef.current) {
+        return;
+      }
+
+      setTextBoxes([]);
+      setTextBoxStatus('error');
+      setTextBoxError(error.message);
+    }
+  }, [compositeId]);
+
   useEffect(() => {
     if (!compositeId) {
       return undefined;
     }
 
-    let isActive = true;
-
-    const loadTextBoxes = async () => {
-      setTextBoxStatus('loading');
-      setTextBoxError('');
-
-      try {
-        const textBoxResult = await getCompositeTextBoxes(compositeId);
-
-        if (!isActive) {
-          return;
-        }
-
-        setTextBoxes(textBoxResult.textBoxes || []);
-        setTextBoxStatus('loaded');
-      } catch (error) {
-        if (!isActive) {
-          return;
-        }
-
-        setTextBoxes([]);
-        setTextBoxStatus('error');
-        setTextBoxError(error.message);
-      }
-    };
-
-    loadTextBoxes();
+    void refreshTextBoxes();
 
     return () => {
-      isActive = false;
+      window.clearTimeout(textBoxPollTimeoutRef.current);
+      textBoxRequestSequenceRef.current += 1;
     };
-  }, [compositeId]);
+  }, [compositeId, refreshTextBoxes]);
 
   const profileMap = useMemo(
     () => new Map(profiles.map((profile) => [profile.id, profile])),
@@ -420,6 +437,14 @@ export default function CompositeEditorPage() {
       return;
     }
 
+    if (textBoxStatus !== 'loaded') {
+      setAutoDetectStatus('waiting');
+      setAutoDetectError('');
+      setAutoDetectMessage('OCR is still processing in the background. Auto-fill will unlock when the name boxes are ready.');
+      void refreshTextBoxes();
+      return;
+    }
+
     const referenceAnnotation = annotations.find(
       (annotation) => annotation.annotationId === selectedAnnotationId,
     );
@@ -443,6 +468,21 @@ export default function CompositeEditorPage() {
         preservedAnnotations.map(toAnnotationPayload),
         toAnnotationPayload(referenceAnnotation),
       );
+      const nextTextBoxStatus = normalizeTextBoxStatus(detectionResult.ocrStatus);
+
+      if (nextTextBoxStatus !== 'loaded') {
+        setTextBoxes(detectionResult.textBoxes || []);
+        setTextBoxStatus(nextTextBoxStatus);
+        setTextBoxError(detectionResult.error || '');
+        setAutoDetectStatus('waiting');
+        setAutoDetectMessage(
+          detectionResult.message
+            || 'OCR is still processing in the background. Auto-fill will unlock when the name boxes are ready.',
+        );
+        void refreshTextBoxes();
+        return;
+      }
+
       const detectedAnnotations = (detectionResult.detectedAnnotations || []).map((annotation) =>
         syncAnnotationForDisplay(annotation, composite),
       );
@@ -465,6 +505,20 @@ export default function CompositeEditorPage() {
       setAutoDetectError(error.message);
     }
   };
+
+  const isOcrBusy = isOcrBusyStatus(textBoxStatus);
+  const isCanvasProcessing = isOcrBusy || autoDetectStatus === 'detecting';
+  const canvasProcessingState = autoDetectStatus === 'detecting'
+    ? {
+        title: 'Auto-fill in progress',
+        description: 'Generating portrait boxes from the cached OCR name anchors for this composite.',
+      }
+    : isOcrBusy
+      ? {
+          title: 'Processing OCR',
+          description: 'Reading names and subtitle lines in the background. Manual editing and auto-fill will unlock when this finishes.',
+        }
+      : null;
 
   if (isLoading) {
     return (
@@ -557,7 +611,7 @@ export default function CompositeEditorPage() {
               type="button"
               className="button compositeButton compositeButton--subtle"
               onClick={handleAutoDetect}
-              disabled={autoDetectStatus === 'detecting'}
+              disabled={autoDetectStatus === 'detecting' || textBoxStatus !== 'loaded'}
             >
               {autoDetectStatus === 'detecting' ? 'Filling...' : 'Auto-fill from reference'}
             </button>
@@ -575,6 +629,11 @@ export default function CompositeEditorPage() {
         {saveError ? <p className="compositeMessage compositeMessage--error">{saveError}</p> : null}
         {textBoxError ? <p className="compositeMessage compositeMessage--error">{textBoxError}</p> : null}
         {autoDetectError ? <p className="compositeMessage compositeMessage--error">{autoDetectError}</p> : null}
+        {isOcrBusy ? (
+          <p className="compositeMessage compositeMessage--warning">
+            OCR is running in the background for this composite. The editor will unlock once the name boxes are ready.
+          </p>
+        ) : null}
         {autoDetectMessage ? (
           <p className={[
             'compositeMessage',
@@ -591,9 +650,7 @@ export default function CompositeEditorPage() {
                 Reusable box size: {Math.round(lastBoxSize.width)} x {Math.round(lastBoxSize.height)} px
               </p>
               <p className="compositeCanvasToolbar__hint">
-                {textBoxStatus === 'loading'
-                  ? 'Reading OCR name boxes...'
-                  : `OCR name boxes: ${textBoxes.length}`}
+                {buildTextBoxStatusLabel(textBoxStatus, textBoxes.length)}
               </p>
               <button
                 type="button"
@@ -605,23 +662,41 @@ export default function CompositeEditorPage() {
               </button>
             </div>
 
-            <AnnotationStage
-              composite={composite}
-              annotations={annotations}
-              textBoxes={showTextBoxes ? textBoxes : []}
-              selectedAnnotationId={selectedAnnotationId}
-              zoom={zoomLevel}
-              lastBoxSize={lastBoxSize}
-              onZoomChange={(nextZoom) => setZoomLevel(clampZoom(nextZoom))}
-              onAnnotationsChange={handleAnnotationListChange}
-              onSelectAnnotation={handleSelectAnnotation}
-              onLastBoxSizeChange={(nextSize) => setLastBoxSize(normalizeBoxSize(nextSize))}
-              resolveAnnotationLabel={(annotation) => (
-                profileMap.get(annotation.profileId)?.displayName
-                || annotation.detectedName
-                || 'Unassigned'
-              )}
-            />
+            <div className={[
+              'compositeCanvasSurface',
+              isCanvasProcessing ? 'compositeCanvasSurface--processing' : '',
+            ].filter(Boolean).join(' ')}>
+              <AnnotationStage
+                composite={composite}
+                annotations={annotations}
+                textBoxes={showTextBoxes ? textBoxes : []}
+                selectedAnnotationId={selectedAnnotationId}
+                zoom={zoomLevel}
+                lastBoxSize={lastBoxSize}
+                interactionsDisabled={isCanvasProcessing}
+                onZoomChange={(nextZoom) => setZoomLevel(clampZoom(nextZoom))}
+                onAnnotationsChange={handleAnnotationListChange}
+                onSelectAnnotation={handleSelectAnnotation}
+                onLastBoxSizeChange={(nextSize) => setLastBoxSize(normalizeBoxSize(nextSize))}
+                resolveAnnotationLabel={(annotation) => (
+                  profileMap.get(annotation.profileId)?.displayName
+                  || annotation.detectedName
+                  || 'Unassigned'
+                )}
+              />
+
+              {canvasProcessingState ? (
+                <div className="compositeProcessingOverlay" role="status" aria-live="polite">
+                  <div className="compositeProcessingOverlay__card">
+                    <p className="compositeProcessingOverlay__eyebrow">Please wait</p>
+                    <h3 className="compositeProcessingOverlay__title">{canvasProcessingState.title}</h3>
+                    <p className="compositeProcessingOverlay__description">
+                      {canvasProcessingState.description}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </article>
 
           <aside className="compositeSidebar">
@@ -929,4 +1004,36 @@ function isEditableElement(target) {
 
 function formatConfidence(confidence) {
   return `${Math.round(confidence * 100)}% match`;
+}
+
+function normalizeTextBoxStatus(status) {
+  if (status === 'ready') {
+    return 'loaded';
+  }
+
+  if (['queued', 'processing', 'loaded', 'error'].includes(status)) {
+    return status;
+  }
+
+  return 'queued';
+}
+
+function isOcrBusyStatus(status) {
+  return ['idle', 'queued', 'processing'].includes(status);
+}
+
+function buildTextBoxStatusLabel(status, textBoxCount) {
+  if (status === 'loaded') {
+    return `OCR name boxes: ${textBoxCount}`;
+  }
+
+  if (status === 'error') {
+    return 'OCR processing needs attention';
+  }
+
+  if (status === 'processing') {
+    return 'OCR is processing this composite...';
+  }
+
+  return 'OCR queue is preparing this composite...';
 }

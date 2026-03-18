@@ -43,7 +43,8 @@ async function writeStore(store) {
 }
 
 function buildImageUrl(storedFilePath) {
-    return `/${storedFilePath.replace(/\\/g, "/").replace(/^\/+/, "")}`;
+    const normalizedPath = storedFilePath.replace(/\\/g, "/").replace(/^\/+/, "");
+    return `/api/${normalizedPath}`;
 }
 
 function toCompositeResponse(composite) {

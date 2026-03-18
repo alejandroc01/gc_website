@@ -14,8 +14,11 @@ const {
 } = require("../utils/compositeStore");
 const {
     detectCompositeAnnotations,
-    detectCompositeTextBoxes,
 } = require("../utils/compositeAutoDetect");
+const {
+    deleteCompositeOcrState,
+    ensureCompositeOcrQueued,
+} = require("../utils/compositeOcrQueue");
 const { listProfiles } = require("../utils/profileStore");
 const {
     allowedMimeTypes,
@@ -134,6 +137,7 @@ router.post("/", upload.single("image"), async (req, res, next) => {
             imageHeight: height,
             uploadTimestamp: new Date().toISOString(),
         });
+        void ensureCompositeOcrQueued(compositeId);
 
         return res.status(201).json(createdComposite);
     } catch (error) {
@@ -160,6 +164,8 @@ router.delete("/:compositeId", async (req, res, next) => {
             }
         }
 
+        await deleteCompositeOcrState(deletedComposite.compositeId);
+
         return res.json({
             success: true,
             compositeId: deletedComposite.compositeId,
@@ -177,15 +183,14 @@ router.get("/:compositeId/text-boxes", async (req, res, next) => {
             return res.status(404).json({ error: "Composite not found." });
         }
 
-        const profiles = await listProfiles();
-        const textBoxResult = await detectCompositeTextBoxes({
-            composite,
-            profiles,
-        });
+        const ocrState = await ensureCompositeOcrQueued(composite.compositeId);
 
-        return res.json({
+        return res.status(ocrState.status === "ready" ? 200 : 202).json({
             compositeId: composite.compositeId,
-            ...textBoxResult,
+            ocrStatus: ocrState.status,
+            textBoxes: ocrState.textBoxes || [],
+            generatedAt: ocrState.generatedAt || null,
+            error: ocrState.error || null,
         });
     } catch (error) {
         return next(error);
@@ -205,15 +210,33 @@ router.post("/:compositeId/auto-detect", async (req, res, next) => {
             ? req.body.existingAnnotations
             : composite.annotations || [];
         const referenceAnnotation = req.body?.referenceAnnotation || null;
+        const ocrState = await ensureCompositeOcrQueued(composite.compositeId);
+
+        if (ocrState.status !== "ready") {
+            return res.status(202).json({
+                compositeId: composite.compositeId,
+                ocrStatus: ocrState.status,
+                textBoxes: ocrState.textBoxes || [],
+                generatedAt: ocrState.generatedAt || null,
+                error: ocrState.error || null,
+                message: ocrState.status === "error"
+                    ? "OCR processing failed. Refresh the page to queue another OCR pass."
+                    : "OCR is still processing in the background. Auto-fill will unlock when the name boxes are ready.",
+            });
+        }
+
         const detectionResult = await detectCompositeAnnotations({
             composite,
             profiles,
             existingAnnotations,
             referenceAnnotation,
+            textBoxes: ocrState.textBoxes || [],
+            generatedAt: ocrState.generatedAt || null,
         });
 
         return res.json({
             compositeId: composite.compositeId,
+            ocrStatus: ocrState.status,
             ...detectionResult,
         });
     } catch (error) {

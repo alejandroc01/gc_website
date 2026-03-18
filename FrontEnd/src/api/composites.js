@@ -1,7 +1,9 @@
+const configuredApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+
 async function requestJson(url, options = {}) {
-  const response = await fetch(url, options);
+  const response = await fetch(buildApiUrl(url), options);
   const responseText = await response.text();
-  const payload = parseResponseBody(responseText);
+  const payload = normalizeResponseUrls(parseResponseBody(responseText));
 
   if (!response.ok) {
     const errorMessage = (
@@ -28,6 +30,46 @@ function parseResponseBody(responseText) {
   } catch {
     return responseText;
   }
+}
+
+function buildApiUrl(url) {
+  if (!url || isAbsoluteUrl(url) || !configuredApiBaseUrl) {
+    return url;
+  }
+
+  return new URL(url, `${configuredApiBaseUrl}/`).toString();
+}
+
+function buildAssetUrl(url) {
+  if (!url || isAbsoluteUrl(url) || !configuredApiBaseUrl) {
+    return url;
+  }
+
+  return new URL(url, `${configuredApiBaseUrl}/`).toString();
+}
+
+function isAbsoluteUrl(url) {
+  return /^[a-z]+:\/\//i.test(String(url || '')) || String(url || '').startsWith('//');
+}
+
+function normalizeResponseUrls(value) {
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeResponseUrls(entry));
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entryValue]) => {
+      if ((key === 'imageUrl' || key === 'profileImageUrl') && typeof entryValue === 'string') {
+        return [key, buildAssetUrl(entryValue)];
+      }
+
+      return [key, normalizeResponseUrls(entryValue)];
+    }),
+  );
 }
 
 export function getComposites() {

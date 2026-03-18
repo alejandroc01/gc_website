@@ -114,6 +114,8 @@ async function detectCompositeAnnotations({
     profiles,
     existingAnnotations = [],
     referenceAnnotation,
+    textBoxes: providedTextBoxes = null,
+    generatedAt: providedGeneratedAt = null,
 }) {
     if (!referenceAnnotation) {
         const error = new Error("Draw and select a reference portrait box before running auto-fill.");
@@ -121,10 +123,16 @@ async function detectCompositeAnnotations({
         throw error;
     }
 
-    const { textBoxes, generatedAt } = await detectCompositeTextBoxes({
-        composite,
-        profiles,
-    });
+    const textBoxResult = Array.isArray(providedTextBoxes)
+        ? {
+            textBoxes: providedTextBoxes,
+            generatedAt: providedGeneratedAt || null,
+        }
+        : await detectCompositeTextBoxes({
+            composite,
+            profiles,
+        });
+    const { textBoxes, generatedAt } = textBoxResult;
     const normalizedReferenceAnnotation = normalizeReferenceAnnotation(referenceAnnotation, composite);
 
     if (!normalizedReferenceAnnotation) {

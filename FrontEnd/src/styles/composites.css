@@ -380,6 +380,56 @@
   line-height: 1.5;
 }
 
+.compositeCanvasSurface {
+  position: relative;
+}
+
+.compositeCanvasSurface--processing .annotationStage {
+  filter: blur(3px);
+  opacity: 0.42;
+}
+
+.compositeProcessingOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.28);
+  pointer-events: auto;
+}
+
+.compositeProcessingOverlay__card {
+  max-width: 420px;
+  padding: 20px 22px;
+  border: 1px solid rgba(38, 21, 56, 0.16);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow-md);
+  text-align: center;
+}
+
+.compositeProcessingOverlay__eyebrow {
+  margin: 0 0 8px;
+  font-family: var(--font-smallcaps);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.compositeProcessingOverlay__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.7rem;
+}
+
+.compositeProcessingOverlay__description {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 .annotationStage {
   display: flex;
   justify-content: center;

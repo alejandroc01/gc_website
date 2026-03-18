@@ -18,6 +18,7 @@ export default function AnnotationStage({
   selectedAnnotationId,
   zoom = 1,
   lastBoxSize = DEFAULT_BOX_SIZE,
+  interactionsDisabled = false,
   onZoomChange,
   onAnnotationsChange,
   onSelectAnnotation,
@@ -276,8 +277,23 @@ export default function AnnotationStage({
     );
   }, [handleWindowPointerMove, handleWindowPointerUp]);
 
+  useEffect(() => {
+    if (!interactionsDisabled) {
+      return;
+    }
+
+    interactionRef.current = null;
+    setDraftRect(null);
+    setIsPanning(false);
+    detachWindowListeners(
+      listenersAttachedRef,
+      handleWindowPointerMove,
+      handleWindowPointerUp,
+    );
+  }, [handleWindowPointerMove, handleWindowPointerUp, interactionsDisabled]);
+
   const handleOverlayPointerDown = (event) => {
-    if (event.button !== 0 || event.target !== event.currentTarget || !composite) {
+    if (interactionsDisabled || event.button !== 0 || event.target !== event.currentTarget || !composite) {
       return;
     }
 
@@ -307,7 +323,7 @@ export default function AnnotationStage({
   };
 
   const handleViewportPointerDown = (event) => {
-    if (event.button !== 2) {
+    if (interactionsDisabled || event.button !== 2) {
       return;
     }
 
@@ -334,7 +350,7 @@ export default function AnnotationStage({
   };
 
   const handleViewportWheel = (event) => {
-    if (typeof onZoomChange !== 'function') {
+    if (interactionsDisabled || typeof onZoomChange !== 'function') {
       return;
     }
 
@@ -364,7 +380,7 @@ export default function AnnotationStage({
   };
 
   const handleBoxPointerDown = (event, annotation) => {
-    if (event.button !== 0) {
+    if (interactionsDisabled || event.button !== 0) {
       return;
     }
 
@@ -393,7 +409,7 @@ export default function AnnotationStage({
   };
 
   const handleResizePointerDown = (event, annotation, handle) => {
-    if (event.button !== 0) {
+    if (interactionsDisabled || event.button !== 0) {
       return;
     }
 
