@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { label: 'Oral Histories', to: '/oral-histories' },
   { label: 'Search', to: '/search' },
   { label: 'Upload', to: '/upload' },
+  {label: 'Display', to: '/display-mode'},
 ];
 
 /**
