@@ -1,6 +1,8 @@
 const crypto = require("crypto");
 const fs = require("fs/promises");
+const { createReadStream, createWriteStream } = require("fs");
 const path = require("path");
+const { pipeline } = require("stream/promises");
 const express = require("express");
 const multer = require("multer");
 
@@ -22,11 +24,14 @@ const {
 const { listProfiles } = require("../utils/profileStore");
 const {
     allowedMimeTypes,
+    extensionByMimeType,
     resolveExtensionFromUpload,
+    temporaryCompositeUploadsDirectory,
     uploadsDirectory,
 } = require("../utils/uploadConfig");
 
 const router = express.Router();
+const compositeUploadChunkSize = 512 * 1024;
 
 const upload = multer({
     storage: multer.diskStorage({
@@ -56,12 +61,158 @@ const upload = multer({
     },
 });
 
+const chunkUpload = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: (_req, file, callback) => {
+        if (!allowedMimeTypes.has(file.mimetype)) {
+            const error = new Error("Only JPG, JPEG, PNG, and WEBP image uploads are allowed.");
+            error.statusCode = 400;
+            return callback(error);
+        }
+
+        return callback(null, true);
+    },
+    limits: {
+        files: 1,
+        fileSize: compositeUploadChunkSize,
+    },
+});
+
 router.get("/", async (_req, res, next) => {
     try {
         const composites = await listComposites();
         res.json(composites);
     } catch (error) {
         next(error);
+    }
+});
+
+router.post("/upload-sessions", async (req, res, next) => {
+    try {
+        const compositeYear = sanitizeCompositeYear(req.body?.compositeYear);
+        const originalFilename = sanitizeOriginalFilename(req.body?.originalFilename);
+        const mimeType = sanitizeMimeType(req.body?.mimeType);
+        await ensureCompositeYearAvailable(compositeYear);
+
+        const uploadId = crypto.randomUUID();
+        const uploadSession = {
+            uploadId,
+            compositeYear,
+            originalFilename,
+            mimeType,
+            totalChunks: null,
+            receivedChunkIndexes: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+        };
+
+        await writeUploadSession(uploadId, uploadSession);
+
+        return res.status(201).json({
+            uploadId,
+            compositeYear,
+            chunkSize: compositeUploadChunkSize,
+        });
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.post("/upload-sessions/:uploadId/chunks", chunkUpload.single("imageChunk"), async (req, res, next) => {
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: "Please upload an image chunk." });
+        }
+
+        const uploadId = sanitizeUploadId(req.params.uploadId);
+        const uploadSession = await readUploadSession(uploadId);
+
+        if (!uploadSession) {
+            return res.status(404).json({ error: "Composite upload session not found." });
+        }
+
+        const chunkIndex = sanitizeChunkIndex(req.body?.chunkIndex);
+        const totalChunks = sanitizeTotalChunks(req.body?.totalChunks);
+        const nextReceivedChunkIndexes = new Set(uploadSession.receivedChunkIndexes || []);
+
+        if (
+            Number.isInteger(uploadSession.totalChunks)
+            && uploadSession.totalChunks > 0
+            && uploadSession.totalChunks !== totalChunks
+        ) {
+            return res.status(400).json({ error: "Chunk count does not match the active upload session." });
+        }
+
+        if (chunkIndex >= totalChunks) {
+            return res.status(400).json({ error: "Chunk index is out of range for this upload." });
+        }
+
+        await fs.writeFile(getUploadChunkPath(uploadId, chunkIndex), req.file.buffer);
+        nextReceivedChunkIndexes.add(chunkIndex);
+
+        await writeUploadSession(uploadId, {
+            ...uploadSession,
+            totalChunks,
+            receivedChunkIndexes: Array.from(nextReceivedChunkIndexes).sort((leftIndex, rightIndex) => leftIndex - rightIndex),
+            updatedAt: new Date().toISOString(),
+        });
+
+        return res.status(201).json({
+            uploadId,
+            receivedChunkCount: nextReceivedChunkIndexes.size,
+            totalChunks,
+        });
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.post("/upload-sessions/:uploadId/complete", async (req, res, next) => {
+    let assembledUploadPath = null;
+
+    try {
+        const uploadId = sanitizeUploadId(req.params.uploadId);
+        const uploadSession = await readUploadSession(uploadId);
+
+        if (!uploadSession) {
+            return res.status(404).json({ error: "Composite upload session not found." });
+        }
+
+        await ensureCompositeYearAvailable(uploadSession.compositeYear);
+
+        if (!Number.isInteger(uploadSession.totalChunks) || uploadSession.totalChunks <= 0) {
+            return res.status(400).json({ error: "Composite upload is incomplete." });
+        }
+
+        for (let chunkIndex = 0; chunkIndex < uploadSession.totalChunks; chunkIndex += 1) {
+            if (!(await hasUploadChunk(uploadId, chunkIndex))) {
+                return res.status(400).json({ error: "Composite upload is missing one or more chunks." });
+            }
+        }
+
+        const extension = resolveChunkedUploadExtension(uploadSession);
+        assembledUploadPath = path.join(
+            temporaryCompositeUploadsDirectory,
+            `${uploadId}-assembled${extension}`,
+        );
+
+        await assembleUploadedChunks(uploadId, uploadSession.totalChunks, assembledUploadPath);
+
+        const createdComposite = await saveUploadedComposite({
+            compositeYear: uploadSession.compositeYear,
+            originalFilename: uploadSession.originalFilename,
+            sourceFilePath: assembledUploadPath,
+            extension,
+        });
+
+        await cleanupUploadSession(uploadId, uploadSession.totalChunks, assembledUploadPath);
+        return res.status(201).json(createdComposite);
+    } catch (error) {
+        if (assembledUploadPath) {
+            await fs.rm(assembledUploadPath, { force: true });
+        }
+
+        return next(error);
     }
 });
 
@@ -102,42 +253,15 @@ router.post("/", upload.single("image"), async (req, res, next) => {
         }
 
         const compositeYear = sanitizeCompositeYear(req.body?.compositeYear);
-        const existingComposites = await listComposites();
-
-        if (existingComposites.some((composite) => composite.compositeYear === compositeYear)) {
-            const error = new Error(`A composite for ${compositeYear} already exists.`);
-            error.statusCode = 409;
-            throw error;
-        }
-
-        const { width, height } = await getImageMetadata(req.file.path);
-        const compositeId = req.generatedCompositeId;
-
-        if (!compositeId) {
-            throw new Error("Composite identifier was not generated for the uploaded file.");
-        }
-
-        const extension = path.extname(req.file.filename);
-        const namedFilename = buildCompositeFilename(compositeYear, extension);
-        const finalAbsolutePath = path.join(uploadsDirectory, namedFilename);
-
-        if (req.file.path !== finalAbsolutePath) {
-            await fs.rename(req.file.path, finalAbsolutePath);
-            currentUploadedPath = finalAbsolutePath;
-        }
-
-        const storedFilePath = path.posix.join("uploads", "composites", namedFilename);
-        const createdComposite = await createComposite({
-            compositeId,
+        await ensureCompositeYearAvailable(compositeYear);
+        const createdComposite = await saveUploadedComposite({
             compositeYear,
-            displayName: buildCompositeDisplayName(compositeYear),
             originalFilename: req.file.originalname,
-            storedFilePath,
-            imageWidth: width,
-            imageHeight: height,
-            uploadTimestamp: new Date().toISOString(),
+            sourceFilePath: req.file.path,
+            extension: path.extname(req.file.filename),
+            compositeId: req.generatedCompositeId,
         });
-        void ensureCompositeOcrQueued(compositeId);
+        currentUploadedPath = null;
 
         return res.status(201).json(createdComposite);
     } catch (error) {
@@ -268,6 +392,192 @@ router.put("/:compositeId/annotations", async (req, res, next) => {
         return next(error);
     }
 });
+
+async function saveUploadedComposite({
+    compositeYear,
+    originalFilename,
+    sourceFilePath,
+    extension,
+    compositeId = crypto.randomUUID(),
+}) {
+    const { width, height } = await getImageMetadata(sourceFilePath);
+
+    if (!compositeId) {
+        throw new Error("Composite identifier was not generated for the uploaded file.");
+    }
+
+    const namedFilename = buildCompositeFilename(compositeYear, extension);
+    const finalAbsolutePath = path.join(uploadsDirectory, namedFilename);
+
+    if (sourceFilePath !== finalAbsolutePath) {
+        await fs.rename(sourceFilePath, finalAbsolutePath);
+    }
+
+    const storedFilePath = path.posix.join("uploads", "composites", namedFilename);
+    const createdComposite = await createComposite({
+        compositeId,
+        compositeYear,
+        displayName: buildCompositeDisplayName(compositeYear),
+        originalFilename,
+        storedFilePath,
+        imageWidth: width,
+        imageHeight: height,
+        uploadTimestamp: new Date().toISOString(),
+    });
+
+    void ensureCompositeOcrQueued(compositeId);
+    return createdComposite;
+}
+
+async function ensureCompositeYearAvailable(compositeYear) {
+    const existingComposites = await listComposites();
+
+    if (existingComposites.some((composite) => composite.compositeYear === compositeYear)) {
+        const error = new Error(`A composite for ${compositeYear} already exists.`);
+        error.statusCode = 409;
+        throw error;
+    }
+}
+
+function sanitizeOriginalFilename(value) {
+    const normalizedValue = String(value || "").trim();
+
+    if (!normalizedValue) {
+        const error = new Error("Include the original composite filename when creating an upload session.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return path.basename(normalizedValue).slice(0, 180);
+}
+
+function sanitizeMimeType(value) {
+    const normalizedValue = String(value || "").trim().toLowerCase();
+
+    if (!allowedMimeTypes.has(normalizedValue)) {
+        const error = new Error("Only JPG, JPEG, PNG, and WEBP image uploads are allowed.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return normalizedValue;
+}
+
+function sanitizeUploadId(value) {
+    const normalizedValue = String(value || "").trim();
+
+    if (!/^[a-f0-9-]{8,}$/i.test(normalizedValue)) {
+        const error = new Error("Composite upload session identifier is invalid.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return normalizedValue;
+}
+
+function sanitizeChunkIndex(value) {
+    const numericValue = Number(value);
+
+    if (!Number.isInteger(numericValue) || numericValue < 0) {
+        const error = new Error("Chunk index must be a non-negative integer.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return numericValue;
+}
+
+function sanitizeTotalChunks(value) {
+    const numericValue = Number(value);
+
+    if (!Number.isInteger(numericValue) || numericValue <= 0 || numericValue > 200) {
+        const error = new Error("Total chunk count is invalid for this upload.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return numericValue;
+}
+
+async function readUploadSession(uploadId) {
+    try {
+        const rawManifest = await fs.readFile(getUploadSessionManifestPath(uploadId), "utf8");
+        return JSON.parse(rawManifest);
+    } catch (error) {
+        if (error.code === "ENOENT") {
+            return null;
+        }
+
+        throw error;
+    }
+}
+
+async function writeUploadSession(uploadId, uploadSession) {
+    await fs.writeFile(
+        getUploadSessionManifestPath(uploadId),
+        JSON.stringify(uploadSession, null, 2),
+    );
+}
+
+function getUploadSessionManifestPath(uploadId) {
+    return path.join(temporaryCompositeUploadsDirectory, `${uploadId}.json`);
+}
+
+function getUploadChunkPath(uploadId, chunkIndex) {
+    return path.join(temporaryCompositeUploadsDirectory, `${uploadId}.part.${chunkIndex}`);
+}
+
+async function hasUploadChunk(uploadId, chunkIndex) {
+    try {
+        await fs.access(getUploadChunkPath(uploadId, chunkIndex));
+        return true;
+    } catch (error) {
+        if (error.code === "ENOENT") {
+            return false;
+        }
+
+        throw error;
+    }
+}
+
+function resolveChunkedUploadExtension(uploadSession) {
+    const normalizedOriginalExtension = path.extname(uploadSession.originalFilename || "").toLowerCase();
+
+    if ([".jpg", ".jpeg", ".png", ".webp"].includes(normalizedOriginalExtension)) {
+        return normalizedOriginalExtension === ".jpeg" ? ".jpg" : normalizedOriginalExtension;
+    }
+
+    return extensionByMimeType[uploadSession.mimeType] || ".jpg";
+}
+
+async function assembleUploadedChunks(uploadId, totalChunks, outputPath) {
+    await fs.rm(outputPath, { force: true });
+
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+        await pipeline(
+            createReadStream(getUploadChunkPath(uploadId, chunkIndex)),
+            createWriteStream(outputPath, {
+                flags: chunkIndex === 0 ? "w" : "a",
+            }),
+        );
+    }
+}
+
+async function cleanupUploadSession(uploadId, totalChunks, assembledUploadPath) {
+    const cleanupTasks = [
+        fs.rm(getUploadSessionManifestPath(uploadId), { force: true }),
+    ];
+
+    for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+        cleanupTasks.push(fs.rm(getUploadChunkPath(uploadId, chunkIndex), { force: true }));
+    }
+
+    if (assembledUploadPath) {
+        cleanupTasks.push(fs.rm(assembledUploadPath, { force: true }));
+    }
+
+    await Promise.all(cleanupTasks);
+}
 
 function sanitizeCompositeYear(rawYear) {
     const normalizedYear = String(rawYear || "").trim();

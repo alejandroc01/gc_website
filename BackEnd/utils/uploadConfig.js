@@ -2,6 +2,7 @@ const fs = require("fs/promises");
 const path = require("path");
 
 const uploadsDirectory = path.join(__dirname, "..", "uploads", "composites");
+const temporaryCompositeUploadsDirectory = path.join(__dirname, "..", "uploads", "temp-composites");
 const extensionByMimeType = {
     "image/jpeg": ".jpg",
     "image/png": ".png",
@@ -10,7 +11,10 @@ const extensionByMimeType = {
 const allowedMimeTypes = new Set(Object.keys(extensionByMimeType));
 
 async function ensureCompositeUploadsDirectory() {
-    await fs.mkdir(uploadsDirectory, { recursive: true });
+    await Promise.all([
+        fs.mkdir(uploadsDirectory, { recursive: true }),
+        fs.mkdir(temporaryCompositeUploadsDirectory, { recursive: true }),
+    ]);
 }
 
 function resolveExtensionFromUpload(file) {
@@ -28,5 +32,6 @@ module.exports = {
     ensureCompositeUploadsDirectory,
     extensionByMimeType,
     resolveExtensionFromUpload,
+    temporaryCompositeUploadsDirectory,
     uploadsDirectory,
 };
