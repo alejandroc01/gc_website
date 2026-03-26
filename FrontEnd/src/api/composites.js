@@ -1,5 +1,4 @@
 const configuredApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
-const compositeUploadChunkSize = 512 * 1024;
 
 async function requestJson(url, options = {}) {
   const response = await fetch(buildApiUrl(url), options);
@@ -103,49 +102,14 @@ export function importProfilesCsv(file) {
   });
 }
 
-export async function uploadComposite(file, compositeYear, { onProgress } = {}) {
-  const uploadSession = await requestJson('/api/composites/upload-sessions', {
+export function uploadComposite(file, compositeYear) {
+  const payload = new FormData();
+  payload.append('compositeYear', compositeYear);
+  payload.append('image', file);
+
+  return requestJson('/api/composites', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      compositeYear,
-      originalFilename: file.name,
-      mimeType: resolveCompositeUploadMimeType(file),
-    }),
-  });
-  const totalChunks = Math.max(1, Math.ceil(file.size / compositeUploadChunkSize));
-
-  onProgress?.({
-    uploadedChunks: 0,
-    totalChunks,
-    percent: 0,
-  });
-
-  for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
-    const startIndex = chunkIndex * compositeUploadChunkSize;
-    const chunkBlob = file.slice(startIndex, startIndex + compositeUploadChunkSize);
-    const payload = new FormData();
-
-    payload.append('chunkIndex', String(chunkIndex));
-    payload.append('totalChunks', String(totalChunks));
-    payload.append('imageChunk', chunkBlob, file.name);
-
-    await requestJson(`/api/composites/upload-sessions/${uploadSession.uploadId}/chunks`, {
-      method: 'POST',
-      body: payload,
-    });
-
-    onProgress?.({
-      uploadedChunks: chunkIndex + 1,
-      totalChunks,
-      percent: Math.round(((chunkIndex + 1) / totalChunks) * 100),
-    });
-  }
-
-  return requestJson(`/api/composites/upload-sessions/${uploadSession.uploadId}/complete`, {
-    method: 'POST',
+    body: payload,
   });
 }
 
@@ -177,22 +141,4 @@ export function deleteComposite(compositeId) {
   return requestJson(`/api/composites/${compositeId}`, {
     method: 'DELETE',
   });
-}
-
-function resolveCompositeUploadMimeType(file) {
-  if (file?.type) {
-    return file.type;
-  }
-
-  const normalizedFilename = String(file?.name || '').toLowerCase();
-
-  if (normalizedFilename.endsWith('.png')) {
-    return 'image/png';
-  }
-
-  if (normalizedFilename.endsWith('.webp')) {
-    return 'image/webp';
-  }
-
-  return 'image/jpeg';
 }

@@ -20,7 +20,6 @@ export default function CompositeUploadPage() {
   const [deletingCompositeId, setDeletingCompositeId] = useState(null);
   const [listError, setListError] = useState('');
   const [uploadError, setUploadError] = useState('');
-  const [uploadProgress, setUploadProgress] = useState(0);
 
   useEffect(() => {
     let isActive = true;
@@ -76,19 +75,13 @@ export default function CompositeUploadPage() {
 
     setUploadError('');
     setIsUploading(true);
-    setUploadProgress(0);
 
     try {
-      const createdComposite = await uploadComposite(selectedFile, normalizedYear, {
-        onProgress: ({ percent }) => {
-          setUploadProgress(percent);
-        },
-      });
+      const createdComposite = await uploadComposite(selectedFile, normalizedYear);
       navigate(`/upload/composites/${createdComposite.compositeId}`);
     } catch (error) {
       setUploadError(error.message);
       setIsUploading(false);
-      setUploadProgress(0);
     }
   };
 
@@ -172,7 +165,6 @@ export default function CompositeUploadPage() {
                   onChange={(event) => {
                     setSelectedFile(event.target.files?.[0] || null);
                     setUploadError('');
-                    setUploadProgress(0);
                   }}
                 />
               </label>
@@ -184,13 +176,12 @@ export default function CompositeUploadPage() {
                 className="button compositeButton compositeButton--filled"
                 disabled={isUploading}
               >
-                {isUploading ? `Uploading... ${uploadProgress}%` : 'Upload and Annotate'}
+                {isUploading ? 'Uploading...' : 'Upload and Annotate'}
               </button>
 
               {selectedFile ? (
                 <p className="compositeUploadForm__fileMeta">
                   Selected file: <strong>{selectedFile.name}</strong>
-                  {isUploading ? ` (${uploadProgress}% complete)` : ''}
                 </p>
               ) : (
                 <p className="compositeUploadForm__fileMeta">No file selected yet.</p>
