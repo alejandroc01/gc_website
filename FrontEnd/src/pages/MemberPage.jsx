@@ -70,6 +70,10 @@ export default function MemberPage() {
 
     const nextBadges = [];
 
+    if (isBoardDepartment(profile.department)) {
+      nextBadges.push('Board');
+    }
+
     if (profile.emeritus) {
       nextBadges.push('Emeritus');
     }
@@ -280,4 +284,8 @@ function formatDate(value) {
     day: 'numeric',
     year: 'numeric',
   }).format(new Date(value));
+}
+
+function isBoardDepartment(department) {
+  return String(department || '').trim().toLowerCase() === 'board';
 }

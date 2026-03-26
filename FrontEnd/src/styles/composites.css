@@ -168,6 +168,10 @@
 .profileDirectoryList {
   display: grid;
   gap: 16px;
+  max-height: min(1100px, 78vh);
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-gutter: stable;
 }
 
 .profileDirectoryCard {

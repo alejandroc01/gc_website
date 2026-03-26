@@ -20,7 +20,7 @@ const emptyProfileForm = {
   email: '',
   candlelightDate: '',
   deceased: false,
-  department: '',
+  board: false,
   emeritus: false,
 };
 
@@ -183,7 +183,7 @@ export default function ProfileImportPanel() {
       email: profile.email || '',
       candlelightDate: profile.candlelightDate || '',
       deceased: Boolean(profile.deceased),
-      department: profile.department || '',
+      board: isBoardDepartment(profile.department),
       emeritus: Boolean(profile.emeritus),
     });
     setProfileFormError('');
@@ -390,7 +390,7 @@ export default function ProfileImportPanel() {
               <span className="compositeField__label">Email</span>
               <input
                 className="compositeField__input"
-                type="email"
+                type="text"
                 name="email"
                 value={profileForm.email}
                 onChange={handleProfileFormChange}
@@ -408,20 +408,19 @@ export default function ProfileImportPanel() {
                 onChange={handleProfileFormChange}
               />
             </label>
-
-            <label className="compositeField profileManagerGrid__fullWidth">
-              <span className="compositeField__label">Department</span>
-              <input
-                className="compositeField__input"
-                type="text"
-                name="department"
-                value={profileForm.department}
-                onChange={handleProfileFormChange}
-              />
-            </label>
           </div>
 
           <div className="profileManagerCheckboxRow">
+            <label className="compositeCheckbox">
+              <input
+                type="checkbox"
+                name="board"
+                checked={profileForm.board}
+                onChange={handleProfileFormChange}
+              />
+              <span>Board</span>
+            </label>
+
             <label className="compositeCheckbox">
               <input
                 type="checkbox"
@@ -489,7 +488,7 @@ export default function ProfileImportPanel() {
             <input
               className="compositeField__input"
               type="search"
-              placeholder="Search by name, year, city, email, or department"
+              placeholder="Search by name, year, city, email, or board"
               value={profileSearchQuery}
               onChange={(event) => setProfileSearchQuery(event.target.value)}
             />
@@ -526,9 +525,9 @@ export default function ProfileImportPanel() {
             </p>
           </div>
         ) : (
-          <div className="profileDirectoryList">
+          <div className="profileDirectoryList" role="list">
             {filteredProfiles.map((profile) => (
-              <article key={profile.id} className="profileDirectoryCard">
+              <article key={profile.id} className="profileDirectoryCard" role="listitem">
                 <div className="profileDirectoryCard__header">
                   <div>
                     <h3 className="profileDirectoryCard__title">{profile.displayName}</h3>
@@ -556,13 +555,11 @@ export default function ProfileImportPanel() {
                 </div>
 
                 <div className="profileDirectoryCard__badges">
+                  {isBoardDepartment(profile.department) ? (
+                    <span className="profileDirectoryBadge profileDirectoryBadge--muted">Board</span>
+                  ) : null}
                   {profile.emeritus ? <span className="profileDirectoryBadge">Emeritus</span> : null}
                   {profile.deceased ? <span className="profileDirectoryBadge">Deceased</span> : null}
-                  {profile.department ? (
-                    <span className="profileDirectoryBadge profileDirectoryBadge--muted">
-                      {profile.department}
-                    </span>
-                  ) : null}
                 </div>
 
                 <dl className="profileDirectoryCard__details">
@@ -607,7 +604,7 @@ function buildProfilePayload(profileForm) {
     email: profileForm.email.trim(),
     candlelightDate: profileForm.candlelightDate.trim(),
     deceased: Boolean(profileForm.deceased),
-    department: profileForm.department.trim(),
+    department: profileForm.board ? 'Board' : '',
     emeritus: Boolean(profileForm.emeritus),
   };
 }
@@ -662,4 +659,8 @@ function buildProfileSummary(profile) {
 
 function buildProfileLocation(profile) {
   return [profile.city, profile.stateProvince].filter(Boolean).join(', ');
+}
+
+function isBoardDepartment(department) {
+  return String(department || '').trim().toLowerCase() === 'board';
 }
