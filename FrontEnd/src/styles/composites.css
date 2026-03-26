@@ -447,6 +447,7 @@
   max-height: 76vh;
   overflow: auto;
   padding: 10px;
+  overscroll-behavior: contain;
 }
 
 .annotationStage__viewport--panning {
@@ -468,10 +469,10 @@
 
 .annotationStage__image {
   display: block;
-  max-width: 100%;
-  max-height: 72vh;
-  object-fit: contain;
+  max-width: none;
+  max-height: none;
   user-select: none;
+  pointer-events: none;
 }
 
 .annotationStage__overlay {
@@ -507,8 +508,8 @@
 
 .annotationStage__box {
   position: absolute;
-  border: 2px solid rgba(255, 215, 102, 0.52);
-  background: rgba(255, 215, 102, 0.06);
+  border: 2px solid rgba(201, 68, 68, 0.72);
+  background: rgba(201, 68, 68, 0.08);
   cursor: move;
   overflow: visible;
   padding: 0;
@@ -519,9 +520,19 @@
     0 0 14px rgba(0, 0, 0, 0.14);
 }
 
-.annotationStage__box--unassigned {
-  border-color: rgba(244, 76, 76, 0.5);
-  background: rgba(244, 76, 76, 0.05);
+.annotationStage__box--unresolved {
+  border-color: rgba(201, 68, 68, 0.78);
+  background: rgba(201, 68, 68, 0.08);
+}
+
+.annotationStage__box--suggested {
+  border-color: rgba(214, 162, 31, 0.82);
+  background: rgba(214, 162, 31, 0.1);
+}
+
+.annotationStage__box--assigned {
+  border-color: rgba(49, 140, 78, 0.82);
+  background: rgba(49, 140, 78, 0.1);
 }
 
 .annotationStage__box--auto {
@@ -529,17 +540,19 @@
 }
 
 .annotationStage__box--review {
-  border-color: rgba(223, 150, 48, 0.78);
-  background: rgba(223, 150, 48, 0.08);
+  box-shadow:
+    0 0 0 1px rgba(21, 15, 37, 0.44),
+    inset 0 0 0 1px rgba(21, 15, 37, 0.28),
+    0 0 0 2px rgba(247, 214, 100, 0.26),
+    0 0 14px rgba(0, 0, 0, 0.14);
 }
 
 .annotationStage__box--selected {
-  border-color: rgba(126, 240, 255, 0.72);
-  background: rgba(126, 240, 255, 0.08);
   box-shadow:
-    0 0 0 1px rgba(11, 77, 90, 0.58),
-    inset 0 0 0 1px rgba(11, 77, 90, 0.36),
-    0 0 16px rgba(11, 77, 90, 0.18);
+    0 0 0 1px rgba(20, 47, 67, 0.56),
+    inset 0 0 0 1px rgba(20, 47, 67, 0.24),
+    0 0 0 2px rgba(126, 240, 255, 0.34),
+    0 0 18px rgba(20, 47, 67, 0.18);
 }
 
 .annotationStage__box--draft {
