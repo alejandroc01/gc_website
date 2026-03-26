@@ -2,16 +2,20 @@
 CREATE DATABASE IF NOT EXISTS gc_capstone;
 USE gc_capstone;
 
+-- Drop child table first because of foreign key dependency
+DROP TABLE IF EXISTS members;
+DROP TABLE IF EXISTS class_years;
+
 -- Table for class years
-CREATE TABLE IF NOT EXISTS class_years (
+CREATE TABLE class_years (
     year_id INT AUTO_INCREMENT PRIMARY KEY,
-    year_value YEAR
+    year_value YEAR NOT NULL UNIQUE
 );
 
--- Table for members. Formatting/Type of columns subject to change
-CREATE TABLE IF NOT EXISTS members (
+-- Table for members
+-- Keep some imported fields as VARCHAR because source data is messy
+CREATE TABLE members (
     member_id INT AUTO_INCREMENT PRIMARY KEY,
-    class_year YEAR,
     last_name VARCHAR(100),
     first_name VARCHAR(100),
     preferred_name VARCHAR(100),
@@ -23,5 +27,9 @@ CREATE TABLE IF NOT EXISTS members (
     department VARCHAR(100),
     emeritus VARCHAR(20),
     year_id INT,
-    FOREIGN KEY (year_id) REFERENCES class_years(year_id)
+    
+    CONSTRAINT fk_members_year
+        FOREIGN KEY (year_id) REFERENCES class_years(year_id)
+        ON UPDATE CASCADE
+        ON DELETE SET NULL
 );
