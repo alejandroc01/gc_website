@@ -9,10 +9,10 @@ export default function ProfileUploadPage() {
       <div className="container">
         <div className="compositePageHeader">
           <p className="compositePageHeader__eyebrow">Admin Upload Flow</p>
-          <h1 className="compositePageHeader__title">Member Profile Upload</h1>
+          <h1 className="compositePageHeader__title">Bulk Upload Member Profiles</h1>
           <p className="compositePageHeader__description">
-            Import the DA membership CSV on its own page, then return to composite annotation once
-            the member list is ready.
+            Import the DA membership CSV, create individual member records, and manage the
+            searchable member directory used throughout composite annotation.
           </p>
         </div>
 

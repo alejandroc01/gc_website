@@ -92,6 +92,32 @@ export function getProfile(profileId) {
   return requestJson(`/api/profiles/${profileId}`);
 }
 
+export function createProfile(profile) {
+  return requestJson('/api/profiles', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(profile),
+  });
+}
+
+export function updateProfile(profileId, profile) {
+  return requestJson(`/api/profiles/${profileId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(profile),
+  });
+}
+
+export function deleteProfile(profileId) {
+  return requestJson(`/api/profiles/${profileId}`, {
+    method: 'DELETE',
+  });
+}
+
 export function importProfilesCsv(file) {
   const payload = new FormData();
   payload.append('profilesCsv', file);

@@ -3,12 +3,18 @@ const multer = require("multer");
 const path = require("path");
 
 const {
+    createProfile,
+    deleteProfile,
     getProfileById,
     importProfilesFromCsv,
     listProfiles,
     profilePlaceholderImageUrl,
+    updateProfile,
 } = require("../utils/profileStore");
-const { listProfileCompositeReferences } = require("../utils/compositeStore");
+const {
+    listProfileCompositeReferences,
+    removeProfileReferences,
+} = require("../utils/compositeStore");
 
 const router = express.Router();
 const upload = multer({
@@ -97,6 +103,55 @@ router.post("/import", upload.single("profilesCsv"), async (req, res, next) => {
 
         const importSummary = await importProfilesFromCsv(req.file.buffer.toString("utf8"));
         return res.status(201).json(importSummary);
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.post("/", async (req, res, next) => {
+    try {
+        const createdProfile = await createProfile(req.body);
+        return res.status(201).json(createdProfile);
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.put("/:profileId", async (req, res, next) => {
+    try {
+        const updatedProfile = await updateProfile(req.params.profileId, req.body);
+
+        if (!updatedProfile) {
+            return res.status(404).json({ error: "Member profile not found." });
+        }
+
+        return res.json(updatedProfile);
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.delete("/:profileId", async (req, res, next) => {
+    try {
+        const existingProfile = await getProfileById(req.params.profileId);
+
+        if (!existingProfile) {
+            return res.status(404).json({ error: "Member profile not found." });
+        }
+
+        const clearedReferences = await removeProfileReferences(req.params.profileId);
+        const deletedProfile = await deleteProfile(req.params.profileId);
+
+        if (!deletedProfile) {
+            return res.status(500).json({ error: "Member profile could not be deleted." });
+        }
+
+        return res.json({
+            success: true,
+            profileId: deletedProfile.id,
+            clearedAnnotationCount: clearedReferences.clearedAnnotationCount,
+            updatedCompositeCount: clearedReferences.updatedCompositeCount,
+        });
     } catch (error) {
         return next(error);
     }

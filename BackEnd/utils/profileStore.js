@@ -81,6 +81,84 @@ async function getProfileById(profileId) {
     return profile ? toProfileResponse(profile) : null;
 }
 
+async function createProfile(profileInput) {
+    const store = await readStore();
+    const now = new Date().toISOString();
+    const nextProfile = buildManualProfileRecord(profileInput, now);
+    const lookupKey = buildProfileLookupKey(nextProfile);
+
+    ensureManualProfileLookupKey(lookupKey);
+    assertProfileLookupKeyIsUnique(store.profiles, lookupKey);
+
+    const createdProfile = {
+        ...nextProfile,
+        id: `profile-${crypto.randomUUID()}`,
+        createdAt: now,
+        updatedAt: now,
+        profileImageMode: "placeholder",
+        profileImageUrl: profilePlaceholderImageUrl,
+    };
+
+    store.profiles.push(createdProfile);
+    store.profiles.sort(compareProfiles);
+    await writeStore(store);
+
+    return toProfileResponse(createdProfile);
+}
+
+async function updateProfile(profileId, profileInput) {
+    const store = await readStore();
+    const profileIndex = store.profiles.findIndex((entry) => String(entry.id) === String(profileId));
+
+    if (profileIndex === -1) {
+        return null;
+    }
+
+    const existingProfile = store.profiles[profileIndex];
+    const now = new Date().toISOString();
+    const nextProfileData = buildManualProfileRecord(
+        {
+            ...existingProfile,
+            ...profileInput,
+        },
+        now,
+    );
+    const lookupKey = buildProfileLookupKey(nextProfileData);
+
+    ensureManualProfileLookupKey(lookupKey);
+    assertProfileLookupKeyIsUnique(store.profiles, lookupKey, existingProfile.id);
+
+    const updatedProfile = {
+        ...existingProfile,
+        ...nextProfileData,
+        id: existingProfile.id,
+        createdAt: existingProfile.createdAt || now,
+        updatedAt: now,
+        profileImageMode: existingProfile.profileImageMode || "placeholder",
+        profileImageUrl: existingProfile.profileImageUrl || profilePlaceholderImageUrl,
+    };
+
+    store.profiles[profileIndex] = updatedProfile;
+    store.profiles.sort(compareProfiles);
+    await writeStore(store);
+
+    return toProfileResponse(updatedProfile);
+}
+
+async function deleteProfile(profileId) {
+    const store = await readStore();
+    const profileIndex = store.profiles.findIndex((entry) => String(entry.id) === String(profileId));
+
+    if (profileIndex === -1) {
+        return null;
+    }
+
+    const [deletedProfile] = store.profiles.splice(profileIndex, 1);
+    await writeStore(store);
+
+    return toProfileResponse(deletedProfile);
+}
+
 async function importProfilesFromCsv(csvText) {
     const { headers, rows } = parseCsvRecords(csvText);
 
@@ -249,6 +327,26 @@ function toProfileFromCsvRow(row, timestamp) {
     });
 }
 
+function buildManualProfileRecord(profileInput, timestamp) {
+    return normalizeStoredProfile({
+        firstName: sanitizeRequiredText(profileInput?.firstName, "First name"),
+        lastName: sanitizeRequiredText(profileInput?.lastName, "Last name"),
+        preferredName: sanitizeOptionalText(profileInput?.preferredName, 80),
+        graduationYear: sanitizeRequiredGraduationYear(profileInput?.graduationYear),
+        city: sanitizeOptionalText(profileInput?.city, 80),
+        stateProvince: sanitizeOptionalText(profileInput?.stateProvince, 80),
+        email: sanitizeOptionalText(profileInput?.email, 120),
+        candlelightDate: sanitizeOptionalText(profileInput?.candlelightDate, 40),
+        deceased: parseFlexibleBoolean(profileInput?.deceased),
+        department: sanitizeOptionalText(profileInput?.department, 120),
+        emeritus: parseFlexibleBoolean(profileInput?.emeritus),
+        profileImageMode: "placeholder",
+        profileImageUrl: profilePlaceholderImageUrl,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+    });
+}
+
 function buildDisplayName(firstName, lastName, preferredName) {
     const normalizedFirstName = String(firstName || "").trim();
     const normalizedLastName = String(lastName || "").trim();
@@ -283,6 +381,16 @@ function buildProfileLookupKey(profile) {
     return [year || "na", lastName || "na", firstName || "na"].join("|");
 }
 
+function ensureManualProfileLookupKey(lookupKey) {
+    if (lookupKey) {
+        return;
+    }
+
+    const error = new Error("Member profiles require a first name, last name, and class year.");
+    error.statusCode = 400;
+    throw error;
+}
+
 function normalizeGraduationYear(value) {
     const normalizedValue = String(value || "").trim();
 
@@ -293,8 +401,82 @@ function normalizeGraduationYear(value) {
     return Number(normalizedValue);
 }
 
+function sanitizeRequiredGraduationYear(value) {
+    const normalizedValue = String(value || "").trim();
+
+    if (!normalizedValue) {
+        const error = new Error("Class year is required.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    if (!/^\d{4}$/.test(normalizedValue)) {
+        const error = new Error("Class year must be a four-digit year.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const yearNumber = Number(normalizedValue);
+
+    if (yearNumber < 1900 || yearNumber > 2100) {
+        const error = new Error("Class year must be between 1900 and 2100.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return yearNumber;
+}
+
+function sanitizeRequiredText(value, label) {
+    const normalizedValue = sanitizeOptionalText(value, 80);
+
+    if (normalizedValue) {
+        return normalizedValue;
+    }
+
+    const error = new Error(`${label} is required.`);
+    error.statusCode = 400;
+    throw error;
+}
+
+function sanitizeOptionalText(value, maxLength) {
+    return String(value || "").trim().slice(0, maxLength);
+}
+
 function parseBooleanFlag(value) {
     return /^(yes|true|1|y)$/i.test(String(value || "").trim());
+}
+
+function parseFlexibleBoolean(value) {
+    if (typeof value === "boolean") {
+        return value;
+    }
+
+    if (typeof value === "number") {
+        return value !== 0;
+    }
+
+    return /^(yes|true|1|y|on)$/i.test(String(value || "").trim());
+}
+
+function assertProfileLookupKeyIsUnique(profiles, lookupKey, excludedProfileId = null) {
+    const conflictingProfile = profiles.find((profile) => {
+        if (excludedProfileId && String(profile.id) === String(excludedProfileId)) {
+            return false;
+        }
+
+        return buildProfileLookupKey(profile) === lookupKey;
+    });
+
+    if (!conflictingProfile) {
+        return;
+    }
+
+    const error = new Error(
+        `A member profile already exists for ${conflictingProfile.displayName} (${conflictingProfile.graduationYear || "Unknown"}).`,
+    );
+    error.statusCode = 409;
+    throw error;
 }
 
 function compareProfiles(leftProfile, rightProfile) {
@@ -312,6 +494,8 @@ function compareStrings(leftValue, rightValue) {
 }
 
 module.exports = {
+    createProfile,
+    deleteProfile,
     ensureProfileStore,
     getProfileById,
     importProfilesFromCsv,
@@ -319,4 +503,5 @@ module.exports = {
     profilePlaceholderImageUrl,
     profileStorePath,
     requiredCsvHeaders,
+    updateProfile,
 };

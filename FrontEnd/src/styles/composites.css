@@ -84,6 +84,24 @@
   font-size: 14px;
 }
 
+.compositeCheckbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.compositeCheckbox input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--deep-purple);
+}
+
 .compositeField__input,
 .profileSearch__input {
   width: 100%;
@@ -110,6 +128,131 @@
 .compositeUploadForm {
   display: grid;
   gap: 18px;
+}
+
+.profileManagerGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.profileManagerGrid__fullWidth {
+  grid-column: 1 / -1;
+}
+
+.profileManagerCheckboxRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.profileDirectoryToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.profileDirectoryToolbar__search {
+  flex: 1 1 320px;
+  max-width: 420px;
+}
+
+.profileDirectoryToolbar__count {
+  margin: 0;
+  color: var(--muted);
+}
+
+.profileDirectoryList {
+  display: grid;
+  gap: 16px;
+}
+
+.profileDirectoryCard {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.profileDirectoryCard__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.profileDirectoryCard__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.45rem;
+}
+
+.profileDirectoryCard__meta {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.profileDirectoryCard__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.profileDirectoryCard__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.profileDirectoryBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid rgba(38, 21, 56, 0.12);
+  background: rgba(38, 21, 56, 0.07);
+  color: var(--deep-purple);
+  font-size: 13px;
+}
+
+.profileDirectoryBadge--muted {
+  background: rgba(198, 162, 74, 0.2);
+  border-color: rgba(164, 120, 22, 0.18);
+  color: #6c5600;
+}
+
+.profileDirectoryCard__details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.profileDirectoryCard__detail {
+  padding: 12px 14px;
+  border: 1px solid rgba(38, 21, 56, 0.08);
+  background: #fff;
+}
+
+.profileDirectoryCard__detail dt {
+  margin: 0 0 6px;
+  font-family: var(--font-smallcaps);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.profileDirectoryCard__detail dd {
+  margin: 0;
+  line-height: 1.55;
+  word-break: break-word;
 }
 
 .compositeUploadForm__grid {
@@ -1004,6 +1147,10 @@
   }
 
   .compositeUploadForm__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .profileManagerGrid {
     grid-template-columns: 1fr;
   }
 

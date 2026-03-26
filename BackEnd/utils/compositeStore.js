@@ -187,6 +187,66 @@ async function replaceAnnotations(compositeId, incomingAnnotations, validProfile
     return toCompositeResponse(composite);
 }
 
+async function removeProfileReferences(profileId) {
+    const normalizedProfileId = String(profileId || "");
+
+    if (!normalizedProfileId) {
+        return {
+            updatedCompositeCount: 0,
+            clearedAnnotationCount: 0,
+        };
+    }
+
+    const store = await readStore();
+    const now = new Date().toISOString();
+    let updatedCompositeCount = 0;
+    let clearedAnnotationCount = 0;
+
+    for (const composite of store.composites) {
+        let compositeWasUpdated = false;
+
+        composite.annotations = (composite.annotations || []).map((annotation) => {
+            const hadAssignedProfile = String(annotation.profileId || "") === normalizedProfileId;
+            const hadSuggestedProfile = String(annotation.matchedProfileId || "") === normalizedProfileId;
+
+            if (!hadAssignedProfile && !hadSuggestedProfile) {
+                return annotation;
+            }
+
+            compositeWasUpdated = true;
+            clearedAnnotationCount += 1;
+
+            const nextProfileId = hadAssignedProfile ? null : annotation.profileId ?? null;
+            const nextMatchedProfileId = hadSuggestedProfile ? null : annotation.matchedProfileId ?? null;
+
+            return {
+                ...annotation,
+                profileId: nextProfileId,
+                matchedProfileId: nextMatchedProfileId,
+                needsReview: hadAssignedProfile
+                    ? true
+                    : !nextProfileId
+                        ? Boolean(annotation.needsReview || hadSuggestedProfile)
+                        : Boolean(annotation.needsReview),
+                updatedAt: now,
+            };
+        });
+
+        if (compositeWasUpdated) {
+            updatedCompositeCount += 1;
+        }
+    }
+
+    if (updatedCompositeCount > 0) {
+        await writeStore(store);
+    }
+
+    return {
+        updatedCompositeCount,
+        clearedAnnotationCount,
+    };
+}
+
 function sanitizeAnnotation(annotation, composite, validProfileIds, existingAnnotations) {
     const imageWidth = Number(composite.imageWidth);
     const imageHeight = Number(composite.imageHeight);
@@ -378,5 +438,6 @@ module.exports = {
     getCompositeById,
     listProfileCompositeReferences,
     listComposites,
+    removeProfileReferences,
     replaceAnnotations,
 };
