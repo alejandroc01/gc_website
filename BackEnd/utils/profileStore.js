@@ -249,7 +249,25 @@ function toProfileFromCsvRow(row, timestamp) {
 }
 
 function buildDisplayName(firstName, lastName, preferredName) {
-    return [firstName || preferredName, lastName].filter(Boolean).join(" ").trim();
+    const normalizedFirstName = String(firstName || "").trim();
+    const normalizedLastName = String(lastName || "").trim();
+    const normalizedPreferredName = String(preferredName || "").trim();
+    const hasDistinctPreferredName = (
+        normalizedPreferredName
+        && normalizedFirstName
+        && normalizedPreferredName.localeCompare(normalizedFirstName, undefined, {
+            sensitivity: "base",
+        }) !== 0
+    );
+
+    if (hasDistinctPreferredName) {
+        return [normalizedFirstName, `"${normalizedPreferredName}"`, normalizedLastName]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+    }
+
+    return [normalizedFirstName || normalizedPreferredName, normalizedLastName].filter(Boolean).join(" ").trim();
 }
 
 function buildProfileLookupKey(profile) {

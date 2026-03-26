@@ -32,6 +32,7 @@ export default function AnnotationStage({
   const annotationsRef = useRef(annotations);
   const compositeRef = useRef(composite);
   const lastBoxSizeRef = useRef(lastBoxSize);
+  const onZoomChangeRef = useRef(onZoomChange);
   const onAnnotationsChangeRef = useRef(onAnnotationsChange);
   const onSelectAnnotationRef = useRef(onSelectAnnotation);
   const onLastBoxSizeChangeRef = useRef(onLastBoxSizeChange);
@@ -44,6 +45,7 @@ export default function AnnotationStage({
   annotationsRef.current = annotations;
   compositeRef.current = composite;
   lastBoxSizeRef.current = lastBoxSize;
+  onZoomChangeRef.current = onZoomChange;
   onAnnotationsChangeRef.current = onAnnotationsChange;
   onSelectAnnotationRef.current = onSelectAnnotation;
   onLastBoxSizeChangeRef.current = onLastBoxSizeChange;
@@ -199,22 +201,30 @@ export default function AnnotationStage({
   }, [handleWindowPointerMove]);
 
   const updateBaseDisplaySize = useCallback(() => {
-    const imageElement = imageRef.current;
+    const viewportElement = viewportRef.current;
+    const currentComposite = compositeRef.current;
 
-    if (!imageElement) {
+    if (!viewportElement || !currentComposite) {
       return;
     }
 
+    const viewportWidth = Math.max(240, viewportElement.clientWidth - 20);
+    const viewportHeight = Math.max(240, Math.round(window.innerHeight * 0.72));
+    const fitScale = Math.min(
+      viewportWidth / Math.max(currentComposite.imageWidth, 1),
+      viewportHeight / Math.max(currentComposite.imageHeight, 1),
+    );
+
     setBaseDisplaySize({
-      width: imageElement.clientWidth,
-      height: imageElement.clientHeight,
+      width: Math.max(1, Math.round(currentComposite.imageWidth * fitScale)),
+      height: Math.max(1, Math.round(currentComposite.imageHeight * fitScale)),
     });
   }, []);
 
   useEffect(() => {
-    const imageElement = imageRef.current;
+    const viewportElement = viewportRef.current;
 
-    if (!imageElement) {
+    if (!viewportElement || !composite) {
       return undefined;
     }
 
@@ -224,12 +234,14 @@ export default function AnnotationStage({
       updateBaseDisplaySize();
     });
 
-    resizeObserver.observe(imageElement);
+    resizeObserver.observe(viewportElement);
+    window.addEventListener('resize', updateBaseDisplaySize);
 
     return () => {
       resizeObserver.disconnect();
+      window.removeEventListener('resize', updateBaseDisplaySize);
     };
-  }, [composite?.imageUrl, updateBaseDisplaySize]);
+  }, [composite, updateBaseDisplaySize]);
 
   useEffect(() => {
     const pendingZoomFocus = pendingZoomFocusRef.current;
@@ -248,6 +260,21 @@ export default function AnnotationStage({
       (pendingZoomFocus.imageY * zoom) - pendingZoomFocus.offsetY,
     );
     pendingZoomFocusRef.current = null;
+  }, [zoom]);
+
+  useEffect(() => {
+    if (zoom !== MIN_ZOOM_LEVEL) {
+      return;
+    }
+
+    const viewportElement = viewportRef.current;
+
+    if (!viewportElement) {
+      return;
+    }
+
+    viewportElement.scrollLeft = 0;
+    viewportElement.scrollTop = 0;
   }, [zoom]);
 
   useEffect(() => {
@@ -291,6 +318,57 @@ export default function AnnotationStage({
       handleWindowPointerUp,
     );
   }, [handleWindowPointerMove, handleWindowPointerUp, interactionsDisabled]);
+
+  useEffect(() => {
+    const viewportElement = viewportRef.current;
+
+    if (!viewportElement) {
+      return undefined;
+    }
+
+    const handleViewportWheel = (event) => {
+      if (interactionsDisabled || typeof onZoomChangeRef.current !== 'function') {
+        return;
+      }
+
+      const viewportRect = viewportElement.getBoundingClientRect();
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      const zoomDirection = event.deltaY < 0 ? 1 : -1;
+      const nextZoom = clampZoom(zoom + (zoomDirection * WHEEL_ZOOM_STEP));
+
+      if (nextZoom === zoom) {
+        return;
+      }
+
+      pendingZoomFocusRef.current = {
+        imageX: (viewportElement.scrollLeft + (event.clientX - viewportRect.left)) / zoom,
+        imageY: (viewportElement.scrollTop + (event.clientY - viewportRect.top)) / zoom,
+        offsetX: event.clientX - viewportRect.left,
+        offsetY: event.clientY - viewportRect.top,
+      };
+      onZoomChangeRef.current(nextZoom);
+    };
+
+    const handleContextMenu = (event) => {
+      if (!(event.target instanceof Node) || !viewportElement.contains(event.target)) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    viewportElement.addEventListener('wheel', handleViewportWheel, { passive: false });
+    window.addEventListener('contextmenu', handleContextMenu, true);
+
+    return () => {
+      viewportElement.removeEventListener('wheel', handleViewportWheel);
+      window.removeEventListener('contextmenu', handleContextMenu, true);
+    };
+  }, [interactionsDisabled, zoom]);
 
   const handleOverlayPointerDown = (event) => {
     if (interactionsDisabled || event.button !== 0 || event.target !== event.currentTarget || !composite) {
@@ -347,36 +425,6 @@ export default function AnnotationStage({
       handleWindowPointerMove,
       handleWindowPointerUp,
     );
-  };
-
-  const handleViewportWheel = (event) => {
-    if (interactionsDisabled || typeof onZoomChange !== 'function') {
-      return;
-    }
-
-    const viewportElement = viewportRef.current;
-    const viewportRect = viewportElement?.getBoundingClientRect();
-
-    if (!viewportElement || !viewportRect) {
-      return;
-    }
-
-    event.preventDefault();
-
-    const zoomDirection = event.deltaY < 0 ? 1 : -1;
-    const nextZoom = clampZoom(zoom + (zoomDirection * WHEEL_ZOOM_STEP));
-
-    if (nextZoom === zoom) {
-      return;
-    }
-
-    pendingZoomFocusRef.current = {
-      imageX: (viewportElement.scrollLeft + (event.clientX - viewportRect.left)) / zoom,
-      imageY: (viewportElement.scrollTop + (event.clientY - viewportRect.top)) / zoom,
-      offsetX: event.clientX - viewportRect.left,
-      offsetY: event.clientY - viewportRect.top,
-    };
-    onZoomChange(nextZoom);
   };
 
   const handleBoxPointerDown = (event, annotation) => {
@@ -455,7 +503,6 @@ export default function AnnotationStage({
         ].filter(Boolean).join(' ')}
         onContextMenu={(event) => event.preventDefault()}
         onPointerDown={handleViewportPointerDown}
-        onWheel={handleViewportWheel}
       >
         <div
           className="annotationStage__scaledCanvas"
@@ -477,6 +524,10 @@ export default function AnnotationStage({
               alt={composite.originalFilename}
               onLoad={updateBaseDisplaySize}
               draggable="false"
+              style={{
+                width: baseDisplaySize.width || undefined,
+                height: baseDisplaySize.height || undefined,
+              }}
             />
 
             <div className="annotationStage__overlay" onPointerDown={handleOverlayPointerDown}>
@@ -506,10 +557,10 @@ export default function AnnotationStage({
                     type="button"
                     className={[
                       'annotationStage__box',
+                      getAnnotationStateClass(annotation),
                       isSelected ? 'annotationStage__box--selected' : '',
                       annotation.source === 'auto' ? 'annotationStage__box--auto' : '',
                       annotation.needsReview ? 'annotationStage__box--review' : '',
-                      annotation.profileId ? '' : 'annotationStage__box--unassigned',
                     ].filter(Boolean).join(' ')}
                     style={displayRect}
                     onPointerDown={(event) => handleBoxPointerDown(event, annotation)}
@@ -698,4 +749,16 @@ function clamp(value, min, max) {
 
 function clampZoom(value) {
   return clamp(Number(value.toFixed(2)), MIN_ZOOM_LEVEL, MAX_ZOOM_LEVEL);
+}
+
+function getAnnotationStateClass(annotation) {
+  if (annotation?.profileId) {
+    return 'annotationStage__box--assigned';
+  }
+
+  if (annotation?.matchedProfileId) {
+    return 'annotationStage__box--suggested';
+  }
+
+  return 'annotationStage__box--unresolved';
 }

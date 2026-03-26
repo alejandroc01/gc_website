@@ -777,7 +777,7 @@ export default function CompositeEditorPage() {
                                 : 'Assign profile'
                             }
                             hideLabel
-                            invalid={!annotation.profileId}
+                            invalid={!annotation.profileId && !annotation.matchedProfileId}
                           />
 
                           {annotation.detectedName ? (
@@ -789,7 +789,7 @@ export default function CompositeEditorPage() {
                           {annotation.matchedProfileId && annotation.profileId !== annotation.matchedProfileId ? (
                             <div className="annotationList__suggestion">
                               <p className="annotationList__helper">
-                                Suggested profile: <strong>{profileMap.get(annotation.matchedProfileId)?.displayName || 'Unknown profile'}</strong>
+                                Suggested profile: <strong>{formatProfileSummary(profileMap.get(annotation.matchedProfileId))}</strong>
                                 {annotation.matchConfidence
                                   ? ` (${formatConfidence(annotation.matchConfidence)})`
                                   : ''}
@@ -1004,6 +1004,18 @@ function isEditableElement(target) {
 
 function formatConfidence(confidence) {
   return `${Math.round(confidence * 100)}% match`;
+}
+
+function formatProfileSummary(profile) {
+  if (!profile) {
+    return 'Unknown profile';
+  }
+
+  if (profile.graduationYear) {
+    return `${profile.displayName} (Class of ${profile.graduationYear})`;
+  }
+
+  return profile.displayName || 'Unknown profile';
 }
 
 function normalizeTextBoxStatus(status) {
