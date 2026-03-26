@@ -178,6 +178,7 @@ function prepareOcrWords(words) {
         .map((word) => ({
             lineIndex: Number(word.lineIndex) || 0,
             text: cleanDisplayText(word.text),
+            confidence: toFiniteNumber(word.confidence),
             x: Math.round(Number(word.x) || 0),
             y: Math.round(Number(word.y) || 0),
             width: Math.round(Number(word.width) || 0),
@@ -188,6 +189,7 @@ function prepareOcrWords(words) {
             && word.width > 0
             && word.height > 0
             && word.height <= 90
+            && hasUsableOcrWordConfidence(word)
         ))
         .map((word) => ({
             ...word,
@@ -372,6 +374,7 @@ function evaluateSegment(segment, profileEntries) {
     const fullNormalizedText = normalizeForMatch(segment.text);
     const fullNormalizedTokens = tokenizeNormalizedText(fullNormalizedText);
     const tokenClassification = classifySegmentTokens(fullNormalizedTokens);
+    const wordClassification = classifySegmentWords(segment.words);
     const normalizedTokens = tokenClassification.nameTokens.length > 0
         ? tokenClassification.nameTokens
         : fullNormalizedTokens;
@@ -391,6 +394,8 @@ function evaluateSegment(segment, profileEntries) {
         fullNormalizedTokens,
         detectedName,
         subtitleText: formatDisplayTokens(tokenClassification.subtitleTokens),
+        primaryBox: buildWordBounds(wordClassification.nameWords.length > 0 ? wordClassification.nameWords : segment.words),
+        subtitleBox: buildWordBounds(wordClassification.subtitleWords),
         matchedProfileDisplayName: bestProfileMatch.displayName || null,
         matchedProfileId: hasReliableProfileSuggestion
             ? bestProfileMatch.profileId
@@ -529,13 +534,18 @@ function buildVisibleTextBoxes(segments) {
     }
 
     const textBoxes = segments
-        .filter((segment) => (
-            segment.text
-            && segment.width >= 16
-            && segment.width <= 900
-            && segment.height >= 8
-            && segment.height <= 60
-        ))
+        .filter((segment) => {
+            const displayBox = segment.primaryBox || segment;
+
+            return (
+                segment.text
+                && shouldDisplaySegment(segment)
+                && displayBox.width >= 16
+                && displayBox.width <= 900
+                && displayBox.height >= 8
+                && displayBox.height <= 60
+            );
+        })
         .sort((leftSegment, rightSegment) => (
             leftSegment.y - rightSegment.y
             || leftSegment.x - rightSegment.x
@@ -543,6 +553,7 @@ function buildVisibleTextBoxes(segments) {
         .map((segment, index) => {
             const row = rowStats.get(segment.rowIndex) || { strongCount: 0, plausibleCount: 0 };
             const rowLooksLikeCaptionBand = row.plausibleCount >= 3 || row.strongCount >= 1;
+            const displayBox = segment.primaryBox || segment;
             const isPlacementCandidate = rowLooksLikeCaptionBand && !segment.isSubtitleOnly && (
                 segment.nameLike
                 || segment.partialNameLike
@@ -564,12 +575,12 @@ function buildVisibleTextBoxes(segments) {
                 rowIndex: segment.rowIndex,
                 text: segment.detectedName || null,
                 rawText: segment.text,
-                x: Math.round(segment.x),
-                y: Math.round(segment.y),
-                width: Math.round(segment.width),
-                height: Math.round(segment.height),
-                centerX: segment.centerX,
-                centerY: segment.centerY,
+                x: Math.round(displayBox.x),
+                y: Math.round(displayBox.y),
+                width: Math.round(displayBox.width),
+                height: Math.round(displayBox.height),
+                centerX: displayBox.centerX,
+                centerY: displayBox.centerY,
                 isPlacementCandidate,
                 isAnchorCandidate,
                 hasEmbeddedSubtitle: Boolean(segment.hasEmbeddedSubtitle),
@@ -592,7 +603,7 @@ function buildVisibleTextBoxes(segments) {
 function dedupeOcrWords(words) {
     const dedupedWords = [];
     const sortedWords = [...words].sort((leftWord, rightWord) => (
-        getOcrWordQualityScore(rightWord.text) - getOcrWordQualityScore(leftWord.text)
+        getOcrWordQualityScore(rightWord.text, rightWord.confidence) - getOcrWordQualityScore(leftWord.text, leftWord.confidence)
         || rightWord.height - leftWord.height
         || rightWord.width - leftWord.width
         || leftWord.y - rightWord.y
@@ -622,7 +633,35 @@ function dedupeOcrWords(words) {
     return dedupedWords;
 }
 
-function getOcrWordQualityScore(text) {
+function hasUsableOcrWordConfidence(word) {
+    const confidence = toFiniteNumber(word?.confidence);
+
+    if (confidence === null) {
+        return true;
+    }
+
+    const normalizedText = cleanDisplayText(word?.text);
+
+    if (!normalizedText) {
+        return false;
+    }
+
+    if (normalizedText.length >= 8) {
+        return confidence >= 10;
+    }
+
+    if (/^[A-Za-z-]{5,}$/.test(normalizedText)) {
+        return confidence >= 16;
+    }
+
+    if (/^[A-Za-z-]{3,}$/.test(normalizedText)) {
+        return confidence >= 24;
+    }
+
+    return confidence >= 34;
+}
+
+function getOcrWordQualityScore(text, confidence = null) {
     const normalizedText = cleanDisplayText(text);
     const letterCount = (normalizedText.match(/[A-Za-z]/g) || []).length;
     const uppercaseCount = (normalizedText.match(/[A-Z]/g) || []).length;
@@ -630,6 +669,7 @@ function getOcrWordQualityScore(text) {
     const digitCount = (normalizedText.match(/\d/g) || []).length;
     const symbolCount = (normalizedText.match(/[^A-Za-z0-9 .'-]/g) || []).length;
     const punctuationPenalty = (normalizedText.match(/[.](?=[A-Za-z])/g) || []).length;
+    const confidenceBonus = toFiniteNumber(confidence) === null ? 0 : Math.round(confidence / 8);
 
     return (
         (letterCount * 2)
@@ -640,7 +680,91 @@ function getOcrWordQualityScore(text) {
         + (lowercaseCount === 0 && uppercaseCount >= 2 ? 6 : 0)
         - (uppercaseCount > 0 && lowercaseCount > 0 ? 8 : 0)
         - (punctuationPenalty * 4)
+        + confidenceBonus
     );
+}
+
+function shouldDisplaySegment(segment) {
+    if (!segment || !segment.text) {
+        return false;
+    }
+
+    if (segment.isSubtitleOnly) {
+        return segment.hasTitleLikeTokens || Boolean(segment.subtitleText);
+    }
+
+    return (
+        segment.nameLike
+        || segment.partialNameLike
+        || segment.strongMatch
+        || segment.hasReliableProfileSuggestion
+        || segment.hasEmbeddedSubtitle
+        || (segment.matchConfidence || 0) >= 0.5
+    );
+}
+
+function classifySegmentWords(words) {
+    const nameWords = [];
+    const subtitleWords = [];
+
+    for (const word of Array.isArray(words) ? words : []) {
+        const wordTokens = tokenizeNormalizedText(normalizeForMatch(word.text));
+
+        if (wordTokens.length === 0) {
+            continue;
+        }
+
+        const hasNameToken = wordTokens.some((token) => (
+            !isLikelyTitleToken(token)
+            && !TITLE_CONNECTOR_TOKENS.has(token)
+            && !NON_NAME_TOKENS.has(token)
+            && token.length > 1
+        ));
+        const hasSubtitleToken = wordTokens.some((token) => (
+            isLikelyTitleToken(token)
+            || TITLE_CONNECTOR_TOKENS.has(token)
+            || NON_NAME_TOKENS.has(token)
+        ));
+
+        if (hasNameToken) {
+            nameWords.push(word);
+        }
+
+        if (hasSubtitleToken || !hasNameToken) {
+            subtitleWords.push(word);
+        }
+    }
+
+    return {
+        nameWords,
+        subtitleWords,
+    };
+}
+
+function buildWordBounds(words) {
+    if (!Array.isArray(words) || words.length === 0) {
+        return null;
+    }
+
+    const left = Math.min(...words.map((word) => word.x));
+    const top = Math.min(...words.map((word) => word.y));
+    const right = Math.max(...words.map((word) => word.right));
+    const bottom = Math.max(...words.map((word) => word.bottom));
+    const width = right - left;
+    const height = bottom - top;
+
+    if (width <= 0 || height <= 0) {
+        return null;
+    }
+
+    return {
+        x: left,
+        y: top,
+        width,
+        height,
+        centerX: left + (width / 2),
+        centerY: top + (height / 2),
+    };
 }
 
 function wordOverlapRatio(leftWord, rightWord) {

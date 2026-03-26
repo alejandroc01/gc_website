@@ -7,7 +7,7 @@ const {
 } = require("./compositeOcrStore");
 const { listProfiles } = require("./profileStore");
 
-const compositeOcrCacheVersion = "2026-03-18-v1";
+const compositeOcrCacheVersion = "2026-03-25-v1";
 const staleOcrStateMs = 20 * 60 * 1000;
 const queuedCompositeIds = [];
 const queuedCompositeIdSet = new Set();

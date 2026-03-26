@@ -10,8 +10,8 @@ const tesseractExecutable = process.env.COMPOSITE_OCR_TESSERACT || "tesseract";
 const targetTileLongSide = 2800;
 const maxTileScaleFactor = 4.0;
 const tesseractLanguage = process.env.COMPOSITE_OCR_LANGUAGE || "eng";
-const tesseractPageSegmentationMode = process.env.COMPOSITE_OCR_PSM || "11";
-const linuxOcrCacheVersion = "linux-tesseract-v1";
+const defaultTesseractPageSegmentationMode = process.env.COMPOSITE_OCR_PSM || "11";
+const linuxOcrCacheVersion = "linux-tesseract-v2";
 
 async function readLinuxOcrWords(imagePath) {
     const metadata = await getImageMetadata(imagePath);
@@ -42,6 +42,7 @@ async function readLinuxOcrWords(imagePath) {
                 sourceX: 0,
                 sourceY: 0,
                 scaleFactor: fullImageScaleFactor,
+                pageSegmentationMode: defaultTesseractPageSegmentationMode,
                 lineIndexStart: currentLineIndex,
             });
 
@@ -54,6 +55,7 @@ async function readLinuxOcrWords(imagePath) {
                 sourceX: 0,
                 sourceY: 0,
                 scaleFactor: 1,
+                pageSegmentationMode: defaultTesseractPageSegmentationMode,
                 lineIndexStart: currentLineIndex,
             });
 
@@ -62,11 +64,11 @@ async function readLinuxOcrWords(imagePath) {
         }
 
         for (const tile of getTileSpecs(metadata.width, metadata.height)) {
-            for (const renderMode of ["normal", "threshold"]) {
+            for (const tesseractPass of getTesseractPasses()) {
                 const scaleFactor = getScaleFactor(tile.width, tile.height);
                 const tileImagePath = path.join(
                     tempDirectory,
-                    `tile-${tile.x}-${tile.y}-${renderMode}.png`,
+                    `tile-${tile.x}-${tile.y}-${tesseractPass.renderMode}-${tesseractPass.pageSegmentationMode}.png`,
                 );
 
                 await renderOcrImage({
@@ -77,7 +79,7 @@ async function readLinuxOcrWords(imagePath) {
                     sourceWidth: tile.width,
                     sourceHeight: tile.height,
                     scaleFactor,
-                    renderMode,
+                    renderMode: tesseractPass.renderMode,
                 });
 
                 const tileResult = await runTesseractTsv({
@@ -86,6 +88,7 @@ async function readLinuxOcrWords(imagePath) {
                     sourceX: tile.x,
                     sourceY: tile.y,
                     scaleFactor,
+                    pageSegmentationMode: tesseractPass.pageSegmentationMode,
                     lineIndexStart: currentLineIndex,
                 });
 
@@ -134,6 +137,20 @@ async function renderOcrImage({
         );
     }
 
+    if (renderMode === "caption") {
+        convertArguments.push(
+            "-colorspace",
+            "Gray",
+            "-normalize",
+            "-contrast-stretch",
+            "2%x1%",
+            "-sharpen",
+            "0x1.2",
+            "-threshold",
+            "66%",
+        );
+    }
+
     convertArguments.push(
         "-filter",
         "Lanczos",
@@ -151,6 +168,7 @@ async function runTesseractTsv({
     sourceX,
     sourceY,
     scaleFactor,
+    pageSegmentationMode,
     lineIndexStart,
 }) {
     const outputBasePath = path.join(
@@ -170,7 +188,7 @@ async function runTesseractTsv({
                 "--oem",
                 "1",
                 "--psm",
-                String(tesseractPageSegmentationMode),
+                String(pageSegmentationMode || defaultTesseractPageSegmentationMode),
                 "tsv",
             ],
             {
@@ -244,16 +262,24 @@ function parseTesseractTsv(tsvText, {
         const top = Number(columns[columnIndexes.get("top")]) || 0;
         const width = Number(columns[columnIndexes.get("width")]) || 0;
         const height = Number(columns[columnIndexes.get("height")]) || 0;
+        const tightenedBounds = tightenWordBounds({
+            text,
+            left,
+            top,
+            width,
+            height,
+        });
 
         words.push({
             lineIndex: lineIndexByKey.get(lineKey),
             text,
-            x: Math.round(sourceX + (left / scaleFactor)),
-            y: Math.round(sourceY + (top / scaleFactor)),
-            width: Math.round(width / scaleFactor),
-            height: Math.round(height / scaleFactor),
-            right: Math.round(sourceX + ((left + width) / scaleFactor)),
-            bottom: Math.round(sourceY + ((top + height) / scaleFactor)),
+            confidence,
+            x: Math.round(sourceX + (tightenedBounds.left / scaleFactor)),
+            y: Math.round(sourceY + (tightenedBounds.top / scaleFactor)),
+            width: Math.round(tightenedBounds.width / scaleFactor),
+            height: Math.round(tightenedBounds.height / scaleFactor),
+            right: Math.round(sourceX + ((tightenedBounds.left + tightenedBounds.width) / scaleFactor)),
+            bottom: Math.round(sourceY + ((tightenedBounds.top + tightenedBounds.height) / scaleFactor)),
         });
     }
 
@@ -324,6 +350,66 @@ function getRowCount(height) {
     }
 
     return 2;
+}
+
+function getTesseractPasses() {
+    return [
+        {
+            renderMode: "normal",
+            pageSegmentationMode: defaultTesseractPageSegmentationMode,
+        },
+        {
+            renderMode: "threshold",
+            pageSegmentationMode: defaultTesseractPageSegmentationMode,
+        },
+        {
+            renderMode: "caption",
+            pageSegmentationMode: "6",
+        },
+    ];
+}
+
+function tightenWordBounds({
+    text,
+    left,
+    top,
+    width,
+    height,
+}) {
+    const normalizedText = String(text || "").trim();
+
+    if (!normalizedText || height < 12) {
+        return {
+            left,
+            top,
+            width,
+            height,
+        };
+    }
+
+    const hasOnlyUppercaseLetters = /[A-Z]/.test(normalizedText) && normalizedText === normalizedText.toUpperCase();
+    const targetHeightRatio = hasOnlyUppercaseLetters ? 0.78 : 0.84;
+    const tightenedHeight = Math.max(8, Math.round(height * targetHeightRatio));
+    const trimAmount = Math.max(0, height - tightenedHeight);
+
+    if (trimAmount <= 1) {
+        return {
+            left,
+            top,
+            width,
+            height,
+        };
+    }
+
+    const topTrim = Math.round(trimAmount * 0.38);
+    const bottomTrim = trimAmount - topTrim;
+
+    return {
+        left,
+        top: top + topTrim,
+        width,
+        height: Math.max(8, height - topTrim - bottomTrim),
+    };
 }
 
 function execFileAsync(command, arguments_, options = {}) {
