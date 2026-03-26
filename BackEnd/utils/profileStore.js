@@ -4,11 +4,12 @@ const path = require("path");
 
 const seedProfiles = require("../data/mockProfiles");
 const { parseCsvRecords } = require("./csvParser");
+const {
+    copyBundledStorageFileIfMissing,
+    storageDirectory,
+} = require("./storageConfig");
 
 const profilePlaceholderImageUrl = "/images/profile-plank.svg";
-const storageDirectory = process.env.BACKEND_STORAGE_DIR
-    ? path.resolve(process.env.BACKEND_STORAGE_DIR)
-    : path.join(__dirname, "..", "storage");
 const profileStorePath = path.join(storageDirectory, "profiles.json");
 const requiredCsvHeaders = [
     "Class (C)",
@@ -25,7 +26,7 @@ const requiredCsvHeaders = [
 ];
 
 async function ensureProfileStore() {
-    await fs.mkdir(storageDirectory, { recursive: true });
+    await copyBundledStorageFileIfMissing("profiles.json");
 
     try {
         await fs.access(profileStorePath);

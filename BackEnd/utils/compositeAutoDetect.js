@@ -1,7 +1,7 @@
 const crypto = require("crypto");
-const path = require("path");
 
 const { readOcrWords } = require("./windowsOcr");
+const { resolveStoredFileAbsolutePath } = require("./uploadConfig");
 
 const MIN_CAPTION_HEIGHT = 10;
 const MAX_CAPTION_HEIGHT = 22;
@@ -90,7 +90,7 @@ const TITLE_CONNECTOR_TOKENS = new Set([
 ]);
 
 async function detectCompositeTextBoxes({ composite, profiles }) {
-    const imagePath = path.join(__dirname, "..", composite.storedFilePath);
+    const imagePath = resolveStoredFileAbsolutePath(composite.storedFilePath);
     const ocrWords = await readOcrWords(imagePath);
     const preparedWords = prepareOcrWords(ocrWords);
     const wordRows = groupWordsIntoRows(preparedWords);

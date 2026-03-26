@@ -1,15 +1,19 @@
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
+const {
+    copyBundledStorageFileIfMissing,
+    storageDirectory,
+} = require("./storageConfig");
+const { normalizeStoredFilePath } = require("./uploadConfig");
 
-const storageDirectory = path.join(__dirname, "..", "storage");
 const compositeStorePath = path.join(storageDirectory, "composites.json");
 const defaultStore = {
     composites: [],
 };
 
 async function ensureCompositeStore() {
-    await fs.mkdir(storageDirectory, { recursive: true });
+    await copyBundledStorageFileIfMissing("composites.json");
 
     try {
         await fs.access(compositeStorePath);
@@ -43,7 +47,7 @@ async function writeStore(store) {
 }
 
 function buildImageUrl(storedFilePath) {
-    const normalizedPath = storedFilePath.replace(/\\/g, "/").replace(/^\/+/, "");
+    const normalizedPath = normalizeStoredFilePath(storedFilePath);
     return `/api/${normalizedPath}`;
 }
 

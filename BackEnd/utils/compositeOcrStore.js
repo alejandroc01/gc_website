@@ -1,7 +1,10 @@
 const fs = require("fs/promises");
 const path = require("path");
+const {
+    copyBundledStorageFileIfMissing,
+    storageDirectory,
+} = require("./storageConfig");
 
-const storageDirectory = path.join(__dirname, "..", "storage");
 const compositeOcrStorePath = path.join(storageDirectory, "compositeOcr.json");
 const defaultStore = {
     composites: {},
@@ -9,7 +12,7 @@ const defaultStore = {
 const validStatuses = new Set(["idle", "queued", "processing", "ready", "error"]);
 
 async function ensureCompositeOcrStore() {
-    await fs.mkdir(storageDirectory, { recursive: true });
+    await copyBundledStorageFileIfMissing("compositeOcr.json");
 
     try {
         await fs.access(compositeOcrStorePath);

@@ -22,7 +22,9 @@ const {
 const { listProfiles } = require("../utils/profileStore");
 const {
     allowedMimeTypes,
+    buildCompositeStoredFilePath,
     resolveExtensionFromUpload,
+    resolveStoredFileAbsolutePath,
     uploadsDirectory,
 } = require("../utils/uploadConfig");
 
@@ -126,7 +128,7 @@ router.post("/", upload.single("image"), async (req, res, next) => {
             currentUploadedPath = finalAbsolutePath;
         }
 
-        const storedFilePath = path.posix.join("uploads", "composites", namedFilename);
+        const storedFilePath = buildCompositeStoredFilePath(namedFilename);
         const createdComposite = await createComposite({
             compositeId,
             compositeYear,
@@ -154,7 +156,7 @@ router.delete("/:compositeId", async (req, res, next) => {
             return res.status(404).json({ error: "Composite not found." });
         }
 
-        const absoluteStoredPath = path.join(__dirname, "..", deletedComposite.storedFilePath);
+        const absoluteStoredPath = resolveStoredFileAbsolutePath(deletedComposite.storedFilePath);
 
         try {
             await fs.unlink(absoluteStoredPath);
