@@ -311,7 +311,7 @@ function sanitizeAnnotation(annotation, composite, validProfileIds, existingAnno
     );
 
     return {
-        annotationId: existingAnnotation?.annotationId || crypto.randomUUID(),
+        annotationId: sanitizeAnnotationId(annotation?.annotationId) || existingAnnotation?.annotationId || crypto.randomUUID(),
         compositeId: composite.compositeId,
         profileId,
         source,
@@ -331,6 +331,16 @@ function sanitizeAnnotation(annotation, composite, validProfileIds, existingAnno
         createdAt: existingAnnotation?.createdAt || now,
         updatedAt: now,
     };
+}
+
+function sanitizeAnnotationId(annotationId) {
+    const normalizedAnnotationId = String(annotationId || "").trim();
+
+    if (!normalizedAnnotationId) {
+        return null;
+    }
+
+    return normalizedAnnotationId.slice(0, 120);
 }
 
 function sanitizeAnnotationSource(source) {
