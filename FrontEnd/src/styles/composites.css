@@ -1054,10 +1054,20 @@
   margin-top: 8px;
 }
 
-.annotationList__suggestionButton {
-  min-height: 34px;
-  padding: 8px 12px;
-  font-size: 12px;
+.annotationList__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.button.annotationList__suggestionButton,
+.button.annotationList__createProfileButton {
+  gap: 5px;
+  min-height: 0;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1;
 }
 
 .annotationList__previewButton {
@@ -1136,6 +1146,42 @@
   filter: brightness(0) saturate(100%) invert(15%) sepia(16%) saturate(1479%) hue-rotate(241deg) brightness(94%) contrast(92%);
 }
 
+.profileModalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 28px 18px;
+  overflow-y: auto;
+  background: rgba(16, 10, 28, 0.58);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.profileModal {
+  position: relative;
+  z-index: 3001;
+  width: min(760px, 100%);
+  margin: auto;
+  box-shadow: var(--shadow-md);
+}
+
+.profileModal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.profileModal__helper {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
 @media (max-width: 1180px) {
   .compositeEditor__content {
     grid-template-columns: 1fr;
@@ -1173,6 +1219,11 @@
 
   .annotationList__previewFrame {
     min-height: 84px;
+  }
+
+  .profileModal__header {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
 

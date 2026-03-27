@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 
 import trashIcon from '../assets/icons/trash.svg';
 import AnnotationStage from '../components/Composite/AnnotationStage.jsx';
+import CreateProfileModal from '../components/Composite/CreateProfileModal.jsx';
 import ProfileSearchSelect from '../components/Composite/ProfileSearchSelect.jsx';
 import {
   autoDetectCompositeAnnotations,
@@ -27,6 +28,7 @@ export default function CompositeEditorPage() {
   const [profiles, setProfiles] = useState([]);
   const [annotations, setAnnotations] = useState([]);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState(null);
+  const [createProfileAnnotationId, setCreateProfileAnnotationId] = useState('');
   const [lastBoxSize, setLastBoxSize] = useState(DEFAULT_BOX_SIZE);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [saveStatus, setSaveStatus] = useState('idle');
@@ -245,6 +247,10 @@ export default function CompositeEditorPage() {
     () => orderAnnotationsByGridPosition(annotations),
     [annotations],
   );
+  const createProfileTargetAnnotation = useMemo(
+    () => annotations.find((annotation) => annotation.annotationId === createProfileAnnotationId) || null,
+    [annotations, createProfileAnnotationId],
+  );
 
   currentSignatureRef.current = createAnnotationSignature(annotations);
 
@@ -414,6 +420,27 @@ export default function CompositeEditorPage() {
       return nextAnnotations;
     });
   }, []);
+
+  const handleOpenCreateProfileModal = useCallback((annotationId) => {
+    setCreateProfileAnnotationId(annotationId);
+    setSelectedAnnotationId(annotationId);
+  }, []);
+
+  const handleCloseCreateProfileModal = useCallback(() => {
+    setCreateProfileAnnotationId('');
+  }, []);
+
+  const handleProfileCreated = useCallback((savedProfile, annotationId) => {
+    setProfiles((currentProfiles) => sortProfiles([
+      ...currentProfiles.filter((profile) => profile.id !== savedProfile.id),
+      savedProfile,
+    ]));
+
+    if (annotationId) {
+      handleProfileSelect(annotationId, savedProfile.id);
+      setSelectedAnnotationId(annotationId);
+    }
+  }, [handleProfileSelect]);
 
   useEffect(() => {
     if (!selectedAnnotationId) {
@@ -839,6 +866,18 @@ export default function CompositeEditorPage() {
                                 This profile is already assigned to another box in this composite.
                               </p>
                             ) : null}
+
+                            {annotationState !== 'assigned' ? (
+                              <div className="annotationList__actions">
+                                <button
+                                  type="button"
+                                  className="button compositeButton compositeButton--subtle annotationList__createProfileButton"
+                                  onClick={() => handleOpenCreateProfileModal(annotation.annotationId)}
+                                >
+                                  Create New Profile
+                                </button>
+                              </div>
+                            ) : null}
                           </div>
 
                           <button
@@ -866,6 +905,14 @@ export default function CompositeEditorPage() {
           </aside>
         </div>
       </div>
+
+      <CreateProfileModal
+        annotation={createProfileTargetAnnotation}
+        compositeYear={composite?.compositeYear}
+        isOpen={Boolean(createProfileTargetAnnotation)}
+        onClose={handleCloseCreateProfileModal}
+        onProfileCreated={handleProfileCreated}
+      />
     </section>
   );
 }
@@ -1073,6 +1120,14 @@ function formatProfileSummary(profile) {
   return profile.displayName || 'Unknown profile';
 }
 
+function sortProfiles(profileList) {
+  return [...profileList].sort((leftProfile, rightProfile) => (
+    compareStrings(leftProfile.lastName, rightProfile.lastName)
+    || compareStrings(leftProfile.firstName, rightProfile.firstName)
+    || compareStrings(String(leftProfile.graduationYear || ''), String(rightProfile.graduationYear || ''))
+  ));
+}
+
 function normalizeTextBoxStatus(status) {
   if (status === 'ready') {
     return 'loaded';
@@ -1217,4 +1272,10 @@ function getMedianValue(values) {
 
 function compareNumbers(leftValue, rightValue) {
   return Number(leftValue || 0) - Number(rightValue || 0);
+}
+
+function compareStrings(leftValue, rightValue) {
+  return String(leftValue || '').localeCompare(String(rightValue || ''), undefined, {
+    sensitivity: 'base',
+  });
 }
