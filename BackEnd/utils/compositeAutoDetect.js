@@ -9,7 +9,8 @@ const ROW_JOIN_TOLERANCE = 18;
 const SEGMENT_GAP_MIN = 8;
 const SEGMENT_MERGE_GAP_MIN = 12;
 const PARTIAL_NAME_TOKEN_MIN_LENGTH = 4;
-const SAME_YEAR_MATCH_BONUS = 0.035;
+const YEAR_WINDOW_RADIUS = 2;
+const YEAR_WINDOW_RELIABLE_MATCH_THRESHOLD = 0.74;
 const STRONG_MATCH_THRESHOLD = 0.78;
 const PROFILE_SUGGESTION_THRESHOLD = 0.86;
 const PARTIAL_PROFILE_SUGGESTION_THRESHOLD = 0.92;
@@ -416,10 +417,14 @@ function buildProfileEntries(profiles, compositeYear) {
 
     return (Array.isArray(profiles) ? profiles : []).map((profile) => {
         const variants = new Set();
-        const firstName = cleanDisplayText(profile.firstName);
-        const lastName = cleanDisplayText(profile.lastName);
-        const preferredName = cleanDisplayText(profile.preferredName);
-        const displayName = cleanDisplayText(profile.displayName);
+        const firstName = normalizeForMatch(profile.firstName);
+        const lastName = normalizeForMatch(profile.lastName);
+        const preferredName = normalizeForMatch(profile.preferredName);
+        const displayName = normalizeForMatch(profile.displayName);
+        const graduationYear = normalizeYear(profile.graduationYear);
+        const yearDistance = targetYear !== null && graduationYear !== null
+            ? Math.abs(graduationYear - targetYear)
+            : null;
 
         [displayName, [firstName, lastName].filter(Boolean).join(" "), [preferredName, lastName].filter(Boolean).join(" ")]
             .filter(Boolean)
@@ -428,52 +433,390 @@ function buildProfileEntries(profiles, compositeYear) {
         return {
             profileId: String(profile.id),
             displayName: profile.displayName || [profile.firstName, profile.lastName].filter(Boolean).join(" "),
-            isSameYear: targetYear !== null && normalizeYear(profile.graduationYear) === targetYear,
+            firstName,
+            preferredName,
+            lastName,
+            graduationYear,
+            isSameYear: yearDistance === 0,
+            isWithinYearWindow: yearDistance !== null && yearDistance <= YEAR_WINDOW_RADIUS,
+            yearDistance,
             variants: Array.from(variants).filter(Boolean),
         };
-    }).filter((entry) => entry.variants.length > 0);
+    }).filter((entry) => (
+        entry.variants.length > 0
+        || entry.lastName
+        || entry.firstName
+        || entry.preferredName
+    ));
 }
 
 function findBestProfileMatch(normalizedText, normalizedTokens, profileEntries) {
-    let bestMatch = {
+    if (!normalizedText || normalizedTokens.length === 0) {
+        return createEmptyProfileMatch();
+    }
+
+    const collapsedTokens = collapseRedundantNameTokens(normalizedTokens);
+    const collapsedText = collapsedTokens.join(" ");
+    const yearWindowEntries = profileEntries.filter((profileEntry) => profileEntry.isWithinYearWindow);
+    const preferredEntries = yearWindowEntries.length > 0
+        ? yearWindowEntries
+        : profileEntries;
+    const yearAwareMatch = findBestProfileMatchAcrossEntries(
+        normalizedText,
+        normalizedTokens,
+        collapsedText,
+        collapsedTokens,
+        preferredEntries,
+        { includeYearBoost: true },
+    );
+
+    if (yearWindowEntries.length === 0 || isReliableYearAwareProfileMatch(normalizedTokens, yearAwareMatch)) {
+        return yearAwareMatch;
+    }
+
+    const fallbackMatch = findBestProfileMatchAcrossEntries(
+        normalizedText,
+        normalizedTokens,
+        collapsedText,
+        collapsedTokens,
+        profileEntries,
+        { includeYearBoost: false },
+    );
+
+    if (!yearAwareMatch.profileId) {
+        return fallbackMatch;
+    }
+
+    if (!fallbackMatch.profileId) {
+        return yearAwareMatch;
+    }
+
+    return yearAwareMatch.score >= (fallbackMatch.score - 0.04)
+        ? yearAwareMatch
+        : fallbackMatch;
+}
+
+function createEmptyProfileMatch() {
+    return {
         profileId: null,
         displayName: "",
         score: 0,
         runnerUpScore: 0,
     };
+}
 
-    if (!normalizedText || normalizedTokens.length === 0) {
-        return bestMatch;
-    }
+function findBestProfileMatchAcrossEntries(
+    normalizedText,
+    normalizedTokens,
+    collapsedText,
+    collapsedTokens,
+    profileEntries,
+    options = {},
+) {
+    let bestMatch = createEmptyProfileMatch();
 
     for (const profileEntry of profileEntries) {
-        for (const variant of profileEntry.variants) {
-            const baseScore = normalizedTokens.length >= 2
-                ? scoreNormalizedNames(normalizedText, normalizedTokens, variant)
-                : scorePartialNameTokenMatch(normalizedTokens[0], variant);
-            const adjustedScore = clamp(
-                baseScore + (profileEntry.isSameYear ? SAME_YEAR_MATCH_BONUS : 0),
-                0,
-                1,
-            );
+        const adjustedScore = scoreProfileEntryMatch(
+            normalizedText,
+            normalizedTokens,
+            collapsedText,
+            collapsedTokens,
+            profileEntry,
+            options,
+        );
 
-            if (adjustedScore <= bestMatch.score) {
-                if (adjustedScore > bestMatch.runnerUpScore) {
-                    bestMatch.runnerUpScore = adjustedScore;
-                }
-                continue;
+        if (adjustedScore <= bestMatch.score) {
+            if (adjustedScore > bestMatch.runnerUpScore) {
+                bestMatch.runnerUpScore = adjustedScore;
             }
-
-            bestMatch = {
-                profileId: profileEntry.profileId,
-                displayName: profileEntry.displayName,
-                score: adjustedScore,
-                runnerUpScore: bestMatch.score,
-            };
+            continue;
         }
+
+        bestMatch = {
+            profileId: profileEntry.profileId,
+            displayName: profileEntry.displayName,
+            score: adjustedScore,
+            runnerUpScore: bestMatch.score,
+        };
     }
 
     return bestMatch;
+}
+
+function scoreProfileEntryMatch(
+    normalizedText,
+    normalizedTokens,
+    collapsedText,
+    collapsedTokens,
+    profileEntry,
+    { includeYearBoost = false } = {},
+) {
+    const hasCollapsedVariant = (
+        collapsedText
+        && collapsedTokens.length > 0
+        && collapsedText !== normalizedText
+    );
+    const tokenSets = hasCollapsedVariant
+        ? [
+            {
+                text: collapsedText,
+                tokens: collapsedTokens,
+            },
+        ]
+        : [
+            {
+                text: normalizedText,
+                tokens: normalizedTokens,
+            },
+        ];
+
+    const yearBoost = includeYearBoost ? getYearWindowMatchBonus(profileEntry) : 0;
+    let bestScore = 0;
+
+    for (const tokenSet of tokenSets) {
+        const fullNameScore = getBestProfileVariantScore(tokenSet.text, tokenSet.tokens, profileEntry.variants);
+
+        if (tokenSet.tokens.length === 1) {
+            const partialToken = tokenSet.tokens[0];
+            const lastNameScore = scoreNameTokenPair(partialToken, profileEntry.lastName);
+            const firstNameScore = Math.max(
+                scoreNameTokenPair(partialToken, profileEntry.firstName),
+                scoreNameTokenPair(partialToken, profileEntry.preferredName),
+            );
+            const partialVariantScore = getBestProfileVariantPartialScore(partialToken, profileEntry.variants);
+            const partialScore = Math.max(
+                partialVariantScore,
+                clamp(
+                    (lastNameScore * 0.68)
+                    + (firstNameScore * 0.18)
+                    + (partialVariantScore * 0.14),
+                    0,
+                    1,
+                ),
+            );
+
+            bestScore = Math.max(bestScore, partialScore);
+            continue;
+        }
+
+        const firstToken = tokenSet.tokens[0];
+        const trailingTokens = tokenSet.tokens.slice(1);
+        const trailingText = trailingTokens.join(" ");
+        const firstNameScore = Math.max(
+            scoreNameTokenPair(firstToken, profileEntry.firstName),
+            scoreNameTokenPair(firstToken, profileEntry.preferredName),
+        );
+        const lastNameScore = Math.max(
+            scoreNameTokenPair(trailingText, profileEntry.lastName),
+            ...trailingTokens.map((token) => scoreNameTokenPair(token, profileEntry.lastName)),
+            0,
+        );
+        const structuredNameScore = clamp(
+            (lastNameScore * 0.44)
+            + (firstNameScore * 0.26)
+            + (fullNameScore * 0.30)
+            + (lastNameScore >= 0.88 && firstNameScore >= 0.82 ? 0.07 : 0)
+            + (trailingTokens.length > 1 && lastNameScore >= 0.84 ? 0.03 : 0),
+            0,
+            1,
+        );
+
+        bestScore = Math.max(bestScore, Math.max(fullNameScore, structuredNameScore));
+    }
+
+    return clamp(bestScore + yearBoost, 0, 1);
+}
+
+function getBestProfileVariantScore(normalizedText, normalizedTokens, variants) {
+    return Math.max(
+        ...variants.map((variant) => (
+            normalizedTokens.length >= 2
+                ? scoreNormalizedNames(normalizedText, normalizedTokens, variant)
+                : scorePartialNameTokenMatch(normalizedTokens[0], variant)
+        )),
+        0,
+    );
+}
+
+function getBestProfileVariantPartialScore(partialToken, variants) {
+    return Math.max(...variants.map((variant) => scorePartialNameTokenMatch(partialToken, variant)), 0);
+}
+
+function getYearWindowMatchBonus(profileEntry) {
+    if (profileEntry.isSameYear) {
+        return 0.07;
+    }
+
+    if (!profileEntry.isWithinYearWindow || profileEntry.yearDistance === null) {
+        return 0;
+    }
+
+    if (profileEntry.yearDistance === 1) {
+        return 0.045;
+    }
+
+    if (profileEntry.yearDistance === 2) {
+        return 0.025;
+    }
+
+    return 0;
+}
+
+function isReliableYearAwareProfileMatch(normalizedTokens, profileMatch) {
+    if (!profileMatch.profileId) {
+        return false;
+    }
+
+    if (normalizedTokens.length >= 2) {
+        return profileMatch.score >= YEAR_WINDOW_RELIABLE_MATCH_THRESHOLD;
+    }
+
+    return profileMatch.score >= PARTIAL_PROFILE_SUGGESTION_THRESHOLD;
+}
+
+function scoreNameTokenPair(leftToken, rightToken) {
+    const normalizedLeftToken = normalizeForMatch(leftToken);
+    const normalizedRightToken = normalizeForMatch(rightToken);
+
+    if (!normalizedLeftToken || !normalizedRightToken) {
+        return 0;
+    }
+
+    if (normalizedLeftToken === normalizedRightToken) {
+        return 1;
+    }
+
+    const compactLeftToken = normalizedLeftToken.replace(/\s+/g, "");
+    const compactRightToken = normalizedRightToken.replace(/\s+/g, "");
+    const confusableLeftToken = normalizeForConfusableMatch(normalizedLeftToken).replace(/\s+/g, "");
+    const confusableRightToken = normalizeForConfusableMatch(normalizedRightToken).replace(/\s+/g, "");
+
+    return clamp(
+        Math.max(
+            scoreObservedTokenFlowMatch(compactLeftToken, compactRightToken),
+            scoreObservedTokenFlowMatch(confusableLeftToken, confusableRightToken),
+            scoreCompactTextSimilarity(compactLeftToken, compactRightToken),
+            scoreCompactTextSimilarity(confusableLeftToken, confusableRightToken),
+        ),
+        0,
+        1,
+    );
+}
+
+function scoreObservedTokenFlowMatch(observedText, expectedText) {
+    if (!observedText || !expectedText) {
+        return 0;
+    }
+
+    if (observedText === expectedText) {
+        return 1;
+    }
+
+    const overlapRatio = Math.min(observedText.length, expectedText.length) / Math.max(observedText.length, expectedText.length, 1);
+
+    if (Math.min(observedText.length, expectedText.length) < PARTIAL_NAME_TOKEN_MIN_LENGTH) {
+        return 0;
+    }
+
+    if (observedText.length <= expectedText.length) {
+        if (expectedText.startsWith(observedText) || expectedText.endsWith(observedText)) {
+            return clamp(0.84 + (overlapRatio * 0.12), 0, 0.97);
+        }
+
+        if (observedText.length >= 5 && expectedText.includes(observedText)) {
+            return clamp(0.76 + (overlapRatio * 0.1), 0, 0.9);
+        }
+    }
+
+    if (observedText.length > expectedText.length) {
+        if (isLikelyRepeatedFragmentMatch(observedText, expectedText)) {
+            return clamp(0.86 + (overlapRatio * 0.1), 0, 0.97);
+        }
+
+        if (observedText.startsWith(expectedText) || observedText.endsWith(expectedText)) {
+            return clamp(0.56 + (overlapRatio * 0.16), 0, 0.76);
+        }
+
+        if (expectedText.length >= 5 && observedText.includes(expectedText)) {
+            return clamp(0.48 + (overlapRatio * 0.16), 0, 0.68);
+        }
+    }
+
+    return 0;
+}
+
+function isLikelyRepeatedFragmentMatch(observedText, expectedText) {
+    if (!observedText || !expectedText || observedText.length <= expectedText.length) {
+        return false;
+    }
+
+    if (observedText.startsWith(expectedText)) {
+        const trailingFragment = observedText.slice(expectedText.length);
+
+        return isLikelyRepeatedNameFragment(trailingFragment, expectedText);
+    }
+
+    if (observedText.endsWith(expectedText)) {
+        const leadingFragment = observedText.slice(0, observedText.length - expectedText.length);
+
+        return isLikelyRepeatedNameFragment(leadingFragment, expectedText);
+    }
+
+    return false;
+}
+
+function isLikelyRepeatedNameFragment(fragmentText, expectedText) {
+    if (!fragmentText || !expectedText) {
+        return false;
+    }
+
+    const normalizedFragment = String(fragmentText || "").trim();
+    const normalizedExpected = String(expectedText || "").trim();
+
+    if (
+        normalizedFragment.length < PARTIAL_NAME_TOKEN_MIN_LENGTH
+        || normalizedFragment.length > Math.max(PARTIAL_NAME_TOKEN_MIN_LENGTH + 4, Math.round(normalizedExpected.length * 0.72))
+    ) {
+        return false;
+    }
+
+    return (
+        normalizedExpected.startsWith(normalizedFragment)
+        || normalizedExpected.endsWith(normalizedFragment)
+        || scoreCompactTextSimilarity(normalizedFragment, normalizedExpected.slice(0, normalizedFragment.length)) >= 0.88
+        || scoreCompactTextSimilarity(normalizedFragment, normalizedExpected.slice(-normalizedFragment.length)) >= 0.88
+    );
+}
+
+function scoreCompactTextSimilarity(leftText, rightText) {
+    if (!leftText || !rightText) {
+        return 0;
+    }
+
+    if (leftText === rightText) {
+        return 1;
+    }
+
+    const maxLength = Math.max(leftText.length, rightText.length) || 1;
+    const editScore = 1 - (levenshteinDistance(leftText, rightText) / maxLength);
+    const bigramScore = diceCoefficient(leftText, rightText);
+    const flowScore = orderedCharacterFlowScore(leftText, rightText);
+
+    return clamp((editScore * 0.42) + (bigramScore * 0.24) + (flowScore * 0.34), 0, 1);
+}
+
+function orderedCharacterFlowScore(leftText, rightText) {
+    if (!leftText || !rightText) {
+        return 0;
+    }
+
+    if (leftText === rightText) {
+        return 1;
+    }
+
+    const lcsLength = longestCommonSubsequenceLength(leftText, rightText);
+
+    return (2 * lcsLength) / (leftText.length + rightText.length);
 }
 
 function scoreNormalizedNames(leftText, leftTokens, rightText) {
@@ -489,9 +832,23 @@ function scoreNormalizedNames(leftText, leftTokens, rightText) {
     const leftCompact = leftText.replace(/\s+/g, "");
     const rightCompact = rightText.replace(/\s+/g, "");
     const maxLength = Math.max(leftCompact.length, rightCompact.length) || 1;
-    const editScore = 1 - (levenshteinDistance(leftCompact, rightCompact) / maxLength);
-    const tokenScore = multisetDiceCoefficient(leftTokens, rightTokens);
-    const bigramScore = diceCoefficient(leftCompact, rightCompact);
+    const confusableLeftCompact = normalizeForConfusableMatch(leftText).replace(/\s+/g, "");
+    const confusableRightCompact = normalizeForConfusableMatch(rightText).replace(/\s+/g, "");
+    const editScore = Math.max(
+        1 - (levenshteinDistance(leftCompact, rightCompact) / maxLength),
+        1 - (levenshteinDistance(confusableLeftCompact, confusableRightCompact) / Math.max(confusableLeftCompact.length, confusableRightCompact.length, 1)),
+    );
+    const tokenScore = Math.max(
+        multisetDiceCoefficient(leftTokens, rightTokens),
+        multisetDiceCoefficient(
+            tokenizeNormalizedText(normalizeForConfusableMatch(leftText)),
+            tokenizeNormalizedText(normalizeForConfusableMatch(rightText)),
+        ),
+    );
+    const bigramScore = Math.max(
+        diceCoefficient(leftCompact, rightCompact),
+        diceCoefficient(confusableLeftCompact, confusableRightCompact),
+    );
     const lastTokenMatches = leftTokens[leftTokens.length - 1] && leftTokens[leftTokens.length - 1] === rightTokens[rightTokens.length - 1];
     const firstTokenMatches = leftTokens[0] && leftTokens[0] === rightTokens[0];
     const lengthPenalty = Math.min(0.12, Math.abs(leftTokens.length - rightTokens.length) * 0.04);
@@ -1308,11 +1665,74 @@ function normalizeForMatch(text) {
         .trim();
 }
 
+function normalizeForConfusableMatch(text) {
+    return normalizeForMatch(text)
+        .replace(/[1IL]/g, "I")
+        .replace(/[0O]/g, "O")
+        .replace(/[5S]/g, "S")
+        .replace(/[2Z]/g, "Z");
+}
+
 function tokenizeNormalizedText(text) {
     return String(text || "")
         .split(" ")
         .map((token) => token.trim())
         .filter(Boolean);
+}
+
+function collapseRedundantNameTokens(tokens) {
+    const collapsedTokens = [];
+
+    for (const token of Array.isArray(tokens) ? tokens : []) {
+        const normalizedToken = String(token || "").trim();
+
+        if (!normalizedToken) {
+            continue;
+        }
+
+        const previousToken = collapsedTokens[collapsedTokens.length - 1];
+
+        if (!previousToken) {
+            collapsedTokens.push(normalizedToken);
+            continue;
+        }
+
+        if (previousToken === normalizedToken) {
+            continue;
+        }
+
+        if (isRedundantTrailingNameToken(previousToken, normalizedToken)) {
+            continue;
+        }
+
+        if (isRedundantTrailingNameToken(normalizedToken, previousToken)) {
+            collapsedTokens[collapsedTokens.length - 1] = normalizedToken;
+            continue;
+        }
+
+        collapsedTokens.push(normalizedToken);
+    }
+
+    return collapsedTokens;
+}
+
+function isRedundantTrailingNameToken(primaryToken, secondaryToken) {
+    if (!primaryToken || !secondaryToken) {
+        return false;
+    }
+
+    if (secondaryToken.length < PARTIAL_NAME_TOKEN_MIN_LENGTH || secondaryToken.length >= primaryToken.length) {
+        return false;
+    }
+
+    return (
+        (primaryToken.startsWith(secondaryToken) || primaryToken.endsWith(secondaryToken))
+        && scoreCompactTextSimilarity(secondaryToken, primaryToken.slice(0, secondaryToken.length)) >= 0.88
+    ) || (
+        primaryToken.includes(secondaryToken)
+        && secondaryToken.length <= Math.round(primaryToken.length * 0.65)
+        && scoreNameTokenPair(secondaryToken, primaryToken) >= 0.9
+    );
 }
 
 function formatDetectedName(text) {
@@ -1421,24 +1841,7 @@ function scorePartialNameTokenMatch(token, variant) {
             continue;
         }
 
-        if (token === variantToken) {
-            bestScore = Math.max(bestScore, 0.9);
-            continue;
-        }
-
-        if (variantToken.startsWith(token) || token.startsWith(variantToken)) {
-            bestScore = Math.max(bestScore, 0.84);
-            continue;
-        }
-
-        const maxLength = Math.max(token.length, variantToken.length) || 1;
-        const editScore = 1 - (levenshteinDistance(token, variantToken) / maxLength);
-        const bigramScore = diceCoefficient(token, variantToken);
-        const tokenScore = clamp((editScore * 0.65) + (bigramScore * 0.35), 0, 1);
-
-        if (tokenScore >= 0.8) {
-            bestScore = Math.max(bestScore, tokenScore);
-        }
+        bestScore = Math.max(bestScore, scoreNameTokenPair(token, variantToken));
     }
 
     return bestScore;
@@ -1543,6 +1946,36 @@ function levenshteinDistance(leftText, rightText) {
                 previousRow[rightIndex] + 1,
                 previousRow[rightIndex - 1] + substitutionCost,
             );
+        }
+
+        for (let rightIndex = 0; rightIndex <= rightLength; rightIndex += 1) {
+            previousRow[rightIndex] = nextRow[rightIndex];
+        }
+    }
+
+    return previousRow[rightLength];
+}
+
+function longestCommonSubsequenceLength(leftText, rightText) {
+    const leftLength = leftText.length;
+    const rightLength = rightText.length;
+
+    if (leftLength === 0 || rightLength === 0) {
+        return 0;
+    }
+
+    const previousRow = new Array(rightLength + 1).fill(0);
+    const nextRow = new Array(rightLength + 1).fill(0);
+
+    for (let leftIndex = 1; leftIndex <= leftLength; leftIndex += 1) {
+        nextRow[0] = 0;
+
+        for (let rightIndex = 1; rightIndex <= rightLength; rightIndex += 1) {
+            if (leftText[leftIndex - 1] === rightText[rightIndex - 1]) {
+                nextRow[rightIndex] = previousRow[rightIndex - 1] + 1;
+            } else {
+                nextRow[rightIndex] = Math.max(nextRow[rightIndex - 1], previousRow[rightIndex]);
+            }
         }
 
         for (let rightIndex = 0; rightIndex <= rightLength; rightIndex += 1) {
