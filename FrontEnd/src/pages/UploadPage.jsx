@@ -15,9 +15,9 @@ const UPLOAD_CARDS = [
     key: 'upload-profiles',
     imageSrc: '/images/person-icon.svg',
     imageAlt: 'Member profile upload icon',
-    title: 'Member Profile Upload',
-    description: 'Import the DA membership CSV on a dedicated page before matching members to composites.',
-    buttonText: 'Open Member Upload',
+    title: 'Manage Member Profiles',
+    description: 'Import the DA membership CSV, create member records, and manage profiles before matching them to composites.',
+    buttonText: 'Open Member Profiles',
     to: '/upload/profiles',
   },
 ];

@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 
 import trashIcon from '../assets/icons/trash.svg';
 import AnnotationStage from '../components/Composite/AnnotationStage.jsx';
+import CreateProfileModal from '../components/Composite/CreateProfileModal.jsx';
 import ProfileSearchSelect from '../components/Composite/ProfileSearchSelect.jsx';
 import {
   autoDetectCompositeAnnotations,
@@ -27,6 +28,7 @@ export default function CompositeEditorPage() {
   const [profiles, setProfiles] = useState([]);
   const [annotations, setAnnotations] = useState([]);
   const [selectedAnnotationId, setSelectedAnnotationId] = useState(null);
+  const [createProfileAnnotationId, setCreateProfileAnnotationId] = useState('');
   const [lastBoxSize, setLastBoxSize] = useState(DEFAULT_BOX_SIZE);
   const [zoomLevel, setZoomLevel] = useState(1);
   const [saveStatus, setSaveStatus] = useState('idle');
@@ -50,7 +52,9 @@ export default function CompositeEditorPage() {
   const textBoxRequestSequenceRef = useRef(0);
   const latestSavedSignatureRef = useRef('[]');
   const currentSignatureRef = useRef('[]');
+  const pendingAnnotationScrollRef = useRef(null);
   const canvasPanelRef = useRef(null);
+  const annotationListRef = useRef(null);
   const annotationItemRefs = useRef(new Map());
 
   useEffect(() => {
@@ -239,6 +243,15 @@ export default function CompositeEditorPage() {
     );
   }, [annotations]);
 
+  const orderedAnnotations = useMemo(
+    () => orderAnnotationsByGridPosition(annotations),
+    [annotations],
+  );
+  const createProfileTargetAnnotation = useMemo(
+    () => annotations.find((annotation) => annotation.annotationId === createProfileAnnotationId) || null,
+    [annotations, createProfileAnnotationId],
+  );
+
   currentSignatureRef.current = createAnnotationSignature(annotations);
 
   useEffect(() => {
@@ -357,22 +370,29 @@ export default function CompositeEditorPage() {
       return;
     }
 
+    const annotationListElement = annotationListRef.current;
     const annotationElement = annotationItemRefs.current.get(annotationId);
 
-    if (!annotationElement) {
+    if (!annotationListElement || !annotationElement) {
       return;
     }
 
-    annotationElement.scrollIntoView({
-      block: 'nearest',
+    const listRect = annotationListElement.getBoundingClientRect();
+    const itemRect = annotationElement.getBoundingClientRect();
+    const nextScrollTop = annotationListElement.scrollTop + (itemRect.top - listRect.top) - 6;
+
+    annotationListElement.scrollTo({
+      top: Math.max(0, Math.round(nextScrollTop)),
       behavior,
     });
   }, []);
 
-  const handleSelectAnnotation = useCallback((annotationId) => {
+  const handleSelectAnnotation = useCallback((annotationId, { scrollList = false, behavior = 'smooth' } = {}) => {
+    pendingAnnotationScrollRef.current = scrollList
+      ? { annotationId, behavior }
+      : null;
     setSelectedAnnotationId(annotationId);
-    scrollAnnotationIntoView(annotationId);
-  }, [scrollAnnotationIntoView]);
+  }, []);
 
   const handleDeleteAnnotation = useCallback((annotationToDelete, { requireConfirmation = true } = {}) => {
     if (!annotationToDelete) {
@@ -401,9 +421,41 @@ export default function CompositeEditorPage() {
     });
   }, []);
 
+  const handleOpenCreateProfileModal = useCallback((annotationId) => {
+    setCreateProfileAnnotationId(annotationId);
+    setSelectedAnnotationId(annotationId);
+  }, []);
+
+  const handleCloseCreateProfileModal = useCallback(() => {
+    setCreateProfileAnnotationId('');
+  }, []);
+
+  const handleProfileCreated = useCallback((savedProfile, annotationId) => {
+    setProfiles((currentProfiles) => sortProfiles([
+      ...currentProfiles.filter((profile) => profile.id !== savedProfile.id),
+      savedProfile,
+    ]));
+
+    if (annotationId) {
+      handleProfileSelect(annotationId, savedProfile.id);
+      setSelectedAnnotationId(annotationId);
+    }
+  }, [handleProfileSelect]);
+
   useEffect(() => {
-    scrollAnnotationIntoView(selectedAnnotationId, 'smooth');
-  }, [scrollAnnotationIntoView, selectedAnnotationId]);
+    if (!selectedAnnotationId) {
+      return;
+    }
+
+    const pendingScroll = pendingAnnotationScrollRef.current;
+
+    if (!pendingScroll || pendingScroll.annotationId !== selectedAnnotationId) {
+      return;
+    }
+
+    scrollAnnotationIntoView(selectedAnnotationId, pendingScroll.behavior);
+    pendingAnnotationScrollRef.current = null;
+  }, [annotations, scrollAnnotationIntoView, selectedAnnotationId]);
 
   useEffect(() => {
     const handleWindowKeyDown = (event) => {
@@ -676,7 +728,7 @@ export default function CompositeEditorPage() {
                 interactionsDisabled={isCanvasProcessing}
                 onZoomChange={(nextZoom) => setZoomLevel(clampZoom(nextZoom))}
                 onAnnotationsChange={handleAnnotationListChange}
-                onSelectAnnotation={handleSelectAnnotation}
+                onSelectAnnotation={(annotationId) => handleSelectAnnotation(annotationId, { scrollList: true })}
                 onLastBoxSizeChange={(nextSize) => setLastBoxSize(normalizeBoxSize(nextSize))}
                 resolveAnnotationLabel={(annotation) => (
                   profileMap.get(annotation.profileId)?.displayName
@@ -710,118 +762,136 @@ export default function CompositeEditorPage() {
                 </div>
               </div>
 
-              {annotations.length > 0 ? (
-                <div className="annotationList">
-                  {annotations.map((annotation, index) => (
-                    <article
-                      key={annotation.annotationId}
-                      ref={(node) => {
-                        if (node) {
-                          annotationItemRefs.current.set(annotation.annotationId, node);
-                        } else {
-                          annotationItemRefs.current.delete(annotation.annotationId);
-                        }
-                      }}
-                      className={[
-                        'annotationList__item',
-                        annotation.source === 'auto' ? 'annotationList__item--auto' : 'annotationList__item--manual',
-                        annotation.needsReview ? 'annotationList__item--review' : '',
-                        annotation.annotationId === selectedAnnotationId ? 'annotationList__item--selected' : '',
-                      ].filter(Boolean).join(' ')}
-                      onPointerDown={() => handleSelectAnnotation(annotation.annotationId)}
-                      onFocusCapture={() => handleSelectAnnotation(annotation.annotationId)}
-                    >
-                      <div className="annotationList__meta">
-                        <span className={[
-                          'annotationList__badge',
-                          annotation.source === 'auto'
-                            ? 'annotationList__badge--auto'
-                            : 'annotationList__badge--manual',
-                        ].join(' ')}>
-                          {annotation.source === 'auto' ? 'Auto' : 'Manual'}
-                        </span>
-                        {annotation.needsReview ? (
-                          <span className="annotationList__badge annotationList__badge--review">
-                            Needs review
-                          </span>
-                        ) : null}
-                      </div>
+              {orderedAnnotations.length > 0 ? (
+                <div ref={annotationListRef} className="annotationList">
+                  {orderedAnnotations.map((annotation, index) => {
+                    const annotationState = getAnnotationAssignmentState(annotation);
+                    const annotationStatusLabel = getAnnotationStatusLabel(annotationState);
+                    const isSelected = annotation.annotationId === selectedAnnotationId;
 
-                      <div className="annotationList__content">
-                        <button
-                          type="button"
-                          className="annotationList__previewButton"
-                          onClick={() => handleSelectAnnotation(annotation.annotationId)}
-                          aria-label={`Highlight annotation ${index + 1} on the composite image`}
-                        >
-                          <span className="annotationList__previewFrame">
-                            <span
-                              className="annotationList__previewImage"
-                              style={buildPreviewStyle(annotation, composite, {
-                                maxWidth: 60,
-                                maxHeight: 78,
-                              })}
-                            />
+                    return (
+                      <article
+                        key={annotation.annotationId}
+                        ref={(node) => {
+                          if (node) {
+                            annotationItemRefs.current.set(annotation.annotationId, node);
+                          } else {
+                            annotationItemRefs.current.delete(annotation.annotationId);
+                          }
+                        }}
+                        className={[
+                          'annotationList__item',
+                          `annotationList__item--${annotationState}`,
+                          isSelected ? 'annotationList__item--selected' : '',
+                        ].filter(Boolean).join(' ')}
+                        onPointerDown={() => handleSelectAnnotation(annotation.annotationId)}
+                        onFocusCapture={() => handleSelectAnnotation(annotation.annotationId)}
+                      >
+                        <div className="annotationList__meta">
+                          <span className="annotationList__badge annotationList__badge--source">
+                            {annotation.source === 'auto' ? 'Auto' : 'Manual'}
                           </span>
-                        </button>
+                          <span className={[
+                            'annotationList__badge',
+                            'annotationList__badge--status',
+                            `annotationList__badge--${annotationState}`,
+                          ].join(' ')}>
+                            {annotationStatusLabel}
+                          </span>
+                          {isSelected ? (
+                            <span className="annotationList__badge annotationList__badge--selected">
+                              Selected
+                            </span>
+                          ) : null}
+                        </div>
 
-                        <div className="annotationList__main">
-                          <ProfileSearchSelect
-                            profiles={profiles}
-                            selectedProfileId={annotation.profileId}
-                            onSelectProfile={(profileId) => handleProfileSelect(annotation.annotationId, profileId)}
-                            inputId={`annotation-profile-${annotation.annotationId}`}
+                        <div className="annotationList__content">
+                          <button
+                            type="button"
+                            className="annotationList__previewButton"
+                            onClick={() => handleSelectAnnotation(annotation.annotationId)}
+                            aria-label={`Highlight annotation ${index + 1} on the composite image`}
+                          >
+                            <span className="annotationList__previewFrame">
+                              <span
+                                className="annotationList__previewImage"
+                                style={buildPreviewStyle(annotation, composite, {
+                                  maxWidth: 60,
+                                  maxHeight: 78,
+                                })}
+                              />
+                            </span>
+                          </button>
+
+                          <div className="annotationList__main">
+                            <ProfileSearchSelect
+                              profiles={profiles}
+                              selectedProfileId={annotation.profileId}
+                              onSelectProfile={(profileId) => handleProfileSelect(annotation.annotationId, profileId)}
+                              inputId={`annotation-profile-${annotation.annotationId}`}
                             placeholder={
                               annotation.detectedName
                                 ? `Search profiles for ${annotation.detectedName}`
                                 : 'Assign profile'
                             }
                             hideLabel
-                            invalid={!annotation.profileId && !annotation.matchedProfileId}
                           />
 
-                          {annotation.detectedName ? (
-                            <p className="annotationList__helper">
-                              Detected name: <strong>{annotation.detectedName}</strong>
-                            </p>
-                          ) : null}
-
-                          {annotation.matchedProfileId && annotation.profileId !== annotation.matchedProfileId ? (
-                            <div className="annotationList__suggestion">
+                            {annotation.detectedName ? (
                               <p className="annotationList__helper">
-                                Suggested profile: <strong>{formatProfileSummary(profileMap.get(annotation.matchedProfileId))}</strong>
-                                {annotation.matchConfidence
-                                  ? ` (${formatConfidence(annotation.matchConfidence)})`
-                                  : ''}
+                                Detected name: <strong>{annotation.detectedName}</strong>
                               </p>
-                              <button
-                                type="button"
-                                className="button compositeButton compositeButton--subtle annotationList__suggestionButton"
-                                onClick={() => handleProfileSelect(annotation.annotationId, annotation.matchedProfileId)}
-                              >
-                                Use suggestion
-                              </button>
-                            </div>
-                          ) : null}
+                            ) : null}
 
-                          {annotation.profileId && duplicateProfileIds.has(annotation.profileId) ? (
-                            <p className="compositeMessage compositeMessage--warning">
-                              This profile is already assigned to another box in this composite.
-                            </p>
-                          ) : null}
+                            {annotation.matchedProfileId && annotation.profileId !== annotation.matchedProfileId ? (
+                              <div className="annotationList__suggestion">
+                                <p className="annotationList__helper">
+                                  Suggested profile: <strong>{formatProfileSummary(profileMap.get(annotation.matchedProfileId))}</strong>
+                                  {annotation.matchConfidence
+                                    ? ` (${formatConfidence(annotation.matchConfidence)})`
+                                    : ''}
+                                </p>
+                                <button
+                                  type="button"
+                                  className="button compositeButton compositeButton--subtle annotationList__suggestionButton"
+                                  onClick={() => handleProfileSelect(annotation.annotationId, annotation.matchedProfileId)}
+                                >
+                                  Use suggestion
+                                </button>
+                              </div>
+                            ) : null}
+
+                            {annotation.profileId && duplicateProfileIds.has(annotation.profileId) ? (
+                              <p className="compositeMessage compositeMessage--warning">
+                                This profile is already assigned to another box in this composite.
+                              </p>
+                            ) : null}
+
+                            {annotationState !== 'assigned' ? (
+                              <div className="annotationList__actions">
+                                <button
+                                  type="button"
+                                  className="button compositeButton compositeButton--subtle annotationList__createProfileButton"
+                                  onClick={() => handleOpenCreateProfileModal(annotation.annotationId)}
+                                >
+                                  Create New Profile
+                                </button>
+                              </div>
+                            ) : null}
+                          </div>
+
+                          <button
+                            type="button"
+                            className="annotationList__deleteButton"
+                            onClick={() => handleDeleteAnnotation(annotation)}
+                            aria-label={`Delete annotation ${index + 1}`}
+                          >
+                            <img src={trashIcon} alt="" />
+                          </button>
                         </div>
-
-                        <button
-                          type="button"
-                          className="annotationList__deleteButton"
-                          onClick={() => handleDeleteAnnotation(annotation)}
-                          aria-label={`Delete annotation ${index + 1}`}
-                        >
-                          <img src={trashIcon} alt="" />
-                        </button>
-                      </div>
-                    </article>
-                  ))}
+                      </article>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="compositeEmptyState compositeEmptyState--tight">
@@ -835,6 +905,14 @@ export default function CompositeEditorPage() {
           </aside>
         </div>
       </div>
+
+      <CreateProfileModal
+        annotation={createProfileTargetAnnotation}
+        compositeYear={composite?.compositeYear}
+        isOpen={Boolean(createProfileTargetAnnotation)}
+        onClose={handleCloseCreateProfileModal}
+        onProfileCreated={handleProfileCreated}
+      />
     </section>
   );
 }
@@ -1006,6 +1084,30 @@ function formatConfidence(confidence) {
   return `${Math.round(confidence * 100)}% match`;
 }
 
+function getAnnotationAssignmentState(annotation) {
+  if (annotation?.profileId) {
+    return 'assigned';
+  }
+
+  if (annotation?.matchedProfileId) {
+    return 'suggested';
+  }
+
+  return 'unresolved';
+}
+
+function getAnnotationStatusLabel(annotationState) {
+  if (annotationState === 'assigned') {
+    return 'Completed';
+  }
+
+  if (annotationState === 'suggested') {
+    return 'Needs review';
+  }
+
+  return 'Needs profile';
+}
+
 function formatProfileSummary(profile) {
   if (!profile) {
     return 'Unknown profile';
@@ -1016,6 +1118,14 @@ function formatProfileSummary(profile) {
   }
 
   return profile.displayName || 'Unknown profile';
+}
+
+function sortProfiles(profileList) {
+  return [...profileList].sort((leftProfile, rightProfile) => (
+    compareStrings(leftProfile.lastName, rightProfile.lastName)
+    || compareStrings(leftProfile.firstName, rightProfile.firstName)
+    || compareStrings(String(leftProfile.graduationYear || ''), String(rightProfile.graduationYear || ''))
+  ));
 }
 
 function normalizeTextBoxStatus(status) {
@@ -1048,4 +1158,124 @@ function buildTextBoxStatusLabel(status, textBoxCount) {
   }
 
   return 'OCR queue is preparing this composite...';
+}
+
+function orderAnnotationsByGridPosition(annotations) {
+  const annotationEntries = (Array.isArray(annotations) ? annotations : []).map((annotation, index) => ({
+    annotation,
+    index,
+    centerX: annotation.x + (annotation.width / 2),
+    centerY: annotation.y + (annotation.height / 2),
+  }));
+
+  if (annotationEntries.length < 2) {
+    return annotationEntries.map(({ annotation }) => annotation);
+  }
+
+  const medianHeight = getMedianValue(
+    annotationEntries.map(({ annotation }) => Math.max(Number(annotation.height) || 0, 1)),
+  );
+  const rowThreshold = Math.max(24, medianHeight * 0.55);
+  const rows = [];
+
+  annotationEntries
+    .sort((leftEntry, rightEntry) => (
+      compareNumbers(leftEntry.centerY, rightEntry.centerY)
+      || compareNumbers(leftEntry.centerX, rightEntry.centerX)
+      || compareNumbers(leftEntry.index, rightEntry.index)
+    ))
+    .forEach((entry) => {
+      const matchingRow = rows.find((row) => doesAnnotationEntryBelongToRow(entry, row, rowThreshold));
+
+      if (matchingRow) {
+        addAnnotationEntryToRow(matchingRow, entry);
+        return;
+      }
+
+      rows.push(createAnnotationRow(entry));
+    });
+
+  return rows
+    .sort((leftRow, rightRow) => (
+      compareNumbers(leftRow.centerY, rightRow.centerY)
+      || compareNumbers(leftRow.left, rightRow.left)
+    ))
+    .flatMap((row) => (
+      row.entries
+        .sort((leftEntry, rightEntry) => (
+          compareNumbers(leftEntry.annotation.x, rightEntry.annotation.x)
+          || compareNumbers(leftEntry.centerX, rightEntry.centerX)
+          || compareNumbers(leftEntry.annotation.y, rightEntry.annotation.y)
+          || compareNumbers(leftEntry.index, rightEntry.index)
+        ))
+        .map(({ annotation }) => annotation)
+    ));
+}
+
+function createAnnotationRow(entry) {
+  const annotationTop = Number(entry.annotation.y) || 0;
+  const annotationHeight = Number(entry.annotation.height) || 0;
+
+  return {
+    entries: [entry],
+    centerY: entry.centerY,
+    left: Number(entry.annotation.x) || 0,
+    top: annotationTop,
+    bottom: annotationTop + annotationHeight,
+    averageHeight: Math.max(annotationHeight, 1),
+  };
+}
+
+function addAnnotationEntryToRow(row, entry) {
+  const annotationTop = Number(entry.annotation.y) || 0;
+  const annotationHeight = Number(entry.annotation.height) || 0;
+  const nextEntries = [...row.entries, entry];
+
+  row.entries = nextEntries;
+  row.centerY = nextEntries.reduce((total, currentEntry) => total + currentEntry.centerY, 0) / nextEntries.length;
+  row.left = Math.min(row.left, Number(entry.annotation.x) || 0);
+  row.top = Math.min(row.top, annotationTop);
+  row.bottom = Math.max(row.bottom, annotationTop + annotationHeight);
+  row.averageHeight = nextEntries.reduce(
+    (total, currentEntry) => total + Math.max(Number(currentEntry.annotation.height) || 0, 1),
+    0,
+  ) / nextEntries.length;
+}
+
+function doesAnnotationEntryBelongToRow(entry, row, rowThreshold) {
+  const annotationTop = Number(entry.annotation.y) || 0;
+  const annotationHeight = Number(entry.annotation.height) || 0;
+  const annotationBottom = annotationTop + annotationHeight;
+  const verticalOverlap = Math.min(annotationBottom, row.bottom) - Math.max(annotationTop, row.top);
+  const minimumSharedHeight = Math.min(Math.max(annotationHeight, 1), Math.max(row.averageHeight, 1)) * 0.25;
+
+  return (
+    Math.abs(entry.centerY - row.centerY) <= rowThreshold
+    || verticalOverlap >= minimumSharedHeight
+  );
+}
+
+function getMedianValue(values) {
+  const sortedValues = [...values].sort((leftValue, rightValue) => leftValue - rightValue);
+  const middleIndex = Math.floor(sortedValues.length / 2);
+
+  if (sortedValues.length === 0) {
+    return DEFAULT_BOX_SIZE.height;
+  }
+
+  if (sortedValues.length % 2 === 0) {
+    return (sortedValues[middleIndex - 1] + sortedValues[middleIndex]) / 2;
+  }
+
+  return sortedValues[middleIndex];
+}
+
+function compareNumbers(leftValue, rightValue) {
+  return Number(leftValue || 0) - Number(rightValue || 0);
+}
+
+function compareStrings(leftValue, rightValue) {
+  return String(leftValue || '').localeCompare(String(rightValue || ''), undefined, {
+    sensitivity: 'base',
+  });
 }

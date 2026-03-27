@@ -1,15 +1,19 @@
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
+const {
+    copyBundledStorageFileIfMissing,
+    storageDirectory,
+} = require("./storageConfig");
+const { normalizeStoredFilePath } = require("./uploadConfig");
 
-const storageDirectory = path.join(__dirname, "..", "storage");
 const compositeStorePath = path.join(storageDirectory, "composites.json");
 const defaultStore = {
     composites: [],
 };
 
 async function ensureCompositeStore() {
-    await fs.mkdir(storageDirectory, { recursive: true });
+    await copyBundledStorageFileIfMissing("composites.json");
 
     try {
         await fs.access(compositeStorePath);
@@ -43,7 +47,7 @@ async function writeStore(store) {
 }
 
 function buildImageUrl(storedFilePath) {
-    const normalizedPath = storedFilePath.replace(/\\/g, "/").replace(/^\/+/, "");
+    const normalizedPath = normalizeStoredFilePath(storedFilePath);
     return `/api/${normalizedPath}`;
 }
 
@@ -183,6 +187,66 @@ async function replaceAnnotations(compositeId, incomingAnnotations, validProfile
     return toCompositeResponse(composite);
 }
 
+async function removeProfileReferences(profileId) {
+    const normalizedProfileId = String(profileId || "");
+
+    if (!normalizedProfileId) {
+        return {
+            updatedCompositeCount: 0,
+            clearedAnnotationCount: 0,
+        };
+    }
+
+    const store = await readStore();
+    const now = new Date().toISOString();
+    let updatedCompositeCount = 0;
+    let clearedAnnotationCount = 0;
+
+    for (const composite of store.composites) {
+        let compositeWasUpdated = false;
+
+        composite.annotations = (composite.annotations || []).map((annotation) => {
+            const hadAssignedProfile = String(annotation.profileId || "") === normalizedProfileId;
+            const hadSuggestedProfile = String(annotation.matchedProfileId || "") === normalizedProfileId;
+
+            if (!hadAssignedProfile && !hadSuggestedProfile) {
+                return annotation;
+            }
+
+            compositeWasUpdated = true;
+            clearedAnnotationCount += 1;
+
+            const nextProfileId = hadAssignedProfile ? null : annotation.profileId ?? null;
+            const nextMatchedProfileId = hadSuggestedProfile ? null : annotation.matchedProfileId ?? null;
+
+            return {
+                ...annotation,
+                profileId: nextProfileId,
+                matchedProfileId: nextMatchedProfileId,
+                needsReview: hadAssignedProfile
+                    ? true
+                    : !nextProfileId
+                        ? Boolean(annotation.needsReview || hadSuggestedProfile)
+                        : Boolean(annotation.needsReview),
+                updatedAt: now,
+            };
+        });
+
+        if (compositeWasUpdated) {
+            updatedCompositeCount += 1;
+        }
+    }
+
+    if (updatedCompositeCount > 0) {
+        await writeStore(store);
+    }
+
+    return {
+        updatedCompositeCount,
+        clearedAnnotationCount,
+    };
+}
+
 function sanitizeAnnotation(annotation, composite, validProfileIds, existingAnnotations) {
     const imageWidth = Number(composite.imageWidth);
     const imageHeight = Number(composite.imageHeight);
@@ -247,7 +311,7 @@ function sanitizeAnnotation(annotation, composite, validProfileIds, existingAnno
     );
 
     return {
-        annotationId: existingAnnotation?.annotationId || crypto.randomUUID(),
+        annotationId: sanitizeAnnotationId(annotation?.annotationId) || existingAnnotation?.annotationId || crypto.randomUUID(),
         compositeId: composite.compositeId,
         profileId,
         source,
@@ -267,6 +331,16 @@ function sanitizeAnnotation(annotation, composite, validProfileIds, existingAnno
         createdAt: existingAnnotation?.createdAt || now,
         updatedAt: now,
     };
+}
+
+function sanitizeAnnotationId(annotationId) {
+    const normalizedAnnotationId = String(annotationId || "").trim();
+
+    if (!normalizedAnnotationId) {
+        return null;
+    }
+
+    return normalizedAnnotationId.slice(0, 120);
 }
 
 function sanitizeAnnotationSource(source) {
@@ -374,5 +448,6 @@ module.exports = {
     getCompositeById,
     listProfileCompositeReferences,
     listComposites,
+    removeProfileReferences,
     replaceAnnotations,
 };
