@@ -29,6 +29,12 @@ app.use((error, _req, res, _next) => {
         return res.status(400).json({ error: "Invalid JSON request body." });
     }
 
+    if (error && error.code === "LIMIT_FILE_SIZE") {
+        return res.status(413).json({
+            error: "The uploaded file exceeded the server size limit for a single request.",
+        });
+    }
+
     const statusCode = error.statusCode || error.status || 500;
     const message = error.message || "Unexpected server error.";
 

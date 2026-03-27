@@ -1,4 +1,5 @@
 const configuredApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
+const compositeUploadChunkSizeBytes = 256 * 1024;
 
 async function requestJson(url, options = {}) {
   const response = await fetch(buildApiUrl(url), options);
@@ -6,13 +7,7 @@ async function requestJson(url, options = {}) {
   const payload = normalizeResponseUrls(parseResponseBody(responseText));
 
   if (!response.ok) {
-    const errorMessage = (
-      payload && typeof payload === 'object'
-        ? payload.error
-        : typeof payload === 'string'
-          ? payload.trim()
-          : ''
-    ) || 'The request could not be completed.';
+    const errorMessage = buildErrorMessage(response, payload);
 
     throw new Error(errorMessage);
   }
@@ -30,6 +25,25 @@ function parseResponseBody(responseText) {
   } catch {
     return responseText;
   }
+}
+
+function buildErrorMessage(response, payload) {
+  const payloadMessage = (
+    payload && typeof payload === 'object'
+      ? payload.error
+      : typeof payload === 'string'
+        ? payload.trim()
+        : ''
+  ) || '';
+
+  if (
+    response.status === 413
+    || /413\s+Request Entity Too Large/i.test(payloadMessage)
+  ) {
+    return 'The upload was too large for the server to accept in one request.';
+  }
+
+  return payloadMessage || 'The request could not be completed.';
 }
 
 function buildApiUrl(url) {
@@ -128,15 +142,115 @@ export function importProfilesCsv(file) {
   });
 }
 
-export function uploadComposite(file, compositeYear) {
-  const payload = new FormData();
-  payload.append('compositeYear', compositeYear);
-  payload.append('image', file);
+async function createCompositeUploadSession(file, compositeYear, totalChunks) {
+  return requestJson('/api/composites/upload-sessions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      compositeYear,
+      originalFilename: file.name,
+      mimeType: file.type || '',
+      totalSize: file.size,
+      totalChunks,
+    }),
+  });
+}
 
-  return requestJson('/api/composites', {
+async function uploadCompositeChunk(uploadId, file, chunk, chunkIndex) {
+  const payload = new FormData();
+  payload.append('chunkIndex', String(chunkIndex));
+  payload.append('chunk', chunk, file.name);
+
+  return requestJson(`/api/composites/upload-sessions/${uploadId}/chunks`, {
     method: 'POST',
     body: payload,
   });
+}
+
+async function completeCompositeUploadSession(uploadId) {
+  return requestJson(`/api/composites/upload-sessions/${uploadId}/complete`, {
+    method: 'POST',
+  });
+}
+
+async function abortCompositeUploadSession(uploadId) {
+  return requestJson(`/api/composites/upload-sessions/${uploadId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function uploadComposite(file, compositeYear, options = {}) {
+  const totalChunks = Math.max(1, Math.ceil(file.size / compositeUploadChunkSizeBytes));
+  const onProgress = typeof options?.onProgress === 'function' ? options.onProgress : null;
+  let uploadId = '';
+
+  try {
+    const uploadSession = await createCompositeUploadSession(file, compositeYear, totalChunks);
+
+    uploadId = String(uploadSession?.uploadId || '');
+
+    if (!uploadId) {
+      throw new Error('The server did not return a valid upload session.');
+    }
+
+    const chunkSize = Number(uploadSession?.chunkSize) > 0
+      ? Number(uploadSession.chunkSize)
+      : compositeUploadChunkSizeBytes;
+    const serverTotalChunks = Number(uploadSession?.totalChunks) > 0
+      ? Number(uploadSession.totalChunks)
+      : totalChunks;
+
+    if (onProgress) {
+      onProgress({
+        uploadedBytes: 0,
+        totalBytes: file.size,
+        chunkIndex: -1,
+        totalChunks: serverTotalChunks,
+      });
+    }
+
+    for (let chunkIndex = 0; chunkIndex < serverTotalChunks; chunkIndex += 1) {
+      const start = chunkIndex * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      const chunk = file.slice(start, end, file.type || undefined);
+      const chunkUploadSummary = await uploadCompositeChunk(uploadId, file, chunk, chunkIndex);
+      const uploadedBytes = Number(chunkUploadSummary?.uploadedBytes);
+
+      if (onProgress) {
+        onProgress({
+          uploadedBytes: Number.isFinite(uploadedBytes) ? uploadedBytes : end,
+          totalBytes: file.size,
+          chunkIndex,
+          totalChunks: serverTotalChunks,
+        });
+      }
+    }
+
+    const createdComposite = await completeCompositeUploadSession(uploadId);
+
+    if (onProgress) {
+      onProgress({
+        uploadedBytes: file.size,
+        totalBytes: file.size,
+        chunkIndex: serverTotalChunks - 1,
+        totalChunks: serverTotalChunks,
+      });
+    }
+
+    return createdComposite;
+  } catch (error) {
+    if (uploadId) {
+      try {
+        await abortCompositeUploadSession(uploadId);
+      } catch {
+        // Best-effort cleanup only; preserve the original upload error.
+      }
+    }
+
+    throw error;
+  }
 }
 
 export function saveCompositeAnnotations(compositeId, annotations) {

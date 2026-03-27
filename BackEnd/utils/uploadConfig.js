@@ -7,6 +7,7 @@ const uploadsRootDirectory = configuredUploadsRoot
     ? path.resolve(configuredUploadsRoot)
     : defaultUploadsRootDirectory;
 const uploadsDirectory = path.join(uploadsRootDirectory, "composites");
+const compositeUploadSessionsDirectory = path.join(__dirname, "..", ".composite_upload_sessions");
 const legacyUploadsDirectory = path.join(defaultUploadsRootDirectory, "composites");
 const extensionByMimeType = {
     "image/jpeg": ".jpg",
@@ -14,16 +15,25 @@ const extensionByMimeType = {
     "image/webp": ".webp",
 };
 const allowedMimeTypes = new Set(Object.keys(extensionByMimeType));
+const allowedUploadExtensions = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 
 async function ensureCompositeUploadsDirectory() {
     await fs.mkdir(uploadsDirectory, { recursive: true });
+    await fs.mkdir(compositeUploadSessionsDirectory, { recursive: true });
     await migrateBundledCompositeUploads();
+}
+
+function isAllowedCompositeUpload(file) {
+    const mimeType = String(file?.mimetype || "").trim().toLowerCase();
+    const originalExtension = path.extname(String(file?.originalname || "")).toLowerCase();
+
+    return allowedMimeTypes.has(mimeType) || allowedUploadExtensions.has(originalExtension);
 }
 
 function resolveExtensionFromUpload(file) {
     const originalExtension = path.extname(file.originalname || "").toLowerCase();
 
-    if ([".jpg", ".jpeg", ".png", ".webp"].includes(originalExtension)) {
+    if (allowedUploadExtensions.has(originalExtension)) {
         return originalExtension === ".jpeg" ? ".jpg" : originalExtension;
     }
 
@@ -123,9 +133,12 @@ function isAbsoluteFilePath(filePath) {
 
 module.exports = {
     allowedMimeTypes,
+    allowedUploadExtensions,
     buildCompositeStoredFilePath,
+    compositeUploadSessionsDirectory,
     ensureCompositeUploadsDirectory,
     extensionByMimeType,
+    isAllowedCompositeUpload,
     normalizeStoredFilePath,
     resolveExtensionFromUpload,
     resolveStoredFileAbsolutePath,
