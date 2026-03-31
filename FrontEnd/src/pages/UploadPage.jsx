@@ -20,6 +20,15 @@ const UPLOAD_CARDS = [
     buttonText: 'Open Member Profiles',
     to: '/upload/profiles',
   },
+  {
+    key: 'upload-scrapbooks',
+    imageSrc: '/images/1983ScrapB-P26.jpg',
+    imageAlt: 'Scrapbook upload preview',
+    title: 'Scrapbook Upload',
+    description: 'Upload scrapbook page images to create a new scrapbook collection for a new year and expand the archive.',
+    buttonText: 'Open Scrapbook Upload',
+    to: '/upload/scrapbooks',
+  },
 ];
 
 export default function UploadPage() {

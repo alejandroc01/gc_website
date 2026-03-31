@@ -42,6 +42,34 @@
   color: #1d1526;
 }
 
+.button.scrapbooksPage__uploadButton {
+  padding: 16px 28px;
+  border-color: rgba(126, 82, 34, 0.7);
+  background:
+    linear-gradient(135deg, rgba(241, 227, 187, 0.98), rgba(219, 191, 122, 0.98));
+  color: #4b3118;
+  font-size: 1.05rem;
+  font-weight: 600;
+  box-shadow: 0 14px 28px rgba(78, 51, 23, 0.14);
+}
+
+.button.scrapbooksPage__uploadButton:hover {
+  background:
+    linear-gradient(135deg, rgba(247, 236, 204, 1), rgba(230, 201, 132, 1));
+  color: #3d2714;
+}
+
+.button.scrapbooksPage__uploadButton:focus-visible {
+  outline: 3px solid rgba(198, 162, 74, 0.45);
+  outline-offset: 3px;
+}
+
+.scrapbooksPage__uploadRow {
+  display: flex;
+  justify-content: center;
+  margin-top: 28px;
+}
+
 .scrapbooksPage__copy,
 .scrapbooksPage__bookFaceCopy,
 .scrapbooksPage__pageStatus {
@@ -291,10 +319,28 @@
   flex-direction: column;
   justify-content: flex-start;
   padding: 28px 32px 18px;
+  color: #fff6de;
+}
+
+.scrapbooksPage__viewerMeta--purple {
   background:
     linear-gradient(145deg, rgba(72, 46, 101, 0.98), rgba(31, 20, 44, 0.98)),
     #2a193d;
-  color: #fff6de;
+}
+
+.scrapbooksPage__viewerMeta--gold {
+  background:
+    linear-gradient(145deg, rgba(216, 184, 99, 0.98), rgba(168, 123, 40, 0.98)),
+    #d7b15c;
+  color: #2e1c0f;
+}
+
+.scrapbooksPage__viewerMeta--gold .scrapbooksPage__coverYear {
+  color: rgba(77, 50, 12, 0.88);
+}
+
+.scrapbooksPage__viewerMeta--gold .scrapbooksPage__coverTitle {
+  color: #2e1c0f;
 }
 
 .scrapbooksPage__slideshow {
@@ -320,10 +366,9 @@
 
 .scrapbooksPage__pageImage {
   width: auto;
-  max-width: 88%;
-  max-height: 88%;
+  max-width: 100%;
+  max-height: 80%;
   object-fit: contain;
-  margin-top: 10px;
   box-shadow: 0 18px 30px rgba(63, 45, 24, 0.2);
   background: #f7f0dc;
 }
@@ -391,6 +436,14 @@
     grid-template-columns: 1fr;
     padding-right: 14px;
     padding-left: 14px;
+  }
+
+  .scrapbooksPage__uploadButton {
+    width: 100%;
+  }
+
+  .scrapbooksPage__uploadRow {
+    margin-top: 22px;
   }
 
   .scrapbooksPage__viewerOverlay {

@@ -40,6 +40,7 @@ export default function App() {
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/upload/composites" element={<CompositeUploadPage />} />
           <Route path="/upload/profiles" element={<ProfileUploadPage />} />
+          <Route path="/upload/scrapbooks" element={<PlaceholderPage title="Scrapbook Upload" />} />
           <Route path="/upload/composites/:compositeId" element={<CompositeEditorPage />} />
           <Route path="/member" element={<MemberPage />} />
           <Route path="/member/:profileId" element={<MemberPage />} />

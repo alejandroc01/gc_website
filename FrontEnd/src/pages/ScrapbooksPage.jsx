@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import './ScrapbooksPage.css';
 
@@ -9,7 +10,6 @@ const scrapbookCollections = [
     title: '1983 Scrapbook',
     tone: 'purple',
     accent: 'Club Purple',
-    description: 'A deep-plum volume styled like a yearbook pulled from the shelf.',
     pages: [
       '/images/scrapbookImages/1983/1983ScrapB-P1.jpg',
       '/images/scrapbookImages/1983/1983ScrapB-P2 (1).jpg',
@@ -22,7 +22,6 @@ const scrapbookCollections = [
     title: '1984 Scrapbook',
     tone: 'gold',
     accent: 'Club Gold',
-    description: 'A warm golden binding that opens into the 1984 scrapbook scans.',
     pages: [
       '/images/scrapbookImages/1984/1984ScrapB-P1.jpg',
       '/images/scrapbookImages/1984/1984ScrapB-P2.jpg',
@@ -116,10 +115,15 @@ export default function ScrapbooksPage() {
                 <span className="scrapbooksPage__bookFace">
                   <span className="scrapbooksPage__bookFaceYear">{book.year}</span>
                   <span className="scrapbooksPage__bookFaceTitle">{book.title}</span>
-                  <span className="scrapbooksPage__bookFaceCopy">{book.description}</span>
                 </span>
               </button>
             ))}
+          </div>
+
+          <div className="scrapbooksPage__uploadRow">
+            <Link className="button scrapbooksPage__uploadButton" to="/upload/scrapbooks">
+              Upload Scrapbook
+            </Link>
           </div>
         </div>
       </section>
@@ -128,14 +132,12 @@ export default function ScrapbooksPage() {
         <div
           className="scrapbooksPage__viewerOverlay"
           role="presentation"
-          onClick={closeBook}
         >
           <section
             className="scrapbooksPage__viewer"
             aria-label={`${activeBook.title} viewer`}
             role="dialog"
             aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
           >
             <div className="scrapbooksPage__viewerTopbar">
               <div>
@@ -147,8 +149,8 @@ export default function ScrapbooksPage() {
               </button>
             </div>
 
-            <div className="scrapbooksPage__viewerFrame">
-              <div className="scrapbooksPage__viewerMeta" aria-hidden="true">
+            <div className={`scrapbooksPage__viewerFrame scrapbooksPage__viewerFrame--${activeBook.tone}`}>
+              <div className={`scrapbooksPage__viewerMeta scrapbooksPage__viewerMeta--${activeBook.tone}`} aria-hidden="true">
                 <span className="scrapbooksPage__coverYear">{activeBook.year}</span>
                 <strong className="scrapbooksPage__coverTitle">Scrapbook</strong>
               </div>
