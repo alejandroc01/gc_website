@@ -1,0 +1,507 @@
+.scrapbooksPage {
+  min-height: calc(100vh - var(--nav-height));
+  background:
+    radial-gradient(circle at top, rgba(235, 215, 155, 0.22), rgba(235, 215, 155, 0) 32%),
+    linear-gradient(180deg, rgba(38, 21, 56, 0.04), rgba(38, 21, 56, 0) 24%),
+    linear-gradient(180deg, #f8f4ea 0%, #f4efe3 48%, #efe8d8 100%);
+}
+
+.scrapbooksPage__sectionLabel {
+  margin: 0 0 12px;
+  font-family: var(--font-smallcaps);
+  font-size: 0.95rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--deep-purple);
+}
+
+.scrapbooksPage__sectionTitle,
+.scrapbooksPage__bookYear,
+.scrapbooksPage__bookFaceYear,
+.scrapbooksPage__coverTitle {
+  font-family: var(--font-display);
+}
+
+.scrapbooksPage__shelfSection {
+  padding-top: 40px;
+}
+
+.scrapbooksPage__shelfIntro,
+.scrapbooksPage__viewerTopbar,
+.scrapbooksPage__viewerControls {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.scrapbooksPage__sectionTitle {
+  margin: 0;
+  font-size: clamp(2.15rem, 3.4vw, 3.2rem);
+  font-weight: 600;
+  color: #1d1526;
+}
+
+.button.scrapbooksPage__uploadButton {
+  padding: 16px 28px;
+  border-color: rgba(126, 82, 34, 0.7);
+  background:
+    linear-gradient(135deg, rgba(241, 227, 187, 0.98), rgba(219, 191, 122, 0.98));
+  color: #4b3118;
+  font-size: 1.05rem;
+  font-weight: 600;
+  box-shadow: 0 14px 28px rgba(78, 51, 23, 0.14);
+}
+
+.button.scrapbooksPage__uploadButton:hover {
+  background:
+    linear-gradient(135deg, rgba(247, 236, 204, 1), rgba(230, 201, 132, 1));
+  color: #3d2714;
+}
+
+.button.scrapbooksPage__uploadButton:focus-visible {
+  outline: 3px solid rgba(198, 162, 74, 0.45);
+  outline-offset: 3px;
+}
+
+.scrapbooksPage__uploadRow {
+  display: flex;
+  justify-content: center;
+  margin-top: 28px;
+}
+
+.scrapbooksPage__copy,
+.scrapbooksPage__bookFaceCopy,
+.scrapbooksPage__pageStatus {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 1rem;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.scrapbooksPage__shelf {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 360px));
+  justify-content: center;
+  gap: 42px;
+  margin-top: 20px;
+  padding: 34px 24px 46px;
+  border: 1px solid rgba(59, 39, 20, 0.15);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.35), rgba(255, 255, 255, 0) 30%),
+    linear-gradient(180deg, #8f643d 0%, #734b2c 100%);
+  box-shadow: 0 18px 32px rgba(65, 38, 18, 0.18);
+}
+
+.scrapbooksPage__shelf::after {
+  content: '';
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  left: 16px;
+  height: 12px;
+  background: rgba(36, 19, 8, 0.28);
+  filter: blur(10px);
+}
+
+.scrapbooksPage__book {
+  position: relative;
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  min-height: 360px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  perspective: 1200px;
+  transition: transform 180ms ease;
+}
+
+.scrapbooksPage__book:hover {
+  transform: translateY(-6px);
+}
+
+.scrapbooksPage__book:focus-visible {
+  outline: 3px solid rgba(198, 162, 74, 0.55);
+  outline-offset: 6px;
+}
+
+.scrapbooksPage__bookShadow {
+  position: absolute;
+  right: 22px;
+  bottom: -14px;
+  left: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: rgba(38, 21, 56, 0.3);
+  filter: blur(10px);
+}
+
+.scrapbooksPage__bookSpine,
+.scrapbooksPage__bookFace {
+  position: relative;
+  border: 1px solid rgba(17, 11, 22, 0.18);
+  box-shadow: 0 16px 24px rgba(34, 22, 15, 0.18);
+}
+
+.scrapbooksPage__bookSpine {
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 18px 12px;
+  overflow: hidden;
+}
+
+.scrapbooksPage__bookFace {
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: end;
+  min-width: 0;
+  padding: 28px 24px;
+  border-left: 0;
+}
+
+.scrapbooksPage__book--purple .scrapbooksPage__bookSpine,
+.scrapbooksPage__book--purple .scrapbooksPage__bookFace {
+  background:
+    linear-gradient(135deg, rgba(83, 54, 116, 0.98), rgba(35, 22, 50, 0.98)),
+    #261538;
+  color: #f7f0df;
+}
+
+.scrapbooksPage__book--gold .scrapbooksPage__bookSpine,
+.scrapbooksPage__book--gold .scrapbooksPage__bookFace {
+  background:
+    linear-gradient(135deg, rgba(216, 184, 99, 0.98), rgba(168, 123, 40, 0.98)),
+    #d7b15c;
+  color: #2e1c0f;
+}
+
+.scrapbooksPage__book--purple .scrapbooksPage__bookSpine::after,
+.scrapbooksPage__book--gold .scrapbooksPage__bookSpine::after {
+  content: '';
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  right: 10px;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.scrapbooksPage__book--gold .scrapbooksPage__bookSpine::after {
+  background: rgba(77, 50, 12, 0.22);
+}
+
+.scrapbooksPage__bookAccent,
+.scrapbooksPage__bookName {
+  font-family: var(--font-smallcaps);
+  font-size: 0.76rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.scrapbooksPage__bookYear {
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+}
+
+.scrapbooksPage__bookFaceYear {
+  margin-bottom: 8px;
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.scrapbooksPage__bookFaceTitle {
+  margin: 0 0 12px;
+  max-width: 10ch;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3vw, 3rem);
+  font-weight: 600;
+  line-height: 0.94;
+}
+
+.scrapbooksPage__bookFaceCopy {
+  max-width: 24ch;
+  color: inherit;
+  opacity: 0.84;
+}
+
+.scrapbooksPage__viewerOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(72px, 11vh, 120px) clamp(12px, 2vw, 28px) clamp(12px, 2vw, 28px);
+  background: rgba(14, 8, 16, 0.66);
+  backdrop-filter: blur(6px);
+}
+
+.scrapbooksPage__viewer {
+  width: min(1360px, calc(100vw - clamp(16px, 4vw, 56px)));
+  height: min(920px, calc(100vh - clamp(96px, 14vh, 152px)));
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: clamp(16px, 2vw, 28px);
+  border: 1px solid rgba(255, 244, 220, 0.18);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at top, rgba(255, 244, 214, 0.32), rgba(255, 244, 214, 0) 34%),
+    linear-gradient(180deg, rgba(71, 48, 32, 0.96), rgba(28, 17, 23, 0.96));
+  box-shadow:
+    0 32px 90px rgba(0, 0, 0, 0.46),
+    0 0 0 1px rgba(255, 251, 240, 0.06);
+  overflow: hidden;
+}
+
+.scrapbooksPage__viewerTopbar {
+  margin-bottom: 18px;
+}
+
+.scrapbooksPage__viewer .scrapbooksPage__sectionLabel {
+  color: rgba(255, 232, 186, 0.8);
+}
+
+.scrapbooksPage__viewer .scrapbooksPage__sectionTitle,
+.scrapbooksPage__viewer .scrapbooksPage__pageStatus {
+  color: #fff6de;
+}
+
+.button.scrapbooksPage__closeButton {
+  border-color: #f2e2bc;
+  background: #fff6de;
+  color: #4e3722;
+  font-weight: 600;
+  box-shadow: 0 10px 24px rgba(12, 7, 14, 0.2);
+}
+
+.button.scrapbooksPage__closeButton:hover {
+  border-color: #f6e9c8;
+  background: #fffaf0;
+  color: #3f2c1b;
+}
+
+.button.scrapbooksPage__closeButton:focus-visible {
+  outline: 3px solid rgba(235, 215, 155, 0.48);
+  outline-offset: 3px;
+}
+
+.scrapbooksPage__viewerFrame {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.3fr) minmax(0, 1fr);
+  gap: 0;
+  border: 1px solid rgba(29, 19, 39, 0.14);
+  background:
+    linear-gradient(180deg, rgba(255, 252, 245, 0.98), rgba(244, 236, 220, 0.98)),
+    #fff;
+  box-shadow: 0 24px 36px rgba(67, 49, 28, 0.16);
+  overflow: hidden;
+  min-height: 0;
+  height: 100%;
+}
+
+.scrapbooksPage__viewerMeta {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding: 28px 32px 18px;
+  color: #fff6de;
+}
+
+.scrapbooksPage__viewerMeta--purple {
+  background:
+    linear-gradient(145deg, rgba(72, 46, 101, 0.98), rgba(31, 20, 44, 0.98)),
+    #2a193d;
+}
+
+.scrapbooksPage__viewerMeta--gold {
+  background:
+    linear-gradient(145deg, rgba(216, 184, 99, 0.98), rgba(168, 123, 40, 0.98)),
+    #d7b15c;
+  color: #2e1c0f;
+}
+
+.scrapbooksPage__viewerMeta--gold .scrapbooksPage__coverYear {
+  color: rgba(77, 50, 12, 0.88);
+}
+
+.scrapbooksPage__viewerMeta--gold .scrapbooksPage__coverTitle {
+  color: #2e1c0f;
+}
+
+.scrapbooksPage__slideshow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: stretch;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 246, 0.98), rgba(245, 239, 224, 0.98)),
+    #fff;
+}
+
+.scrapbooksPage__slidePanel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 0;
+  height: 100%;
+  padding: clamp(24px, 3vw, 40px);
+  background:
+    linear-gradient(90deg, rgba(76, 54, 34, 0.08), rgba(255, 255, 255, 0) 4%),
+    transparent;
+}
+
+.scrapbooksPage__pageImage {
+  width: auto;
+  max-width: 100%;
+  max-height: 80%;
+  object-fit: contain;
+  box-shadow: 0 18px 30px rgba(63, 45, 24, 0.2);
+  background: #f7f0dc;
+}
+
+.scrapbooksPage__coverYear {
+  margin-bottom: 10px;
+  font-family: var(--font-smallcaps);
+  font-size: 0.95rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.scrapbooksPage__coverTitle {
+  max-width: none;
+  font-size: clamp(1.75rem, 2.4vw, 2.6rem);
+  line-height: 0.98;
+  white-space: nowrap;
+}
+
+.scrapbooksPage__viewerControls {
+  justify-content: center;
+  align-items: center;
+  margin-top: 14px;
+}
+
+.scrapbooksPage__pageStatus {
+  font-family: var(--font-smallcaps);
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--deep-purple);
+}
+
+.scrapbooksPage__arrow {
+  width: 72px;
+  min-width: 72px;
+  border: 0;
+  background: rgba(95, 68, 39, 0.08);
+  color: var(--deep-purple);
+  font-family: var(--font-display);
+  font-size: 3rem;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.scrapbooksPage__arrow:hover:not(:disabled) {
+  background: rgba(38, 21, 56, 0.12);
+}
+
+.scrapbooksPage__arrow:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+@media (max-width: 960px) {
+  .scrapbooksPage__shelfIntro,
+  .scrapbooksPage__viewerTopbar,
+  .scrapbooksPage__viewerControls {
+    flex-direction: column;
+    align-items: start;
+  }
+
+  .scrapbooksPage__shelf {
+    grid-template-columns: 1fr;
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .scrapbooksPage__uploadButton {
+    width: 100%;
+  }
+
+  .scrapbooksPage__uploadRow {
+    margin-top: 22px;
+  }
+
+  .scrapbooksPage__viewerOverlay {
+    padding: 72px 20px 20px;
+  }
+
+  .scrapbooksPage__viewer {
+    width: min(100%, calc(100vw - 28px));
+    height: calc(100vh - 104px);
+    padding: 20px;
+  }
+
+  .scrapbooksPage__viewerFrame {
+    grid-template-columns: 1fr;
+  }
+
+  .scrapbooksPage__viewerMeta {
+    min-height: 220px;
+  }
+
+  .scrapbooksPage__slidePanel {
+    padding: 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  .scrapbooksPage__shelfSection {
+    padding-top: 28px;
+  }
+
+  .scrapbooksPage__book {
+    grid-template-columns: 76px minmax(0, 1fr);
+    min-height: 300px;
+  }
+
+  .scrapbooksPage__bookFace {
+    padding: 20px 18px;
+  }
+
+  .scrapbooksPage__viewerOverlay {
+    padding: 64px 12px 12px;
+  }
+
+  .scrapbooksPage__viewer {
+    width: min(100%, calc(100vw - 24px));
+    height: calc(100vh - 88px);
+    padding: 16px;
+    border-radius: 22px;
+  }
+
+  .scrapbooksPage__viewerMeta,
+  .scrapbooksPage__slidePanel {
+    padding: 20px;
+  }
+
+  .scrapbooksPage__arrow {
+    width: 56px;
+    min-width: 56px;
+    font-size: 2.5rem;
+  }
+}
