@@ -112,7 +112,7 @@ export default function SearchBar() {
               id="archive-search"
               className="search__input"
               type="search"
-              placeholder="Search by name, city, or state...."
+              placeholder="Search members by name, city, or state...."
               autoComplete="off"
               value={query}
               onChange={(event) => setQuery(event.target.value)}

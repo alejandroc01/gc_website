@@ -29,6 +29,15 @@ const CARDS = [
     buttonText: 'Watch Oral Histories',
     to: '/oral-histories',
   },
+  {
+    key: 'history',
+    imageSrc: '/images/homepageimage.jpg',
+    imageAlt: 'German Club history preview',
+    title: 'History of the German Club',
+    description: 'Open curated club-history documents and archival PDFs by topic.',
+    buttonText: 'View History',
+    to: '/history',
+  },
 ];
 
 /**

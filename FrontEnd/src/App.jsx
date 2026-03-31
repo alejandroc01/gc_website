@@ -8,11 +8,14 @@ import HomePage from './pages/HomePage.jsx';
 import PlaceholderPage from './pages/PlaceholderPage.jsx';
 import MemberPage from './pages/MemberPage.jsx';
 import UploadPage from './pages/UploadPage.jsx';
+import SearchPage from './pages/SearchPage.jsx';
 import CompositeUploadPage from './pages/CompositeUploadPage.jsx';
 import CompositeEditorPage from './pages/CompositeEditorPage.jsx';
 import ProfileUploadPage from './pages/ProfileUploadPage.jsx';
 import DisplayModePage from './pages/DisplayModePage.jsx';
 import OralHistories from './pages/OralHistories.jsx';
+import HistoryPage from './pages/HistoryPage.jsx';
+import HistoryUploadPage from './pages/HistoryUploadPage.jsx';
 
 /**
  * App
@@ -34,11 +37,13 @@ export default function App() {
           <Route path="/composites" element={<PlaceholderPage title="Composites" />} />
           <Route path="/scrapbooks" element={<PlaceholderPage title="Scrapbooks" />} />
           <Route path="/oral-histories" element={<OralHistories />} />
-          <Route path="/search" element={<PlaceholderPage title="Search" />} />
+          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/search" element={<SearchPage />} />
           <Route path="/display-mode" element={<DisplayModePage />} />
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/upload/composites" element={<CompositeUploadPage />} />
           <Route path="/upload/profiles" element={<ProfileUploadPage />} />
+          <Route path="/upload/history" element={<HistoryUploadPage />} />
           <Route path="/upload/composites/:compositeId" element={<CompositeEditorPage />} />
           <Route path="/member" element={<MemberPage />} />
           <Route path="/member/:profileId" element={<MemberPage />} />

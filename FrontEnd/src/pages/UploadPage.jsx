@@ -20,6 +20,15 @@ const UPLOAD_CARDS = [
     buttonText: 'Open Member Profiles',
     to: '/upload/profiles',
   },
+  {
+    key: 'upload-history',
+    imageSrc: '/images/homepageimage.jpg',
+    imageAlt: 'History document upload preview',
+    title: 'Upload History PDF',
+    description: 'Prepare a history document PDF with its key, name, and description for future archive storage.',
+    buttonText: 'Open History Upload',
+    to: '/upload/history',
+  },
 ];
 
 export default function UploadPage() {
