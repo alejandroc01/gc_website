@@ -230,7 +230,7 @@ export default function SearchPage() {
               id="archive-search-page-input"
               className="searchPage__bar"
               type="search"
-              placeholder="Search by title or member name"
+              placeholder="Search archive by content title or member name"
               value={query}
               onChange={(event) => setQuery(event.target.value)}
             />
