@@ -13,6 +13,7 @@ import CompositeEditorPage from './pages/CompositeEditorPage.jsx';
 import ProfileUploadPage from './pages/ProfileUploadPage.jsx';
 import DisplayModePage from './pages/DisplayModePage.jsx';
 import OralHistories from './pages/OralHistories.jsx';
+import ScrapbooksPage from './pages/ScrapbooksPage.jsx';
 
 /**
  * App
@@ -32,7 +33,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/composites" element={<PlaceholderPage title="Composites" />} />
-          <Route path="/scrapbooks" element={<PlaceholderPage title="Scrapbooks" />} />
+          <Route path="/scrapbooks" element={<ScrapbooksPage />} />
           <Route path="/oral-histories" element={<OralHistories />} />
           <Route path="/search" element={<PlaceholderPage title="Search" />} />
           <Route path="/display-mode" element={<DisplayModePage />} />
