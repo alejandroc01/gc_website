@@ -433,6 +433,13 @@ function hasCompositeYear(composites, compositeYear) {
 }
 
 function compareProfileCompositeReferences(leftReference, rightReference) {
+    const leftYear = Number(leftReference.compositeYear || 0);
+    const rightYear = Number(rightReference.compositeYear || 0);
+
+    if (leftYear !== rightYear) {
+        return rightYear - leftYear;
+    }
+
     const leftTimestamp = new Date(leftReference.updatedAt || leftReference.uploadTimestamp || 0).getTime();
     const rightTimestamp = new Date(rightReference.updatedAt || rightReference.uploadTimestamp || 0).getTime();
 
