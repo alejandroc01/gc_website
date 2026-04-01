@@ -95,7 +95,7 @@ export default function Navbar() {
 
   return (
     <header className={headerClassName}>
-      <nav className="navbar__inner" aria-label="Primary">
+      <nav className="navbar__inner container" aria-label="Primary">
         <Link to="/" className="navbar__brand" aria-label="German Club Alumni Archives Home">
           <img className="navbar__logo" src="/images/logo.png" alt="German Club logo" />
           <span className="navbar__title">
