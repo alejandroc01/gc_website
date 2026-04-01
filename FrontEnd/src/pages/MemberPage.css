@@ -212,6 +212,11 @@
   gap: 12px;
 }
 
+.member__materialsGrid--yearOnly {
+  grid-template-columns: repeat(auto-fit, minmax(96px, max-content));
+  justify-content: start;
+}
+
 .member__materialCard {
   display: grid;
   grid-template-columns: auto 1fr;
@@ -222,6 +227,15 @@
   background: var(--surface-muted);
   color: inherit;
   text-decoration: none;
+}
+
+.member__materialCard--yearOnly {
+  display: inline-flex;
+  grid-template-columns: none;
+  justify-self: start;
+  align-items: center;
+  width: auto;
+  padding: 12px 14px;
 }
 
 .member__materialCard:hover {
@@ -239,6 +253,16 @@
   color: var(--deep-purple);
   font-weight: 600;
   border: 1px solid rgba(38, 21, 56, 0.1);
+}
+
+.member__materialCard--yearOnly .member__materialYear {
+  min-width: 62px;
+  width: auto;
+  padding: 6px 10px;
+  font-family: inherit;
+  font-size: 1rem;
+  letter-spacing: 0;
+  background: rgba(38, 21, 56, 0.06);
 }
 
 .member__materialTitle {
