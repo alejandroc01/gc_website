@@ -1,13 +1,15 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { createOralHistory, getOralHistories } from '../api/composites.js';
 import '../styles/composites.css';
 
 const acceptedVideoTypes = 'video/*,.mp4,.mov,.m4v,.webm';
-const localDraftStorageKey = 'gc-oral-history-upload-drafts';
 const emptyForm = {
   key: '',
+  episodeNumber: '1',
   name: '',
+  interviewee: '',
   description: '',
 };
 
@@ -17,14 +19,48 @@ export default function OralHistoryUploadPage() {
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
+  const [isLoadingDrafts, setIsLoadingDrafts] = useState(true);
   const [statusError, setStatusError] = useState('');
   const [statusSummary, setStatusSummary] = useState('');
-  const [preparedDrafts, setPreparedDrafts] = useState(() => loadPreparedDrafts());
+  const [storedEpisodes, setStoredEpisodes] = useState([]);
   const fileInputRef = useRef(null);
 
-  const latestPreparedDraft = useMemo(
-    () => (preparedDrafts.length > 0 ? preparedDrafts[0] : null),
-    [preparedDrafts],
+  useEffect(() => {
+    let isActive = true;
+
+    const loadOralHistoryEntries = async () => {
+      setIsLoadingDrafts(true);
+      setStatusError('');
+
+      try {
+        const loadedOralHistories = await getOralHistories();
+
+        if (!isActive) {
+          return;
+        }
+
+        setStoredEpisodes(normalizeOralHistories(loadedOralHistories));
+      } catch (error) {
+        if (isActive) {
+          setStatusError(error.message);
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingDrafts(false);
+        }
+      }
+    };
+
+    loadOralHistoryEntries();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const latestStoredEpisode = useMemo(
+    () => (storedEpisodes.length > 0 ? storedEpisodes[storedEpisodes.length - 1] : null),
+    [storedEpisodes],
   );
 
   const handleFieldChange = (event) => {
@@ -53,36 +89,36 @@ export default function OralHistoryUploadPage() {
 
     try {
       const normalizedKey = validateOralHistoryKey(formValues.key);
+      const normalizedEpisodeNumber = validateEpisodeNumber(formValues.episodeNumber);
       const normalizedName = validateRequiredField(formValues.name, 'Enter an oral history title.');
+      const normalizedInterviewee = validateRequiredField(
+        formValues.interviewee,
+        'Enter the interviewee name.',
+      );
       const normalizedDescription = validateRequiredField(
         formValues.description,
         'Enter a description for this oral history video.',
       );
 
       if (!selectedFile) {
-        throw new Error('Choose a video file before preparing the oral history upload.');
+        throw new Error('Choose a video file before uploading the oral history.');
       }
 
       await validateVideoFile(selectedFile);
 
-      const preparedDraft = {
-        key: normalizedKey,
-        title: normalizedName,
-        description: normalizedDescription,
-        fileName: selectedFile.name,
-        fileSize: selectedFile.size,
-        mimeType: selectedFile.type || 'video/mp4',
-        preparedAt: new Date().toISOString(),
-        storageStatus: 'ready-for-local-save',
-      };
+      const payload = new FormData();
+      payload.append('key', normalizedKey);
+      payload.append('episodeNumber', String(normalizedEpisodeNumber));
+      payload.append('title', normalizedName);
+      payload.append('interviewee', normalizedInterviewee);
+      payload.append('description', normalizedDescription);
+      payload.append('video', selectedFile);
 
-      const nextDrafts = [preparedDraft, ...preparedDrafts.filter((entry) => entry.key !== preparedDraft.key)]
-        .slice(0, 12);
+      const createdOralHistory = normalizeOralHistory(await createOralHistory(payload));
 
-      setPreparedDrafts(nextDrafts);
-      persistPreparedDrafts(nextDrafts);
+      setStoredEpisodes((currentEpisodes) => normalizeOralHistories([...currentEpisodes, createdOralHistory]));
       setStatusSummary(
-        `Prepared ${preparedDraft.title} for local save. Metadata is stored in this browser and the video filename ${preparedDraft.fileName} passed validation.`,
+        `Uploaded Episode ${createdOralHistory.episodeNumber}: ${createdOralHistory.title}.`,
       );
       setFormValues(emptyForm);
       setSelectedFile(null);
@@ -101,8 +137,8 @@ export default function OralHistoryUploadPage() {
           <p className="compositePageHeader__eyebrow">Admin Upload Flow</p>
           <h1 className="compositePageHeader__title">Upload Oral History Video</h1>
           <p className="compositePageHeader__description">
-            Prepare an oral history recording for archive storage by entering its key, display name,
-            and description, then validating the video locally before the database workflow exists.
+            Upload an oral history recording to backend storage by entering its key, episode number,
+            title, interviewee, and description.
           </p>
         </div>
 
@@ -115,10 +151,10 @@ export default function OralHistoryUploadPage() {
         <article className="compositePanel compositePanel--spacious">
           <div className="compositePanel__header">
             <div>
-              <h2 className="compositePanel__title">Prepare a New Oral History Video</h2>
+              <h2 className="compositePanel__title">Upload a New Oral History Video</h2>
               <p className="compositePanel__description">
-                The current flow validates the video and stores the prepared metadata locally in the
-                browser. The actual file is not persisted to the archive yet.
+                This flow validates the selected video in the browser and then uploads the file and
+                metadata to backend storage so it can be played on the oral histories page.
               </p>
             </div>
           </div>
@@ -138,6 +174,19 @@ export default function OralHistoryUploadPage() {
               </label>
 
               <label className="compositeField">
+                <span className="compositeField__label">Episode Number</span>
+                <input
+                  className="compositeField__input"
+                  type="text"
+                  name="episodeNumber"
+                  inputMode="numeric"
+                  placeholder="1"
+                  value={formValues.episodeNumber}
+                  onChange={handleFieldChange}
+                />
+              </label>
+
+              <label className="compositeField">
                 <span className="compositeField__label">Name</span>
                 <input
                   className="compositeField__input"
@@ -145,6 +194,18 @@ export default function OralHistoryUploadPage() {
                   name="name"
                   placeholder="enter oral history title"
                   value={formValues.name}
+                  onChange={handleFieldChange}
+                />
+              </label>
+
+              <label className="compositeField">
+                <span className="compositeField__label">Interviewee</span>
+                <input
+                  className="compositeField__input"
+                  type="text"
+                  name="interviewee"
+                  placeholder="enter interviewee name"
+                  value={formValues.interviewee}
                   onChange={handleFieldChange}
                 />
               </label>
@@ -207,7 +268,7 @@ export default function OralHistoryUploadPage() {
                 className="button compositeButton compositeButton--filled"
                 disabled={isPreparing}
               >
-                {isPreparing ? 'Preparing Video...' : 'Prepare Oral History Video'}
+                {isPreparing ? 'Uploading Video...' : 'Upload Oral History Video'}
               </button>
 
               {selectedFile ? (
@@ -229,42 +290,47 @@ export default function OralHistoryUploadPage() {
         <article className="compositePanel compositePanel--spacious">
           <div className="compositePanel__header">
             <div>
-              <h2 className="compositePanel__title">Prepared Local Oral History Drafts</h2>
+              <h2 className="compositePanel__title">Stored Oral History Episodes</h2>
               <p className="compositePanel__description">
-                These are the metadata records that have passed validation in this browser and are ready
-                to be connected to backend storage later.
+                These are the oral history videos currently stored by the backend and available to the site.
               </p>
             </div>
           </div>
 
-          {preparedDrafts.length === 0 ? (
+          {isLoadingDrafts ? (
             <div className="compositeEmptyState">
-              <h3 className="compositeEmptyState__title">No prepared oral history drafts yet.</h3>
+              <p className="compositeEmptyState__description">Loading oral history uploads...</p>
+            </div>
+          ) : storedEpisodes.length === 0 ? (
+            <div className="compositeEmptyState">
+              <h3 className="compositeEmptyState__title">No uploaded oral histories yet.</h3>
               <p className="compositeEmptyState__description">
-                After a video passes validation, its key, name, description, and filename will appear
-                here.
+                After a video upload succeeds, its episode metadata and filename will appear here.
               </p>
             </div>
           ) : (
             <div className="compositeCardGrid">
-              {preparedDrafts.map((draft) => (
-                <article key={draft.key} className="compositeCard">
+              {storedEpisodes.map((episode) => (
+                <article key={episode.oralHistoryId} className="compositeCard">
                   <div className="compositeCard__body">
                     <div className="compositeCard__metaRow">
-                      <span className="compositeCard__pill">{draft.storageStatus}</span>
+                      <span className="compositeCard__pill">episode {episode.episodeNumber}</span>
                       <span className="compositeCard__pill compositeCard__pill--year">
-                        {formatFileSize(draft.fileSize)}
+                        {formatFileSize(episode.fileSize)}
                       </span>
                     </div>
 
-                    <h3 className="compositeCard__title">{draft.title}</h3>
-                    <p className="compositeCard__sourceName">{draft.fileName}</p>
+                    <h3 className="compositeCard__title">{episode.title}</h3>
                     <p className="compositeCard__meta">
-                      Key: <strong>{draft.key}</strong>
+                      Interviewee: <strong>{episode.interviewee}</strong>
                     </p>
-                    <p className="compositeCard__meta">{draft.description}</p>
+                    <p className="compositeCard__sourceName">{episode.fileName}</p>
                     <p className="compositeCard__meta">
-                      Prepared {formatDate(draft.preparedAt)}
+                      Key: <strong>{episode.key}</strong>
+                    </p>
+                    <p className="compositeCard__meta">{episode.description}</p>
+                    <p className="compositeCard__meta">
+                      Uploaded {formatDate(episode.preparedAt)}
                     </p>
                   </div>
                 </article>
@@ -272,10 +338,10 @@ export default function OralHistoryUploadPage() {
             </div>
           )}
 
-          {latestPreparedDraft ? (
+          {latestStoredEpisode ? (
             <p className="compositeMessage" style={{ marginTop: '18px' }}>
-              Latest prepared draft: <strong>{latestPreparedDraft.title}</strong> using filename{' '}
-              <strong>{latestPreparedDraft.fileName}</strong>.
+              Latest upload: <strong>{latestStoredEpisode.title}</strong> using filename{' '}
+              <strong>{latestStoredEpisode.fileName}</strong>.
             </p>
           ) : null}
         </article>
@@ -294,11 +360,21 @@ function validateRequiredField(value, emptyMessage) {
   return normalizedValue;
 }
 
+function validateEpisodeNumber(value) {
+  const normalizedValue = Number(String(value || '').trim());
+
+  if (!Number.isInteger(normalizedValue) || normalizedValue <= 0 || normalizedValue > 999) {
+    throw new Error('Enter a valid positive episode number.');
+  }
+
+  return normalizedValue;
+}
+
 function validateOralHistoryKey(value) {
   const normalizedValue = value.trim().toLowerCase();
 
   if (!normalizedValue) {
-    throw new Error('Enter an oral history key before preparing the video.');
+    throw new Error('Enter an oral history key before uploading the video.');
   }
 
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalizedValue)) {
@@ -326,32 +402,25 @@ async function validateVideoFile(file) {
   await file.slice(0, 1).arrayBuffer();
 }
 
-function loadPreparedDrafts() {
-  if (typeof window === 'undefined') {
-    return [];
-  }
-
-  try {
-    const storedValue = window.localStorage.getItem(localDraftStorageKey);
-
-    if (!storedValue) {
-      return [];
-    }
-
-    const parsedValue = JSON.parse(storedValue);
-    return Array.isArray(parsedValue) ? parsedValue : [];
-  } catch (error) {
-    console.error('Unable to read stored oral history drafts.', error);
-    return [];
-  }
+function normalizeOralHistories(oralHistories) {
+  return [...(Array.isArray(oralHistories) ? oralHistories : [])]
+    .map((entry) => normalizeOralHistory(entry))
+    .sort((leftEntry, rightEntry) => Number(leftEntry.episodeNumber || 0) - Number(rightEntry.episodeNumber || 0));
 }
 
-function persistPreparedDrafts(drafts) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(localDraftStorageKey, JSON.stringify(drafts));
+function normalizeOralHistory(oralHistory) {
+  return {
+    ...oralHistory,
+    oralHistoryId: String(oralHistory?.oralHistoryId || ''),
+    key: String(oralHistory?.key || ''),
+    title: String(oralHistory?.title || ''),
+    interviewee: String(oralHistory?.interviewee || ''),
+    description: String(oralHistory?.description || ''),
+    episodeNumber: Number(oralHistory?.episodeNumber || 0),
+    fileName: String(oralHistory?.originalFilename || ''),
+    fileSize: Number(oralHistory?.fileSize || 0),
+    preparedAt: oralHistory?.uploadTimestamp || new Date().toISOString(),
+  };
 }
 
 function formatDate(value) {

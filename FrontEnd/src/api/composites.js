@@ -77,7 +77,10 @@ function normalizeResponseUrls(value) {
 
   return Object.fromEntries(
     Object.entries(value).map(([key, entryValue]) => {
-      if ((key === 'imageUrl' || key === 'profileImageUrl') && typeof entryValue === 'string') {
+      if (
+        (key === 'imageUrl' || key === 'profileImageUrl' || key === 'videoUrl')
+        && typeof entryValue === 'string'
+      ) {
         return [key, buildAssetUrl(entryValue)];
       }
 
@@ -280,5 +283,16 @@ export function autoDetectCompositeAnnotations(
 export function deleteComposite(compositeId) {
   return requestJson(`/api/composites/${compositeId}`, {
     method: 'DELETE',
+  });
+}
+
+export function getOralHistories() {
+  return requestJson('/api/oral-histories');
+}
+
+export function createOralHistory(formData) {
+  return requestJson('/api/oral-histories', {
+    method: 'POST',
+    body: formData,
   });
 }

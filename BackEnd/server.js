@@ -2,8 +2,10 @@ const express = require("express");
 const cors = require("cors");
 
 const compositeRoutes = require("./routes/composites");
+const oralHistoryRoutes = require("./routes/oralHistories");
 const profileRoutes = require("./routes/profiles");
 const { ensureCompositeStore } = require("./utils/compositeStore");
+const { ensureOralHistoryStore } = require("./utils/oralHistoryStore");
 const { ensureProfileStore } = require("./utils/profileStore");
 const {
     ensureCompositeUploadsDirectory,
@@ -23,6 +25,7 @@ app.get("/api/test", (_req, res) => {
 
 app.use("/api/profiles", profileRoutes);
 app.use("/api/composites", compositeRoutes);
+app.use("/api/oral-histories", oralHistoryRoutes);
 
 app.use((error, _req, res, _next) => {
     if (error && error.type === "entity.parse.failed") {
@@ -47,7 +50,12 @@ app.use((error, _req, res, _next) => {
 
 const PORT = process.env.PORT || 3000;
 
-Promise.all([ensureCompositeStore(), ensureCompositeUploadsDirectory(), ensureProfileStore()])
+Promise.all([
+    ensureCompositeStore(),
+    ensureCompositeUploadsDirectory(),
+    ensureOralHistoryStore(),
+    ensureProfileStore(),
+])
     .then(() => {
         app.listen(PORT, () => {
             console.log(`Server is running on port ${PORT}`);

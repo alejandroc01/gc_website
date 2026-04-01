@@ -1,18 +1,66 @@
-import './OralHistories.css';
+import { useEffect, useMemo, useState } from 'react';
 
-const episodePlaceholders = Array.from({ length: 16 }, (_, index) => ({
-  number: index + 1,
-  title: index === 0 ? 'Why Did You Come to Tech?' : 'Episode placeholder',
-}));
+import { getOralHistories } from '../api/composites.js';
+import './OralHistories.css';
 
 /**
  * OralHistories
  *
  * Landing page for oral history interviews.
- * The player is intentionally empty for now and uses a poster thumbnail
- * until the first interview file is available.
+ * The page now loads uploaded oral history videos from backend storage.
  */
 export default function OralHistories() {
+  const [episodes, setEpisodes] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [activeEpisodeNumber, setActiveEpisodeNumber] = useState(1);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadEpisodes = async () => {
+      setIsLoading(true);
+      setLoadError('');
+
+      try {
+        const loadedEpisodes = await getOralHistories();
+
+        if (!isActive) {
+          return;
+        }
+
+        const normalizedEpisodes = [...(Array.isArray(loadedEpisodes) ? loadedEpisodes : [])]
+          .sort((leftEpisode, rightEpisode) => Number(leftEpisode?.episodeNumber || 0) - Number(rightEpisode?.episodeNumber || 0));
+
+        setEpisodes(normalizedEpisodes);
+
+        if (normalizedEpisodes.length > 0) {
+          setActiveEpisodeNumber(Number(normalizedEpisodes[0].episodeNumber || 1));
+        }
+      } catch (error) {
+        if (isActive) {
+          setLoadError(error.message);
+        }
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadEpisodes();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const activeEpisode = useMemo(() => (
+    episodes.find((episode) => Number(episode?.episodeNumber) === Number(activeEpisodeNumber))
+    || episodes[0]
+    || null
+  ), [activeEpisodeNumber, episodes]);
+
   return (
     <div className="oralHistories">
       <section className="oralHistories__hero section">
@@ -25,19 +73,24 @@ export default function OralHistories() {
               experiences of German Club alumni across generations ]
             </p>
             <p className="oralHistories__copy">
-              IN PROGRESS: The video player is set up below and ready for media. Until the video is
-              added, the player displays a thumbnail preview for the featured oral history.
+              {activeEpisode
+                ? 'Select an uploaded episode from the playlist to stream it in the player below.'
+                : 'Upload Episode 1 from the admin upload page to begin testing playback here.'}
             </p>
           </div>
 
           <aside className="oralHistories__details" aria-label="Collection overview">
             <div className="oralHistories__detailCard">
               <span className="oralHistories__detailLabel">Featured interview</span>
-              <strong className="oralHistories__detailValue">Doug C. Petty Jr.</strong>
+              <strong className="oralHistories__detailValue">
+                {activeEpisode?.interviewee || 'No episode uploaded yet'}
+              </strong>
             </div>
             <div className="oralHistories__detailCard">
               <span className="oralHistories__detailLabel">Collection</span>
-              <strong className="oralHistories__detailValue">Episode 1</strong>
+              <strong className="oralHistories__detailValue">
+                {activeEpisode ? `Episode ${activeEpisode.episodeNumber}` : 'Awaiting Episode 1'}
+              </strong>
             </div>
           </aside>
         </div>
@@ -49,9 +102,11 @@ export default function OralHistories() {
             <div className="oralHistories__panelHeader">
               <div>
                 <p className="oralHistories__sectionLabel">Featured Recording</p>
-                <h2 className="oralHistories__sectionTitle">Episode One — Why Did You Come to Tech?</h2>
+                <h2 className="oralHistories__sectionTitle">
+                  {activeEpisode?.title || 'Episode 1 will appear here after upload'}
+                </h2>
               </div>
-              {/* <p className="oralHistories__panelNote">Thumbnail only for now. Video file coming soon.</p> */}
+              {isLoading ? <p className="oralHistories__panelNote">Loading episodes...</p> : null}
             </div>
 
             <div className="oralHistories__contentGrid">
@@ -59,38 +114,54 @@ export default function OralHistories() {
                 <video
                   className="oralHistories__video"
                   controls
-                  preload="none"
+                  preload="metadata"
                   poster="/images/doug_oral_history_thumbnail.png"
                   aria-label="Featured oral history video player"
+                  key={activeEpisode?.oralHistoryId || 'oral-history-placeholder'}
                 >
+                  {activeEpisode?.videoUrl ? (
+                    <source src={activeEpisode.videoUrl} type={activeEpisode.mimeType || 'video/mp4'} />
+                  ) : null}
                   Your browser does not support the video tag.
                 </video>
               </div>
 
-              <aside className="oralHistories__playlist" aria-label="Episode playlist placeholder">
+              <aside className="oralHistories__playlist" aria-label="Episode playlist">
                 <div className="oralHistories__playlistHeader">
                   <h3 className="oralHistories__playlistTitle">Episode Playlist</h3>
-                  {/* <p className="oralHistories__playlistCount">16 placeholders</p> */}
                 </div>
 
                 <div className="oralHistories__playlistList">
-                  {episodePlaceholders.map((episode) => (
+                  {episodes.length > 0 ? episodes.map((episode) => (
                     <button
-                      key={episode.number}
+                      key={episode.oralHistoryId}
                       type="button"
                       className={`oralHistories__playlistItem${
-                        episode.number === 1 ? ' oralHistories__playlistItem--active' : ''
+                        Number(episode.episodeNumber) === Number(activeEpisode?.episodeNumber)
+                          ? ' oralHistories__playlistItem--active'
+                          : ''
                       }`}
+                      onClick={() => setActiveEpisodeNumber(Number(episode.episodeNumber))}
                     >
                       <span className="oralHistories__playlistNumber">
-                        {String(episode.number).padStart(2, '0')}
+                        {String(episode.episodeNumber).padStart(2, '0')}
                       </span>
                       <span className="oralHistories__playlistText">
-                        Episode {episode.number}
+                        Episode {episode.episodeNumber}
                         <span className="oralHistories__playlistSubtitle">{episode.title}</span>
                       </span>
                     </button>
-                  ))}
+                  )) : (
+                    <div className="oralHistories__playlistItem oralHistories__playlistItem--active">
+                      <span className="oralHistories__playlistNumber">01</span>
+                      <span className="oralHistories__playlistText">
+                        Episode 1
+                        <span className="oralHistories__playlistSubtitle">
+                          {loadError || 'Upload Episode 1 from the admin upload page to test playback.'}
+                        </span>
+                      </span>
+                    </div>
+                  )}
                 </div>
               </aside>
             </div>

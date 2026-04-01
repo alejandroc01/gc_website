@@ -7,6 +7,7 @@ const uploadsRootDirectory = configuredUploadsRoot
     ? path.resolve(configuredUploadsRoot)
     : defaultUploadsRootDirectory;
 const uploadsDirectory = path.join(uploadsRootDirectory, "composites");
+const oralHistoryUploadsDirectory = path.join(uploadsRootDirectory, "oral-histories");
 const compositeUploadSessionsDirectory = path.join(__dirname, "..", ".composite_upload_sessions");
 const legacyUploadsDirectory = path.join(defaultUploadsRootDirectory, "composites");
 const extensionByMimeType = {
@@ -16,9 +17,18 @@ const extensionByMimeType = {
 };
 const allowedMimeTypes = new Set(Object.keys(extensionByMimeType));
 const allowedUploadExtensions = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+const oralHistoryExtensionByMimeType = {
+    "video/mp4": ".mp4",
+    "video/quicktime": ".mov",
+    "video/x-m4v": ".m4v",
+    "video/webm": ".webm",
+};
+const allowedOralHistoryMimeTypes = new Set(Object.keys(oralHistoryExtensionByMimeType));
+const allowedOralHistoryUploadExtensions = new Set([".mp4", ".mov", ".m4v", ".webm"]);
 
 async function ensureCompositeUploadsDirectory() {
     await fs.mkdir(uploadsDirectory, { recursive: true });
+    await fs.mkdir(oralHistoryUploadsDirectory, { recursive: true });
     await fs.mkdir(compositeUploadSessionsDirectory, { recursive: true });
     await migrateBundledCompositeUploads();
 }
@@ -42,6 +52,27 @@ function resolveExtensionFromUpload(file) {
 
 function buildCompositeStoredFilePath(filename) {
     return path.posix.join("uploads", "composites", String(filename || "").trim());
+}
+
+function isAllowedOralHistoryUpload(file) {
+    const mimeType = String(file?.mimetype || "").trim().toLowerCase();
+    const originalExtension = path.extname(String(file?.originalname || "")).toLowerCase();
+
+    return allowedOralHistoryMimeTypes.has(mimeType) || allowedOralHistoryUploadExtensions.has(originalExtension);
+}
+
+function resolveExtensionFromOralHistoryUpload(file) {
+    const originalExtension = path.extname(file.originalname || "").toLowerCase();
+
+    if (allowedOralHistoryUploadExtensions.has(originalExtension)) {
+        return originalExtension;
+    }
+
+    return oralHistoryExtensionByMimeType[file.mimetype] || ".mp4";
+}
+
+function buildOralHistoryStoredFilePath(filename) {
+    return path.posix.join("uploads", "oral-histories", String(filename || "").trim());
 }
 
 function normalizeStoredFilePath(storedFilePath) {
@@ -134,14 +165,21 @@ function isAbsoluteFilePath(filePath) {
 module.exports = {
     allowedMimeTypes,
     allowedUploadExtensions,
+    allowedOralHistoryMimeTypes,
+    allowedOralHistoryUploadExtensions,
     buildCompositeStoredFilePath,
+    buildOralHistoryStoredFilePath,
     compositeUploadSessionsDirectory,
     ensureCompositeUploadsDirectory,
     extensionByMimeType,
     isAllowedCompositeUpload,
+    isAllowedOralHistoryUpload,
     normalizeStoredFilePath,
     resolveExtensionFromUpload,
+    resolveExtensionFromOralHistoryUpload,
     resolveStoredFileAbsolutePath,
+    oralHistoryExtensionByMimeType,
+    oralHistoryUploadsDirectory,
     uploadsDirectory,
     uploadsRootDirectory,
 };
