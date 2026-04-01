@@ -30,6 +30,15 @@ const UPLOAD_CARDS = [
     to: '/upload/history',
   },
   {
+    key: 'upload-oral-histories',
+    imageSrc: '/images/doug_oral_history_thumbnail.png',
+    imageAlt: 'Oral history upload preview',
+    title: 'Upload Oral Histories',
+    description: 'Prepare oral history interview videos with archive metadata before backend storage is connected.',
+    buttonText: 'Open Oral History Upload',
+    to: '/upload/oral-histories',
+  },
+  {
     key: 'upload-scrapbooks',
     imageSrc: '/images/1983ScrapB-P26.jpg',
     imageAlt: 'Scrapbook upload preview',
