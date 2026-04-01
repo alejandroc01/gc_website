@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { createOralHistory, getOralHistories } from '../api/composites.js';
+import { createOralHistory, deleteOralHistory, getOralHistories } from '../api/composites.js';
 import '../styles/composites.css';
 
 const acceptedVideoTypes = 'video/*,.mp4,.mov,.m4v,.webm';
@@ -20,6 +20,7 @@ export default function OralHistoryUploadPage() {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isLoadingDrafts, setIsLoadingDrafts] = useState(true);
+  const [deletingOralHistoryId, setDeletingOralHistoryId] = useState('');
   const [statusError, setStatusError] = useState('');
   const [statusSummary, setStatusSummary] = useState('');
   const [storedEpisodes, setStoredEpisodes] = useState([]);
@@ -127,6 +128,32 @@ export default function OralHistoryUploadPage() {
       setStatusError(error.message);
     } finally {
       setIsPreparing(false);
+    }
+  };
+
+  const handleDeleteEpisode = async (episode) => {
+    const confirmed = window.confirm(
+      `Delete Episode ${episode.episodeNumber}: ${episode.title}? This will remove the video from backend storage.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingOralHistoryId(episode.oralHistoryId);
+    setStatusError('');
+    setStatusSummary('');
+
+    try {
+      await deleteOralHistory(episode.oralHistoryId);
+      setStoredEpisodes((currentEpisodes) => currentEpisodes.filter(
+        (entry) => entry.oralHistoryId !== episode.oralHistoryId,
+      ));
+      setStatusSummary(`Deleted Episode ${episode.episodeNumber}: ${episode.title}.`);
+    } catch (error) {
+      setStatusError(error.message);
+    } finally {
+      setDeletingOralHistoryId('');
     }
   };
 
@@ -332,6 +359,17 @@ export default function OralHistoryUploadPage() {
                     <p className="compositeCard__meta">
                       Uploaded {formatDate(episode.preparedAt)}
                     </p>
+
+                    <div style={{ marginTop: '18px' }}>
+                      <button
+                        type="button"
+                        className="button compositeButton compositeButton--danger"
+                        onClick={() => handleDeleteEpisode(episode)}
+                        disabled={deletingOralHistoryId === episode.oralHistoryId}
+                      >
+                        {deletingOralHistoryId === episode.oralHistoryId ? 'Deleting...' : 'Delete Episode'}
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))}

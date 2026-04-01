@@ -47,6 +47,10 @@
   color: #2a2233;
 }
 
+.oralHistories__lede--wide {
+  max-width: none;
+}
+
 .oralHistories__copy,
 .oralHistories__panelNote {
   margin: 0;

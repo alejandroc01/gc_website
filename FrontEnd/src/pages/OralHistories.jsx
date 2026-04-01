@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { getOralHistories } from '../api/composites.js';
 import './OralHistories.css';
 
+const totalEpisodeCount = 16;
+
 /**
  * OralHistories
  *
@@ -61,6 +63,8 @@ export default function OralHistories() {
     || null
   ), [activeEpisodeNumber, episodes]);
 
+  const playlistEpisodes = useMemo(() => buildPlaylistEpisodes(episodes), [episodes]);
+
   return (
     <div className="oralHistories">
       <section className="oralHistories__hero section">
@@ -68,7 +72,7 @@ export default function OralHistories() {
           <div className="oralHistories__intro">
             <p className="oralHistories__eyebrow">German Club Alumni Archives</p>
             <h1 className="oralHistories__title">Oral Histories</h1>
-            <p className="oralHistories__lede">
+            <p className="oralHistories__lede oralHistories__lede--wide">
               [ This collection will feature recorded interviews preserving the memories, voices, and
               experiences of German Club alumni across generations ]
             </p>
@@ -103,7 +107,7 @@ export default function OralHistories() {
               <div>
                 <p className="oralHistories__sectionLabel">Featured Recording</p>
                 <h2 className="oralHistories__sectionTitle">
-                  {activeEpisode?.title || 'Episode 1 will appear here after upload'}
+                  {activeEpisode ? formatEpisodeTitle(activeEpisode.title) : 'Episode 1 will appear here after upload'}
                 </h2>
               </div>
               {isLoading ? <p className="oralHistories__panelNote">Loading episodes...</p> : null}
@@ -132,36 +136,35 @@ export default function OralHistories() {
                 </div>
 
                 <div className="oralHistories__playlistList">
-                  {episodes.length > 0 ? episodes.map((episode) => (
+                  {playlistEpisodes.map((episode) => (
                     <button
-                      key={episode.oralHistoryId}
+                      key={episode.oralHistoryId || `placeholder-${episode.episodeNumber}`}
                       type="button"
                       className={`oralHistories__playlistItem${
                         Number(episode.episodeNumber) === Number(activeEpisode?.episodeNumber)
                           ? ' oralHistories__playlistItem--active'
                           : ''
                       }`}
-                      onClick={() => setActiveEpisodeNumber(Number(episode.episodeNumber))}
+                      onClick={() => {
+                        if (episode.videoUrl) {
+                          setActiveEpisodeNumber(Number(episode.episodeNumber));
+                        }
+                      }}
+                      disabled={!episode.videoUrl}
                     >
                       <span className="oralHistories__playlistNumber">
                         {String(episode.episodeNumber).padStart(2, '0')}
                       </span>
                       <span className="oralHistories__playlistText">
                         Episode {episode.episodeNumber}
-                        <span className="oralHistories__playlistSubtitle">{episode.title}</span>
-                      </span>
-                    </button>
-                  )) : (
-                    <div className="oralHistories__playlistItem oralHistories__playlistItem--active">
-                      <span className="oralHistories__playlistNumber">01</span>
-                      <span className="oralHistories__playlistText">
-                        Episode 1
                         <span className="oralHistories__playlistSubtitle">
-                          {loadError || 'Upload Episode 1 from the admin upload page to test playback.'}
+                          {episode.videoUrl
+                            ? formatEpisodeTitle(episode.title)
+                            : getPlaceholderTitle(episode.episodeNumber)}
                         </span>
                       </span>
-                    </div>
-                  )}
+                    </button>
+                  ))}
                 </div>
               </aside>
             </div>
@@ -170,4 +173,38 @@ export default function OralHistories() {
       </section>
     </div>
   );
+}
+
+function buildPlaylistEpisodes(episodes) {
+  const episodesByNumber = new Map(
+    episodes.map((episode) => [Number(episode?.episodeNumber || 0), episode]),
+  );
+
+  return Array.from({ length: totalEpisodeCount }, (_, index) => {
+    const episodeNumber = index + 1;
+    return episodesByNumber.get(episodeNumber) || {
+      oralHistoryId: '',
+      episodeNumber,
+      title: '',
+      videoUrl: '',
+    };
+  });
+}
+
+function formatEpisodeTitle(title) {
+  const normalizedTitle = String(title || '').trim();
+
+  if (!normalizedTitle) {
+    return '';
+  }
+
+  return normalizedTitle.replace(/^episode\s+\d+\s*(?:-|:|\u2013|\u2014)\s*/i, '').trim();
+}
+
+function getPlaceholderTitle(episodeNumber) {
+  if (episodeNumber === 1) {
+    return 'Upload Episode 1 from the admin page to test playback.';
+  }
+
+  return 'Episode placeholder';
 }

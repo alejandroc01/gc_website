@@ -296,3 +296,9 @@ export function createOralHistory(formData) {
     body: formData,
   });
 }
+
+export function deleteOralHistory(oralHistoryId) {
+  return requestJson(`/api/oral-histories/${oralHistoryId}`, {
+    method: 'DELETE',
+  });
+}
