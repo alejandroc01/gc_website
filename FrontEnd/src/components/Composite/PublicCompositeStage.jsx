@@ -279,15 +279,15 @@ export default function PublicCompositeStage({
             />
 
             <div className="publicCompositeStage__overlay">
-              {annotations.map((annotation, index) => (
+              {annotations.map((annotation) => (
                 <button
                   key={annotation.annotationId}
                   type="button"
                   className="publicCompositeStage__hotspot"
                   style={toDisplayRect(annotation, composite, baseDisplaySize)}
                   onClick={() => onAnnotationSelect?.(annotation.profileId)}
-                  aria-label={`Open confirmed member profile ${index + 1}`}
-                  title="Open confirmed member profile"
+                  aria-label="Open member profile"
+                  title="Open member profile"
                 />
               ))}
             </div>

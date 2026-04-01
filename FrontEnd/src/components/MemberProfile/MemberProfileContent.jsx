@@ -107,6 +107,7 @@ function Fact({ label, value }) {
 
 function ArchiveSection({ label, items, onNavigate }) {
   const hasItems = Array.isArray(items) && items.length > 0;
+  const isYearOnlySection = hasItems && items.every((item) => item.yearOnly);
 
   return (
     <section className="member__archiveSection" aria-label={label}>
@@ -118,7 +119,12 @@ function ArchiveSection({ label, items, onNavigate }) {
       </div>
 
       {hasItems ? (
-        <div className="member__materialsGrid">
+        <div
+          className={[
+            'member__materialsGrid',
+            isYearOnlySection ? 'member__materialsGrid--yearOnly' : '',
+          ].filter(Boolean).join(' ')}
+        >
           {items.map((item) => (
             <MaterialCard
               key={`${label}-${item.compositeId}-${item.annotationId}`}
@@ -134,26 +140,35 @@ function ArchiveSection({ label, items, onNavigate }) {
   );
 }
 
-function MaterialCard({ title, year, note, to, onNavigate }) {
+function MaterialCard({ title, year, note, to, onNavigate, yearOnly = false }) {
+  const cardClassName = [
+    'member__materialCard',
+    yearOnly ? 'member__materialCard--yearOnly' : '',
+  ].filter(Boolean).join(' ');
+
   if (to) {
     return (
-      <Link className="member__materialCard" to={to} onClick={onNavigate || undefined}>
+      <Link className={cardClassName} to={to} onClick={onNavigate || undefined}>
         <div className="member__materialYear">{year}</div>
-        <div className="member__materialBody">
-          <p className="member__materialTitle">{title}</p>
-          {note ? <p className="member__materialNote">{note}</p> : null}
-        </div>
+        {!yearOnly && (title || note) ? (
+          <div className="member__materialBody">
+            {title ? <p className="member__materialTitle">{title}</p> : null}
+            {note ? <p className="member__materialNote">{note}</p> : null}
+          </div>
+        ) : null}
       </Link>
     );
   }
 
   return (
-    <div className="member__materialCard">
+    <div className={cardClassName}>
       <div className="member__materialYear">{year}</div>
-      <div className="member__materialBody">
-        <p className="member__materialTitle">{title}</p>
-        {note ? <p className="member__materialNote">{note}</p> : null}
-      </div>
+      {!yearOnly && (title || note) ? (
+        <div className="member__materialBody">
+          {title ? <p className="member__materialTitle">{title}</p> : null}
+          {note ? <p className="member__materialNote">{note}</p> : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -163,16 +178,17 @@ function buildLocation(profile) {
 }
 
 function buildCompositeItems(relatedComposites) {
-  return (Array.isArray(relatedComposites) ? relatedComposites : []).map((composite) => ({
-    compositeId: composite.compositeId,
-    annotationId: composite.annotationId,
-    title: composite.compositeName,
-    year: composite.compositeYear || 'N/A',
-    note: composite.updatedAt
-      ? `Updated ${formatDate(composite.updatedAt)}`
-      : 'Saved in archive',
-    to: buildCompositeLink(composite.compositeYear),
-  }));
+  return [...(Array.isArray(relatedComposites) ? relatedComposites : [])]
+    .sort(compareCompositeArchiveItems)
+    .map((composite) => ({
+      compositeId: composite.compositeId,
+      annotationId: composite.annotationId,
+      title: '',
+      year: composite.compositeYear || 'N/A',
+      note: '',
+      yearOnly: true,
+      to: buildCompositeLink(composite.compositeYear),
+    }));
 }
 
 function buildCompositeLink(compositeYear) {
@@ -192,12 +208,18 @@ function buildCompositePortraitStyle(reference) {
   };
 }
 
-function formatDate(value) {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(new Date(value));
+function compareCompositeArchiveItems(leftComposite, rightComposite) {
+  const leftYear = Number(leftComposite.compositeYear || 0);
+  const rightYear = Number(rightComposite.compositeYear || 0);
+
+  if (leftYear !== rightYear) {
+    return rightYear - leftYear;
+  }
+
+  const leftTimestamp = new Date(leftComposite.updatedAt || leftComposite.uploadTimestamp || 0).getTime();
+  const rightTimestamp = new Date(rightComposite.updatedAt || rightComposite.uploadTimestamp || 0).getTime();
+
+  return rightTimestamp - leftTimestamp;
 }
 
 function isBoardDepartment(department) {
