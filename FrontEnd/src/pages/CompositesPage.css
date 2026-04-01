@@ -278,6 +278,17 @@
   position: relative;
   display: inline-block;
   transform-origin: top left;
+  transition: filter 280ms ease, opacity 280ms ease;
+}
+
+.publicCompositeStage__frame--loading {
+  filter: blur(16px);
+  opacity: 0.68;
+}
+
+.publicCompositeStage__frame--loaded {
+  filter: blur(0);
+  opacity: 1;
 }
 
 .publicCompositeStage__image {
@@ -296,6 +307,10 @@
 .publicCompositeStage__overlay {
   position: absolute;
   inset: 0;
+  pointer-events: none;
+}
+
+.publicCompositeStage__overlay--loading {
   pointer-events: none;
 }
 

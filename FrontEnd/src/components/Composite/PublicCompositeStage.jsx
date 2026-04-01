@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 const MIN_ZOOM_LEVEL = 1;
 const MAX_ZOOM_LEVEL = 4;
@@ -18,6 +18,7 @@ export default function PublicCompositeStage({
   const compositeRef = useRef(composite);
   const pendingZoomFocusRef = useRef(null);
   const [baseDisplaySize, setBaseDisplaySize] = useState({ width: 0, height: 0 });
+  const [isImageLoaded, setIsImageLoaded] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(MIN_ZOOM_LEVEL);
   const [isPanning, setIsPanning] = useState(false);
 
@@ -64,10 +65,10 @@ export default function PublicCompositeStage({
     const isFullscreen = variant === 'fullscreen';
     const viewportWidth = isFullscreen
       ? Math.max(1, viewportElement.clientWidth)
-      : Math.max(240, viewportElement.clientWidth - (zoomEnabled ? 24 : 16));
+      : Math.max(240, viewportElement.clientWidth - 24);
     const viewportHeight = isFullscreen
       ? Math.max(1, viewportElement.clientHeight)
-      : Math.max(240, Math.min(viewportElement.clientHeight - 16, Math.round(window.innerHeight * 0.68)));
+      : Math.max(240, Math.min(Math.round(window.innerHeight * 0.68), 860) - 24);
     const fitScale = Math.min(
       viewportWidth / Math.max(currentComposite.imageWidth, 1),
       viewportHeight / Math.max(currentComposite.imageHeight, 1),
@@ -79,7 +80,8 @@ export default function PublicCompositeStage({
     });
   }, [variant, zoomEnabled]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    setIsImageLoaded(false);
     setZoomLevel(MIN_ZOOM_LEVEL);
     setIsPanning(false);
     interactionRef.current = null;
@@ -93,6 +95,18 @@ export default function PublicCompositeStage({
   }, [composite?.compositeId]);
 
   useEffect(() => {
+    const imageElement = imageRef.current;
+
+    if (!imageElement) {
+      return;
+    }
+
+    if (imageElement.complete && imageElement.naturalWidth > 0) {
+      setIsImageLoaded(true);
+    }
+  }, [composite?.imageUrl]);
+
+  useLayoutEffect(() => {
     const viewportElement = viewportRef.current;
 
     if (!viewportElement || !composite) {
@@ -238,6 +252,7 @@ export default function PublicCompositeStage({
     return null;
   }
 
+  const hasMeasuredBaseSize = baseDisplaySize.width > 0 && baseDisplaySize.height > 0;
   const scaledWidth = baseDisplaySize.width * zoomLevel;
   const scaledHeight = baseDisplaySize.height * zoomLevel;
 
@@ -249,6 +264,7 @@ export default function PublicCompositeStage({
           'publicCompositeStage__viewport',
           isPanning ? 'publicCompositeStage__viewport--panning' : '',
         ].filter(Boolean).join(' ')}
+        aria-busy={isImageLoaded ? 'false' : 'true'}
         onContextMenu={zoomEnabled ? (event) => event.preventDefault() : undefined}
         onPointerDown={handleViewportPointerDown}
       >
@@ -260,8 +276,12 @@ export default function PublicCompositeStage({
           }}
         >
           <div
-            className="publicCompositeStage__frame"
+            className={[
+              'publicCompositeStage__frame',
+              isImageLoaded ? 'publicCompositeStage__frame--loaded' : 'publicCompositeStage__frame--loading',
+            ].join(' ')}
             style={{
+              visibility: hasMeasuredBaseSize ? 'visible' : 'hidden',
               transform: `scale(${zoomLevel})`,
             }}
           >
@@ -271,14 +291,22 @@ export default function PublicCompositeStage({
               src={composite.imageUrl}
               alt={`${composite.displayName || composite.originalFilename} composite`}
               draggable="false"
-              onLoad={updateBaseDisplaySize}
+              onLoad={() => {
+                updateBaseDisplaySize();
+                setIsImageLoaded(true);
+              }}
               style={{
                 width: baseDisplaySize.width || undefined,
                 height: baseDisplaySize.height || undefined,
               }}
             />
 
-            <div className="publicCompositeStage__overlay">
+            <div
+              className={[
+                'publicCompositeStage__overlay',
+                isImageLoaded ? '' : 'publicCompositeStage__overlay--loading',
+              ].filter(Boolean).join(' ')}
+            >
               {annotations.map((annotation) => (
                 <button
                   key={annotation.annotationId}
