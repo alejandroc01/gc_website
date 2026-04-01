@@ -866,8 +866,21 @@
   line-height: 1.25;
 }
 
+.profileSearch__input::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+.profileSearch__input::-ms-clear,
+.profileSearch__input::-ms-reveal {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .profileSearch__input--clearable {
-  padding-right: 30px;
+  padding-right: 36px;
 }
 
 .profileSearch--invalid .profileSearch__input {
@@ -887,20 +900,20 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   padding: 0;
   border: none;
   background: transparent;
   color: var(--muted);
-  font-size: 13px;
-  line-height: 1;
   cursor: pointer;
   transform: translateY(-50%);
+  transition: background 120ms ease, color 120ms ease;
 }
 
 .profileSearch__clear:hover,
 .profileSearch__clear:focus-visible {
+  background: var(--surface-muted);
   color: var(--deep-purple);
   outline: none;
 }
