@@ -9,6 +9,7 @@ import PlaceholderPage from './pages/PlaceholderPage.jsx';
 import MemberPage from './pages/MemberPage.jsx';
 import UploadPage from './pages/UploadPage.jsx';
 import SearchPage from './pages/SearchPage.jsx';
+import CompositesPage from './pages/CompositesPage.jsx';
 import CompositeUploadPage from './pages/CompositeUploadPage.jsx';
 import CompositeEditorPage from './pages/CompositeEditorPage.jsx';
 import ProfileUploadPage from './pages/ProfileUploadPage.jsx';
@@ -35,7 +36,7 @@ export default function App() {
       <main className="app-main">
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/composites" element={<PlaceholderPage title="Composites" />} />
+          <Route path="/composites" element={<CompositesPage />} />
           <Route path="/scrapbooks" element={<ScrapbooksPage />} />
           <Route path="/oral-histories" element={<OralHistories />} />
           <Route path="/history" element={<HistoryPage />} />
