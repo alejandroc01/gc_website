@@ -114,7 +114,7 @@ export default function ProfileSearchSelect({
             onClick={handleClearProfile}
             aria-label="Clear assigned profile"
           >
-            <span aria-hidden="true">x</span>
+            <ClearIcon />
           </button>
         ) : null}
 
@@ -140,5 +140,26 @@ export default function ProfileSearchSelect({
         ) : null}
       </div>
     </div>
+  );
+}
+
+function ClearIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M18 6L6 18"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6 6L18 18"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
