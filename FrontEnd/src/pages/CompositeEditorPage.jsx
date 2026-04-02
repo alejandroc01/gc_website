@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 
 import trashIcon from '../assets/icons/trash.svg';
 import AnnotationStage from '../components/Composite/AnnotationStage.jsx';
+import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
 import CreateProfileModal from '../components/Composite/CreateProfileModal.jsx';
 import ProfileSearchSelect from '../components/Composite/ProfileSearchSelect.jsx';
 import {
@@ -749,6 +750,8 @@ export default function CompositeEditorPage() {
                 </div>
               ) : null}
             </div>
+
+            <CompositeCopyrightNotice className="compositeEditor__copyrightNotice" />
           </article>
 
           <aside className="compositeSidebar">

@@ -1,4 +1,5 @@
 import ActionCards from '../components/ActionCards/ActionCards.jsx';
+import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
 import '../styles/composites.css';
 
 const UPLOAD_CARDS = [
@@ -70,6 +71,12 @@ export default function UploadPage() {
       </section>
 
       <ActionCards cards={UPLOAD_CARDS} ariaLabel="Upload actions" />
+
+      <section className="section compositeCopyrightNoticeSection">
+        <div className="container">
+          <CompositeCopyrightNotice className="compositeCopyrightNotice--pageFooter" />
+        </div>
+      </section>
     </>
   );
 }

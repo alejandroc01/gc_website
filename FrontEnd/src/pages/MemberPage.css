@@ -9,6 +9,11 @@
   align-items: start;
 }
 
+.member__mediaColumn {
+  display: grid;
+  gap: 12px;
+}
+
 .member__photoCard {
   position: relative;
   background: #fff;
@@ -174,6 +179,14 @@
   padding-top: 18px;
 }
 
+.member__photoCopyrightNotice {
+  font-size: 11px;
+  line-height: 1.55;
+  background: #fff;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
 .member__archiveSection + .member__archiveSection {
   margin-top: 16px;
   padding-top: 16px;
@@ -288,7 +301,7 @@
     grid-template-columns: 1fr;
   }
 
-  .member__photoCard {
+  .member__mediaColumn {
     max-width: 420px;
     margin: 0 auto;
   }

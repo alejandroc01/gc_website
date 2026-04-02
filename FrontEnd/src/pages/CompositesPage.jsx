@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
 import PublicCompositeStage from '../components/Composite/PublicCompositeStage.jsx';
 import MemberProfileModal from '../components/MemberProfile/MemberProfileModal.jsx';
 import { getComposites } from '../api/composites.js';
@@ -297,6 +298,8 @@ export default function CompositesPage() {
                   onAnnotationSelect={handleOpenProfile}
                 />
               </div>
+
+              <CompositeCopyrightNotice className="compositesPage__copyrightNotice" />
             </div>
           </article>
         ) : null}

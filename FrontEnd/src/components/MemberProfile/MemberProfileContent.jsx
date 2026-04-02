@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 
+import CompositeCopyrightNotice from '../Composite/CompositeCopyrightNotice.jsx';
 import '../../pages/MemberPage.css';
 
 export default function MemberProfileContent({ profile, onArchiveNavigate = null }) {
@@ -23,10 +24,21 @@ export default function MemberProfileContent({ profile, onArchiveNavigate = null
     badges.push('Deceased');
   }
 
+  const showsCompositeCopyrightNotice = (
+    profile.portrait?.mode === 'composite-reference'
+    || (Array.isArray(profile.relatedComposites) && profile.relatedComposites.length > 0)
+  );
+
   return (
     <div className="member__shell">
-      <div className="member__photoCard">
-        <ProfilePortrait profile={profile} />
+      <div className="member__mediaColumn">
+        <div className="member__photoCard">
+          <ProfilePortrait profile={profile} />
+        </div>
+
+        {showsCompositeCopyrightNotice ? (
+          <CompositeCopyrightNotice className="member__photoCopyrightNotice" />
+        ) : null}
       </div>
 
       <div className="member__body">

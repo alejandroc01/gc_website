@@ -173,6 +173,10 @@
   padding: 24px 28px 28px;
 }
 
+.compositesPage__copyrightNotice {
+  margin-top: 16px;
+}
+
 .compositesPage__viewerStage {
   position: relative;
 }

@@ -1,6 +1,7 @@
 import Hero from '../components/Hero/Hero.jsx';
 import SearchBar from '../components/SearchBar/SearchBar.jsx';
 import ActionCards from '../components/ActionCards/ActionCards.jsx';
+import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
 
 /**
  * HomePage ("Archive Home")
@@ -25,6 +26,12 @@ export default function HomePage() {
       <SearchBar />
 
       <ActionCards />
+
+      <section className="section compositeCopyrightNoticeSection">
+        <div className="container">
+          <CompositeCopyrightNotice className="compositeCopyrightNotice--pageFooter" />
+        </div>
+      </section>
     </>
   );
 }

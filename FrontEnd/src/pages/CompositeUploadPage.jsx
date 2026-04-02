@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
+import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
 import {
   deleteComposite as deleteCompositeRequest,
   getComposites,
@@ -131,6 +132,8 @@ export default function CompositeUploadPage() {
             Back to upload options
           </Link>
         </div>
+
+        <CompositeCopyrightNotice className="compositeUpload__copyrightNotice" />
 
         <article className="compositePanel compositePanel--spacious">
           <div className="compositePanel__header">

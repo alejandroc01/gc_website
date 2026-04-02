@@ -26,6 +26,14 @@
   line-height: 1.7;
 }
 
+.compositeUpload__copyrightNotice {
+  margin-bottom: 24px;
+}
+
+.compositeEditor__copyrightNotice {
+  margin-top: 16px;
+}
+
 .compositePanel {
   background: #fff;
   border: 1px solid var(--border);
