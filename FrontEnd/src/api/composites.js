@@ -77,8 +77,15 @@ function normalizeResponseUrls(value) {
 
   return Object.fromEntries(
     Object.entries(value).map(([key, entryValue]) => {
+      if (key === 'pageImageUrls' && Array.isArray(entryValue)) {
+        return [key, entryValue.map((url) => (typeof url === 'string' ? buildAssetUrl(url) : url))];
+      }
+
       if (
-        (key === 'imageUrl' || key === 'profileImageUrl' || key === 'videoUrl')
+        (key === 'imageUrl'
+        || key === 'profileImageUrl'
+        || key === 'videoUrl'
+        || key === 'pdfUrl')
         && typeof entryValue === 'string'
       ) {
         return [key, buildAssetUrl(entryValue)];
@@ -91,6 +98,10 @@ function normalizeResponseUrls(value) {
 
 export function getComposites() {
   return requestJson('/api/composites');
+}
+
+export function getScrapbooks() {
+  return requestJson('/api/scrapbooks');
 }
 
 export function getHomepageContent() {
@@ -194,6 +205,45 @@ async function completeCompositeUploadSession(uploadId) {
 
 async function abortCompositeUploadSession(uploadId) {
   return requestJson(`/api/composites/upload-sessions/${uploadId}`, {
+    method: 'DELETE',
+  });
+}
+
+async function createScrapbookUploadSession(file, scrapbookYear, totalChunks) {
+  return requestJson('/api/scrapbooks/upload-sessions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      scrapbookYear,
+      originalFilename: file.name,
+      mimeType: file.type || '',
+      totalSize: file.size,
+      totalChunks,
+    }),
+  });
+}
+
+async function uploadScrapbookChunk(uploadId, file, chunk, chunkIndex) {
+  const payload = new FormData();
+  payload.append('chunkIndex', String(chunkIndex));
+  payload.append('chunk', chunk, file.name);
+
+  return requestJson(`/api/scrapbooks/upload-sessions/${uploadId}/chunks`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+async function completeScrapbookUploadSession(uploadId) {
+  return requestJson(`/api/scrapbooks/upload-sessions/${uploadId}/complete`, {
+    method: 'POST',
+  });
+}
+
+async function abortScrapbookUploadSession(uploadId) {
+  return requestJson(`/api/scrapbooks/upload-sessions/${uploadId}`, {
     method: 'DELETE',
   });
 }
@@ -310,6 +360,78 @@ export async function uploadComposite(file, compositeYear, options = {}) {
   }
 }
 
+export async function uploadScrapbook(file, scrapbookYear, options = {}) {
+  const totalChunks = Math.max(1, Math.ceil(file.size / compositeUploadChunkSizeBytes));
+  const onProgress = typeof options?.onProgress === 'function' ? options.onProgress : null;
+  let uploadId = '';
+
+  try {
+    const uploadSession = await createScrapbookUploadSession(file, scrapbookYear, totalChunks);
+
+    uploadId = String(uploadSession?.uploadId || '');
+
+    if (!uploadId) {
+      throw new Error('The server did not return a valid upload session.');
+    }
+
+    const chunkSize = Number(uploadSession?.chunkSize) > 0
+      ? Number(uploadSession.chunkSize)
+      : compositeUploadChunkSizeBytes;
+    const serverTotalChunks = Number(uploadSession?.totalChunks) > 0
+      ? Number(uploadSession.totalChunks)
+      : totalChunks;
+
+    if (onProgress) {
+      onProgress({
+        uploadedBytes: 0,
+        totalBytes: file.size,
+        chunkIndex: -1,
+        totalChunks: serverTotalChunks,
+      });
+    }
+
+    for (let chunkIndex = 0; chunkIndex < serverTotalChunks; chunkIndex += 1) {
+      const start = chunkIndex * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      const chunk = file.slice(start, end, file.type || undefined);
+      const chunkUploadSummary = await uploadScrapbookChunk(uploadId, file, chunk, chunkIndex);
+      const uploadedBytes = Number(chunkUploadSummary?.uploadedBytes);
+
+      if (onProgress) {
+        onProgress({
+          uploadedBytes: Number.isFinite(uploadedBytes) ? uploadedBytes : end,
+          totalBytes: file.size,
+          chunkIndex,
+          totalChunks: serverTotalChunks,
+        });
+      }
+    }
+
+    const createdScrapbook = await completeScrapbookUploadSession(uploadId);
+
+    if (onProgress) {
+      onProgress({
+        uploadedBytes: file.size,
+        totalBytes: file.size,
+        chunkIndex: serverTotalChunks - 1,
+        totalChunks: serverTotalChunks,
+      });
+    }
+
+    return createdScrapbook;
+  } catch (error) {
+    if (uploadId) {
+      try {
+        await abortScrapbookUploadSession(uploadId);
+      } catch {
+        // Best-effort cleanup only; preserve the original upload error.
+      }
+    }
+
+    throw error;
+  }
+}
+
 export async function uploadHomepageContent(file, title, description, options = {}) {
   const totalChunks = Math.max(1, Math.ceil(file.size / compositeUploadChunkSizeBytes));
   const onProgress = typeof options?.onProgress === 'function' ? options.onProgress : null;
@@ -408,6 +530,12 @@ export function autoDetectCompositeAnnotations(
 
 export function deleteComposite(compositeId) {
   return requestJson(`/api/composites/${compositeId}`, {
+    method: 'DELETE',
+  });
+}
+
+export function deleteScrapbook(scrapbookId) {
+  return requestJson(`/api/scrapbooks/${scrapbookId}`, {
     method: 'DELETE',
   });
 }

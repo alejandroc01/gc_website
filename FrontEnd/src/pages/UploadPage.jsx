@@ -53,7 +53,7 @@ const UPLOAD_CARDS = [
     imageSrc: '/images/1983ScrapB-P26.jpg',
     imageAlt: 'Scrapbook upload preview',
     title: 'Scrapbook Upload',
-    description: 'Upload scrapbook page images to create a new scrapbook collection for a new year and expand the archive.',
+    description: 'Upload a scrapbook PDF and let the backend convert it into page images for the public scrapbook viewer.',
     buttonText: 'Open Scrapbook Upload',
     to: '/upload/scrapbooks',
   },

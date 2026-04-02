@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { getScrapbooks } from '../api/composites.js';
 import './ScrapbooksPage.css';
 
-const scrapbookCollections = [
+const legacyScrapbookCollections = [
   {
-    id: '1983',
+    id: 'legacy-1983',
     year: '1983',
     title: '1983 Scrapbook',
     tone: 'purple',
@@ -17,7 +18,7 @@ const scrapbookCollections = [
     ],
   },
   {
-    id: '1984',
+    id: 'legacy-1984',
     year: '1984',
     title: '1984 Scrapbook',
     tone: 'gold',
@@ -33,6 +34,65 @@ const scrapbookCollections = [
 export default function ScrapbooksPage() {
   const [activeBook, setActiveBook] = useState(null);
   const [activePageIndex, setActivePageIndex] = useState(0);
+  const [uploadedScrapbooks, setUploadedScrapbooks] = useState([]);
+  const [listError, setListError] = useState('');
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadScrapbooks = async () => {
+      try {
+        const scrapbookRecords = await getScrapbooks();
+
+        if (!isActive) {
+          return;
+        }
+
+        setUploadedScrapbooks(
+          scrapbookRecords
+            .filter((scrapbook) => Array.isArray(scrapbook.pageImageUrls) && scrapbook.pageImageUrls.length > 0)
+            .map((scrapbook) => ({
+              id: scrapbook.scrapbookId,
+              year: String(scrapbook.scrapbookYear || ''),
+              title: scrapbook.title || `${scrapbook.scrapbookYear} Scrapbook`,
+              tone: deriveScrapbookTone(scrapbook.scrapbookYear),
+              accent: deriveScrapbookAccent(scrapbook.scrapbookYear),
+              pages: scrapbook.pageImageUrls,
+              pageCount: scrapbook.pageCount || scrapbook.pageImageUrls.length,
+              pdfUrl: scrapbook.pdfUrl || '',
+              uploadTimestamp: scrapbook.uploadTimestamp || '',
+            })),
+        );
+        setListError('');
+      } catch (error) {
+        if (isActive) {
+          setListError(error.message);
+        }
+      }
+    };
+
+    loadScrapbooks();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const scrapbookCollections = useMemo(() => {
+    const recordsByYear = new Map();
+
+    uploadedScrapbooks.forEach((scrapbook) => {
+      recordsByYear.set(String(scrapbook.year || scrapbook.id), scrapbook);
+    });
+
+    legacyScrapbookCollections.forEach((scrapbook) => {
+      if (!recordsByYear.has(String(scrapbook.year || scrapbook.id))) {
+        recordsByYear.set(String(scrapbook.year || scrapbook.id), scrapbook);
+      }
+    });
+
+    return Array.from(recordsByYear.values()).sort(compareScrapbooks);
+  }, [uploadedScrapbooks]);
 
   useEffect(() => {
     if (!activeBook) return undefined;
@@ -94,6 +154,7 @@ export default function ScrapbooksPage() {
             <div>
               <p className="scrapbooksPage__sectionLabel">Available Volumes</p>
               <h2 className="scrapbooksPage__sectionTitle">Pick a scrapbook from the shelf</h2>
+              {listError ? <p className="scrapbooksPage__copy">{listError}</p> : null}
             </div>
           </div>
 
@@ -190,10 +251,34 @@ export default function ScrapbooksPage() {
               <p className="scrapbooksPage__pageStatus">
                 Page {activePageIndex + 1} of {activeBook.pages.length}
               </p>
+              {activeBook.pdfUrl ? (
+                <a className="button scrapbooksPage__uploadButton" href={activeBook.pdfUrl} target="_blank" rel="noreferrer">
+                  Open Original PDF
+                </a>
+              ) : null}
             </div>
           </section>
         </div>
       )}
     </div>
   );
+}
+
+function compareScrapbooks(leftValue, rightValue) {
+  const leftYear = Number(leftValue.year || 0);
+  const rightYear = Number(rightValue.year || 0);
+
+  if (leftYear !== rightYear) {
+    return rightYear - leftYear;
+  }
+
+  return String(leftValue.title || '').localeCompare(String(rightValue.title || ''));
+}
+
+function deriveScrapbookTone(scrapbookYear) {
+  return Number(scrapbookYear) % 2 === 0 ? 'gold' : 'purple';
+}
+
+function deriveScrapbookAccent(scrapbookYear) {
+  return deriveScrapbookTone(scrapbookYear) === 'gold' ? 'Club Gold' : 'Club Purple';
 }
