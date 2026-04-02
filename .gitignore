@@ -4,6 +4,4 @@ dist
 .DS_Store
 Thumbs.db
 *.log
-BackEnd/storage/
-BackEnd/uploads/
 composites_for_testing/

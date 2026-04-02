@@ -1,0 +1,16 @@
+{
+  "composites": {
+    "9a2893b6-1959-47ef-ac8c-2c8e121111f1": {
+      "compositeId": "9a2893b6-1959-47ef-ac8c-2c8e121111f1",
+      "status": "ready",
+      "cacheVersion": "2026-03-25-v1",
+      "textBoxes": [],
+      "generatedAt": "2026-03-26T01:23:56.451Z",
+      "queuedAt": "2026-03-26T01:23:19.940Z",
+      "startedAt": "2026-03-26T01:23:19.945Z",
+      "completedAt": "2026-03-26T01:23:56.451Z",
+      "updatedAt": "2026-03-26T01:23:56.453Z",
+      "error": null
+    }
+  }
+}
