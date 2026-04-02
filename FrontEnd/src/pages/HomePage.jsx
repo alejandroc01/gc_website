@@ -1,7 +1,15 @@
+import { useEffect, useState } from 'react';
+
 import Hero from '../components/Hero/Hero.jsx';
 import SearchBar from '../components/SearchBar/SearchBar.jsx';
 import ActionCards from '../components/ActionCards/ActionCards.jsx';
 import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
+import { getHomepageContent } from '../api/composites.js';
+import {
+  loadStoredHomepageContent,
+  normalizeHomepageContent,
+  persistHomepageContent,
+} from '../constants/homepageContent.js';
 
 /**
  * HomePage ("Archive Home")
@@ -14,14 +22,64 @@ import CompositeCopyrightNotice from '../components/Composite/CompositeCopyright
  * 3) Action cards (Composites, Scrapbooks, Oral Histories)
  */
 export default function HomePage() {
+  const [homepageContent, setHomepageContent] = useState(() => loadStoredHomepageContent());
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadHomepageContent = async () => {
+      try {
+        const loadedHomepageContent = normalizeHomepageContent(await getHomepageContent());
+
+        if (!isActive) {
+          return;
+        }
+
+        setHomepageContent(loadedHomepageContent);
+        persistHomepageContent(loadedHomepageContent);
+      } catch (error) {
+        if (!isActive) {
+          return;
+        }
+
+        console.error('Unable to load homepage content.', error);
+        setHomepageContent((currentHomepageContent) => currentHomepageContent || normalizeHomepageContent(null));
+      }
+    };
+
+    loadHomepageContent();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   return (
     <>
-      <Hero
-        imageSrc="/images/homepageimage.jpg"
-        imageAlt="German Club alumni"
-        title="Alumni Archives"
-        description="This is a test description. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec a diam lectus. Sed sit amet ipsum mauris. Maecenas congue ligula ac quam viverra nec consectetur ante hendrerit. Donec et mollis dolor. Praesent et diam eget libero egestas mattis sit amet vitae augue."
-      />
+      {homepageContent ? (
+        <Hero
+          imageSrc={homepageContent.imageUrl}
+          imageAlt={homepageContent.imageAlt}
+          title={homepageContent.title}
+          description={homepageContent.description}
+        />
+      ) : (
+        <section className="hero section" aria-hidden="true">
+          <div className="container">
+            <div className="hero__grid">
+              <div
+                className="hero__media"
+                style={{
+                  aspectRatio: '4 / 3',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface-muted)',
+                }}
+              />
+              <div style={{ minHeight: '240px' }} />
+            </div>
+          </div>
+        </section>
+      )}
 
       <SearchBar />
 

@@ -22,6 +22,15 @@ const UPLOAD_CARDS = [
     to: '/upload/profiles',
   },
   {
+    key: 'upload-homepage',
+    imageSrc: '/images/edit-homepage-icon.svg',
+    imageAlt: 'Homepage editor icon',
+    title: 'Edit Homepage',
+    description: 'Update the homepage hero image, header, and description, then store the image through the backend upload flow.',
+    buttonText: 'Open Homepage Editor',
+    to: '/upload/homepage',
+  },
+  {
     key: 'upload-history',
     imageSrc: '/images/homepageimage.jpg',
     imageAlt: 'History document upload preview',

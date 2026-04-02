@@ -2,9 +2,11 @@ const express = require("express");
 const cors = require("cors");
 
 const compositeRoutes = require("./routes/composites");
+const homepageRoutes = require("./routes/homepage");
 const oralHistoryRoutes = require("./routes/oralHistories");
 const profileRoutes = require("./routes/profiles");
 const { ensureCompositeStore } = require("./utils/compositeStore");
+const { ensureHomepageStore } = require("./utils/homepageStore");
 const { ensureOralHistoryStore } = require("./utils/oralHistoryStore");
 const { ensureProfileStore } = require("./utils/profileStore");
 const {
@@ -25,6 +27,7 @@ app.get("/api/test", (_req, res) => {
 
 app.use("/api/profiles", profileRoutes);
 app.use("/api/composites", compositeRoutes);
+app.use("/api/homepage", homepageRoutes);
 app.use("/api/oral-histories", oralHistoryRoutes);
 
 app.use((error, _req, res, _next) => {
@@ -52,6 +55,7 @@ const PORT = process.env.PORT || 3000;
 
 Promise.all([
     ensureCompositeStore(),
+    ensureHomepageStore(),
     ensureCompositeUploadsDirectory(),
     ensureOralHistoryStore(),
     ensureProfileStore(),

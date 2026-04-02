@@ -7,8 +7,10 @@ const uploadsRootDirectory = configuredUploadsRoot
     ? path.resolve(configuredUploadsRoot)
     : defaultUploadsRootDirectory;
 const uploadsDirectory = path.join(uploadsRootDirectory, "composites");
+const homepageUploadsDirectory = path.join(uploadsRootDirectory, "homepage");
 const oralHistoryUploadsDirectory = path.join(uploadsRootDirectory, "oral-histories");
 const compositeUploadSessionsDirectory = path.join(__dirname, "..", ".composite_upload_sessions");
+const homepageUploadSessionsDirectory = path.join(__dirname, "..", ".homepage_upload_sessions");
 const legacyUploadsDirectory = path.join(defaultUploadsRootDirectory, "composites");
 const extensionByMimeType = {
     "image/jpeg": ".jpg",
@@ -28,8 +30,10 @@ const allowedOralHistoryUploadExtensions = new Set([".mp4", ".mov", ".m4v", ".we
 
 async function ensureCompositeUploadsDirectory() {
     await fs.mkdir(uploadsDirectory, { recursive: true });
+    await fs.mkdir(homepageUploadsDirectory, { recursive: true });
     await fs.mkdir(oralHistoryUploadsDirectory, { recursive: true });
     await fs.mkdir(compositeUploadSessionsDirectory, { recursive: true });
+    await fs.mkdir(homepageUploadSessionsDirectory, { recursive: true });
     await migrateBundledCompositeUploads();
 }
 
@@ -52,6 +56,10 @@ function resolveExtensionFromUpload(file) {
 
 function buildCompositeStoredFilePath(filename) {
     return path.posix.join("uploads", "composites", String(filename || "").trim());
+}
+
+function buildHomepageStoredFilePath(filename) {
+    return path.posix.join("uploads", "homepage", String(filename || "").trim());
 }
 
 function isAllowedOralHistoryUpload(file) {
@@ -79,7 +87,7 @@ function normalizeStoredFilePath(storedFilePath) {
     const rawPath = String(storedFilePath || "").trim();
 
     if (!rawPath) {
-        const error = new Error("Composite stored file path is missing.");
+        const error = new Error("Stored file path is missing.");
         error.statusCode = 500;
         throw error;
     }
@@ -103,7 +111,7 @@ function normalizeStoredFilePath(storedFilePath) {
         || normalizedRelativePath === "."
         || normalizedRelativePath.startsWith("../")
     ) {
-        const error = new Error(`Composite stored file path is invalid: ${rawPath}`);
+        const error = new Error(`Stored file path is invalid: ${rawPath}`);
         error.statusCode = 500;
         throw error;
     }
@@ -168,10 +176,13 @@ module.exports = {
     allowedOralHistoryMimeTypes,
     allowedOralHistoryUploadExtensions,
     buildCompositeStoredFilePath,
+    buildHomepageStoredFilePath,
     buildOralHistoryStoredFilePath,
     compositeUploadSessionsDirectory,
     ensureCompositeUploadsDirectory,
     extensionByMimeType,
+    homepageUploadSessionsDirectory,
+    homepageUploadsDirectory,
     isAllowedCompositeUpload,
     isAllowedOralHistoryUpload,
     normalizeStoredFilePath,

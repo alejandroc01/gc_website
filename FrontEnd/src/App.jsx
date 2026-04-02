@@ -16,6 +16,7 @@ import ProfileUploadPage from './pages/ProfileUploadPage.jsx';
 import DisplayModePage from './pages/DisplayModePage.jsx';
 import OralHistories from './pages/OralHistories.jsx';
 import OralHistoryUploadPage from './pages/OralHistoryUploadPage.jsx';
+import HomepageUploadPage from './pages/HomepageUploadPage.jsx';
 import HistoryPage from './pages/HistoryPage.jsx';
 import HistoryUploadPage from './pages/HistoryUploadPage.jsx';
 import ScrapbooksPage from './pages/ScrapbooksPage.jsx';
@@ -46,6 +47,7 @@ export default function App() {
           <Route path="/upload" element={<UploadPage />} />
           <Route path="/upload/composites" element={<CompositeUploadPage />} />
           <Route path="/upload/profiles" element={<ProfileUploadPage />} />
+          <Route path="/upload/homepage" element={<HomepageUploadPage />} />
           <Route path="/upload/oral-histories" element={<OralHistoryUploadPage />} />
           <Route path="/upload/history" element={<HistoryUploadPage />} />
           <Route path="/upload/scrapbooks" element={<PlaceholderPage title="Scrapbook Upload" />} />
