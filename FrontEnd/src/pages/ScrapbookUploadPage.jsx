@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 
 import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
 import {
-  deleteScrapbook as deleteScrapbookRequest,
   getScrapbooks,
   uploadScrapbook,
 } from '../api/composites.js';
@@ -15,10 +14,7 @@ export default function ScrapbookUploadPage() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [scrapbookYear, setScrapbookYear] = useState('');
   const [scrapbooks, setScrapbooks] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
-  const [deletingScrapbookId, setDeletingScrapbookId] = useState(null);
-  const [listError, setListError] = useState('');
   const [uploadError, setUploadError] = useState('');
   const [uploadProgress, setUploadProgress] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState('');
@@ -27,9 +23,6 @@ export default function ScrapbookUploadPage() {
     let isActive = true;
 
     const loadScrapbooks = async () => {
-      setIsLoading(true);
-      setListError('');
-
       try {
         const scrapbookRecords = await getScrapbooks();
 
@@ -38,13 +31,9 @@ export default function ScrapbookUploadPage() {
         }
 
         setScrapbooks(scrapbookRecords);
-      } catch (error) {
+      } catch {
         if (isActive) {
-          setListError(error.message);
-        }
-      } finally {
-        if (isActive) {
-          setIsLoading(false);
+          setScrapbooks([]);
         }
       }
     };
@@ -84,6 +73,19 @@ export default function ScrapbookUploadPage() {
       return;
     }
 
+    const existingScrapbook = scrapbooks.find(
+      (scrapbook) => String(scrapbook.scrapbookYear || '') === normalizedYear,
+    );
+    const hasDuplicateFilename = Array.isArray(existingScrapbook?.pageOriginalFilenames)
+      && existingScrapbook.pageOriginalFilenames.some(
+        (filename) => String(filename || '').toLowerCase() === normalizedFileName,
+      );
+
+    if (hasDuplicateFilename) {
+      setUploadError('A scrapbook page with that filename already exists. Please rename the file and try again.');
+      return;
+    }
+
     setUploadError('');
     setUploadSuccess('');
     setIsUploading(true);
@@ -110,30 +112,6 @@ export default function ScrapbookUploadPage() {
       setUploadError(error.message);
       setUploadProgress(null);
       setIsUploading(false);
-    }
-  };
-
-  const handleDeleteScrapbook = async (scrapbook) => {
-    const confirmed = window.confirm(
-      `Delete ${scrapbook.title || scrapbook.originalFilename}? This removes the stored PDF and generated page images.`,
-    );
-
-    if (!confirmed) {
-      return;
-    }
-
-    setListError('');
-    setDeletingScrapbookId(scrapbook.scrapbookId);
-
-    try {
-      await deleteScrapbookRequest(scrapbook.scrapbookId);
-      setScrapbooks((currentScrapbooks) =>
-        currentScrapbooks.filter((entry) => entry.scrapbookId !== scrapbook.scrapbookId),
-      );
-    } catch (error) {
-      setListError(error.message);
-    } finally {
-      setDeletingScrapbookId(null);
     }
   };
 
@@ -228,100 +206,9 @@ export default function ScrapbookUploadPage() {
             {uploadError ? <p className="compositeMessage compositeMessage--error">{uploadError}</p> : null}
           </form>
         </article>
-
-        <article className="compositePanel compositePanel--spacious">
-          <div className="compositePanel__header">
-            <div>
-              <h2 className="compositePanel__title">Previously Uploaded Scrapbooks</h2>
-              <p className="compositePanel__description">
-                These scrapbook collections are already available from the scrapbook shelf page.
-              </p>
-            </div>
-          </div>
-
-          {listError ? <p className="compositeMessage compositeMessage--error">{listError}</p> : null}
-          {isLoading ? <p className="compositeMessage">Loading saved scrapbooks...</p> : null}
-
-          {!isLoading && !listError && scrapbooks.length === 0 ? (
-            <div className="compositeEmptyState">
-              <h3 className="compositeEmptyState__title">No scrapbook pages uploaded yet.</h3>
-              <p className="compositeEmptyState__description">
-                Uploaded scrapbook page images will appear here after they are grouped into a scrapbook year.
-              </p>
-            </div>
-          ) : null}
-
-          {!isLoading && scrapbooks.length > 0 ? (
-            <div className="compositeCardGrid">
-              {scrapbooks.map((scrapbook) => (
-                <article key={scrapbook.scrapbookId} className="compositeCard">
-                  <div className="compositeCard__media">
-                    {scrapbook.pageImageUrls?.[0] ? (
-                      <img
-                        className="compositeCard__image"
-                        src={scrapbook.pageImageUrls[0]}
-                        alt={`${scrapbook.title} cover preview`}
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="compositeCard__image" style={{ display: 'grid', placeItems: 'center' }}>
-                        Page
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="compositeCard__body">
-                    <div className="compositeCard__metaRow">
-                      {scrapbook.scrapbookYear ? (
-                        <span className="compositeCard__pill compositeCard__pill--year">
-                          Year {scrapbook.scrapbookYear}
-                        </span>
-                      ) : null}
-                      <span className="compositeCard__pill">
-                        {scrapbook.pageCount || scrapbook.pageImageUrls?.length || 0} pages
-                      </span>
-                    </div>
-
-                    <h3 className="compositeCard__title">
-                      {scrapbook.title || scrapbook.originalFilename}
-                    </h3>
-                    <p className="compositeCard__sourceName">{scrapbook.originalFilename}</p>
-                    <p className="compositeCard__meta">
-                      Uploaded {formatDate(scrapbook.uploadTimestamp)}
-                    </p>
-
-                    <div className="compositeCard__actions">
-                      <Link className="button compositeButton" to="/scrapbooks">
-                        Open shelf
-                      </Link>
-                      <button
-                        type="button"
-                        className="button compositeButton compositeButton--danger"
-                        onClick={() => handleDeleteScrapbook(scrapbook)}
-                        disabled={deletingScrapbookId === scrapbook.scrapbookId}
-                      >
-                        {deletingScrapbookId === scrapbook.scrapbookId ? 'Deleting...' : 'Delete'}
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : null}
-        </article>
       </div>
     </section>
   );
-}
-
-function formatDate(value) {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  }).format(new Date(value));
 }
 
 function formatFileSize(bytes) {

@@ -35,7 +35,6 @@ export default function ScrapbooksPage() {
   const [activeBook, setActiveBook] = useState(null);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [uploadedScrapbooks, setUploadedScrapbooks] = useState([]);
-  const [listError, setListError] = useState('');
 
   useEffect(() => {
     let isActive = true;
@@ -63,10 +62,9 @@ export default function ScrapbooksPage() {
               uploadTimestamp: scrapbook.uploadTimestamp || '',
             })),
         );
-        setListError('');
-      } catch (error) {
+      } catch {
         if (isActive) {
-          setListError(error.message);
+          setUploadedScrapbooks([]);
         }
       }
     };
@@ -154,7 +152,6 @@ export default function ScrapbooksPage() {
             <div>
               <p className="scrapbooksPage__sectionLabel">Available Volumes</p>
               <h2 className="scrapbooksPage__sectionTitle">Pick a scrapbook from the shelf</h2>
-              {listError ? <p className="scrapbooksPage__copy">{listError}</p> : null}
             </div>
           </div>
 
