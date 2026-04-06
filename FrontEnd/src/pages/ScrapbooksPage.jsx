@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
 
 import { getScrapbooks } from '../api/composites.js';
 import './ScrapbooksPage.css';
@@ -176,12 +175,6 @@ export default function ScrapbooksPage() {
                 </span>
               </button>
             ))}
-          </div>
-
-          <div className="scrapbooksPage__uploadRow">
-            <Link className="button scrapbooksPage__uploadButton" to="/upload/scrapbooks">
-              Upload Scrapbook
-            </Link>
           </div>
         </div>
       </section>
