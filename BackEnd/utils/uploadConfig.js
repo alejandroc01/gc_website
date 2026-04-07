@@ -3,13 +3,18 @@ const path = require("path");
 
 const defaultUploadsRootDirectory = path.join(__dirname, "..", "uploads");
 const configuredUploadsRoot = String(process.env.COMPOSITE_UPLOADS_ROOT || "").trim();
+const configuredScrapbookUploadsRoot = String(process.env.SCRAPBOOK_UPLOADS_ROOT || "").trim();
 const uploadsRootDirectory = configuredUploadsRoot
     ? path.resolve(configuredUploadsRoot)
     : defaultUploadsRootDirectory;
 const uploadsDirectory = path.join(uploadsRootDirectory, "composites");
+const scrapbookUploadsDirectory = configuredScrapbookUploadsRoot
+    ? path.resolve(configuredScrapbookUploadsRoot)
+    : path.join(uploadsRootDirectory, "scrapbooks");
 const homepageUploadsDirectory = path.join(uploadsRootDirectory, "homepage");
 const oralHistoryUploadsDirectory = path.join(uploadsRootDirectory, "oral-histories");
 const compositeUploadSessionsDirectory = path.join(__dirname, "..", ".composite_upload_sessions");
+const scrapbookUploadSessionsDirectory = path.join(__dirname, "..", ".scrapbook_upload_sessions");
 const homepageUploadSessionsDirectory = path.join(__dirname, "..", ".homepage_upload_sessions");
 const legacyUploadsDirectory = path.join(defaultUploadsRootDirectory, "composites");
 const extensionByMimeType = {
@@ -19,6 +24,8 @@ const extensionByMimeType = {
 };
 const allowedMimeTypes = new Set(Object.keys(extensionByMimeType));
 const allowedUploadExtensions = new Set([".jpg", ".jpeg", ".png", ".webp"]);
+const allowedScrapbookMimeTypes = new Set(Object.keys(extensionByMimeType));
+const allowedScrapbookUploadExtensions = new Set([".jpg", ".jpeg", ".png", ".webp"]);
 const oralHistoryExtensionByMimeType = {
     "video/mp4": ".mp4",
     "video/quicktime": ".mov",
@@ -30,9 +37,11 @@ const allowedOralHistoryUploadExtensions = new Set([".mp4", ".mov", ".m4v", ".we
 
 async function ensureCompositeUploadsDirectory() {
     await fs.mkdir(uploadsDirectory, { recursive: true });
+    await fs.mkdir(scrapbookUploadsDirectory, { recursive: true });
     await fs.mkdir(homepageUploadsDirectory, { recursive: true });
     await fs.mkdir(oralHistoryUploadsDirectory, { recursive: true });
     await fs.mkdir(compositeUploadSessionsDirectory, { recursive: true });
+    await fs.mkdir(scrapbookUploadSessionsDirectory, { recursive: true });
     await fs.mkdir(homepageUploadSessionsDirectory, { recursive: true });
     await migrateBundledCompositeUploads();
 }
@@ -56,6 +65,31 @@ function resolveExtensionFromUpload(file) {
 
 function buildCompositeStoredFilePath(filename) {
     return path.posix.join("uploads", "composites", String(filename || "").trim());
+}
+
+function isAllowedScrapbookUpload(file) {
+    const mimeType = String(file?.mimetype || "").trim().toLowerCase();
+    const originalExtension = path.extname(String(file?.originalname || "")).toLowerCase();
+
+    return allowedScrapbookMimeTypes.has(mimeType) || allowedScrapbookUploadExtensions.has(originalExtension);
+}
+
+function resolveExtensionFromScrapbookUpload(file) {
+    const originalExtension = path.extname(file.originalname || "").toLowerCase();
+
+    if (allowedScrapbookUploadExtensions.has(originalExtension)) {
+        return originalExtension === ".jpeg" ? ".jpg" : originalExtension;
+    }
+
+    return extensionByMimeType[file.mimetype] || ".jpg";
+}
+
+function buildScrapbookStoredFilePath(...segments) {
+    return path.posix.join(
+        "uploads",
+        "scrapbooks",
+        ...segments.map((segment) => String(segment || "").trim()),
+    );
 }
 
 function buildHomepageStoredFilePath(filename) {
@@ -95,7 +129,13 @@ function normalizeStoredFilePath(storedFilePath) {
     let uploadsRelativePath = rawPath.replace(/\\/g, "/");
 
     if (isAbsoluteFilePath(rawPath)) {
-        uploadsRelativePath = path.relative(uploadsRootDirectory, rawPath).replace(/\\/g, "/");
+        const scrapbookRelativePath = getUploadsRelativePathForAbsoluteFile(rawPath, scrapbookUploadsDirectory, "scrapbooks");
+
+        if (scrapbookRelativePath) {
+            uploadsRelativePath = scrapbookRelativePath;
+        } else {
+            uploadsRelativePath = path.relative(uploadsRootDirectory, rawPath).replace(/\\/g, "/");
+        }
     } else {
         uploadsRelativePath = uploadsRelativePath.replace(/^\/+/, "");
 
@@ -121,6 +161,13 @@ function normalizeStoredFilePath(storedFilePath) {
 
 function resolveStoredFileAbsolutePath(storedFilePath) {
     const normalizedStoredFilePath = normalizeStoredFilePath(storedFilePath);
+
+    if (normalizedStoredFilePath.startsWith("uploads/scrapbooks/")) {
+        const scrapbookRelativePath = normalizedStoredFilePath.slice("uploads/scrapbooks/".length);
+
+        return path.join(scrapbookUploadsDirectory, ...scrapbookRelativePath.split("/"));
+    }
+
     const uploadsRootRelativePath = normalizedStoredFilePath.slice("uploads/".length);
 
     return path.join(uploadsRootDirectory, ...uploadsRootRelativePath.split("/"));
@@ -170,27 +217,49 @@ function isAbsoluteFilePath(filePath) {
         || path.win32.isAbsolute(filePath);
 }
 
+function getUploadsRelativePathForAbsoluteFile(rawPath, baseDirectory, prefix) {
+    const relativePath = path.relative(baseDirectory, rawPath).replace(/\\/g, "/");
+
+    if (
+        !relativePath
+        || relativePath === "."
+        || relativePath.startsWith("../")
+        || path.isAbsolute(relativePath)
+    ) {
+        return null;
+    }
+
+    return path.posix.join(prefix, relativePath);
+}
+
 module.exports = {
     allowedMimeTypes,
     allowedUploadExtensions,
+    allowedScrapbookMimeTypes,
+    allowedScrapbookUploadExtensions,
     allowedOralHistoryMimeTypes,
     allowedOralHistoryUploadExtensions,
     buildCompositeStoredFilePath,
+    buildScrapbookStoredFilePath,
     buildHomepageStoredFilePath,
     buildOralHistoryStoredFilePath,
     compositeUploadSessionsDirectory,
+    scrapbookUploadSessionsDirectory,
     ensureCompositeUploadsDirectory,
     extensionByMimeType,
     homepageUploadSessionsDirectory,
     homepageUploadsDirectory,
     isAllowedCompositeUpload,
+    isAllowedScrapbookUpload,
     isAllowedOralHistoryUpload,
     normalizeStoredFilePath,
     resolveExtensionFromUpload,
+    resolveExtensionFromScrapbookUpload,
     resolveExtensionFromOralHistoryUpload,
     resolveStoredFileAbsolutePath,
     oralHistoryExtensionByMimeType,
     oralHistoryUploadsDirectory,
+    scrapbookUploadsDirectory,
     uploadsDirectory,
     uploadsRootDirectory,
 };

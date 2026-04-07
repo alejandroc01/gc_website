@@ -302,7 +302,7 @@
 
 .scrapbooksPage__viewerFrame {
   display: grid;
-  grid-template-columns: minmax(220px, 0.3fr) minmax(0, 1fr);
+  grid-template-columns: minmax(180px, 0.22fr) minmax(0, 1fr);
   gap: 0;
   border: 1px solid rgba(29, 19, 39, 0.14);
   background:
@@ -318,7 +318,7 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
-  padding: 28px 32px 18px;
+  padding: 24px 24px 18px;
   color: #fff6de;
 }
 
@@ -347,6 +347,7 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: stretch;
+  min-height: 0;
   background:
     linear-gradient(180deg, rgba(255, 253, 246, 0.98), rgba(245, 239, 224, 0.98)),
     #fff;
@@ -356,18 +357,20 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
   min-height: 0;
   height: 100%;
   overflow: hidden;
-  padding: clamp(24px, 3vw, 40px);
+  padding: clamp(14px, 1.8vw, 24px);
   background:
     linear-gradient(90deg, rgba(76, 54, 34, 0.08), rgba(255, 255, 255, 0) 4%),
     transparent;
 }
 
 .scrapbooksPage__pageImage {
-  width: 100%;
-  height: 100%;
+  display: block;
+  width: auto;
+  height: auto;
   max-width: 100%;
   max-height: 100%;
   object-fit: contain;
@@ -427,7 +430,7 @@
   cursor: not-allowed;
 }
 
-@media (max-width: 960px) {
+@media (max-width: 1100px) {
   .scrapbooksPage__shelfIntro,
   .scrapbooksPage__viewerTopbar,
   .scrapbooksPage__viewerControls {
@@ -460,11 +463,41 @@
   }
 
   .scrapbooksPage__viewerFrame {
+    grid-template-columns: minmax(160px, 0.2fr) minmax(0, 1fr);
+  }
+
+  .scrapbooksPage__viewerMeta {
+    padding: 20px 20px 16px;
+  }
+
+  .scrapbooksPage__coverTitle {
+    font-size: clamp(1.45rem, 2vw, 2.1rem);
+    white-space: normal;
+  }
+
+  .scrapbooksPage__slidePanel {
+    padding: 16px;
+  }
+}
+
+@media (max-width: 760px) {
+  .scrapbooksPage__viewerOverlay {
+    padding: 72px 20px 20px;
+  }
+
+  .scrapbooksPage__viewer {
+    width: min(100%, calc(100vw - 28px));
+    height: calc(100vh - 104px);
+    padding: 20px;
+  }
+
+  .scrapbooksPage__viewerFrame {
     grid-template-columns: 1fr;
   }
 
   .scrapbooksPage__viewerMeta {
-    min-height: 220px;
+    min-height: 0;
+    padding: 20px 22px 18px;
   }
 
   .scrapbooksPage__slidePanel {
@@ -500,6 +533,10 @@
   .scrapbooksPage__viewerMeta,
   .scrapbooksPage__slidePanel {
     padding: 20px;
+  }
+
+  .scrapbooksPage__viewerMeta {
+    min-height: 0;
   }
 
   .scrapbooksPage__arrow {

@@ -5,12 +5,15 @@ const compositeRoutes = require("./routes/composites");
 const homepageRoutes = require("./routes/homepage");
 const oralHistoryRoutes = require("./routes/oralHistories");
 const profileRoutes = require("./routes/profiles");
+const scrapbookRoutes = require("./routes/scrapbooks");
 const { ensureCompositeStore } = require("./utils/compositeStore");
 const { ensureHomepageStore } = require("./utils/homepageStore");
 const { ensureOralHistoryStore } = require("./utils/oralHistoryStore");
 const { ensureProfileStore } = require("./utils/profileStore");
+const { ensureScrapbookStore } = require("./utils/scrapbookStore");
 const {
     ensureCompositeUploadsDirectory,
+    scrapbookUploadsDirectory,
     uploadsRootDirectory,
 } = require("./utils/uploadConfig");
 
@@ -18,6 +21,8 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
+app.use("/uploads/scrapbooks", express.static(scrapbookUploadsDirectory));
+app.use("/api/uploads/scrapbooks", express.static(scrapbookUploadsDirectory));
 app.use("/uploads", express.static(uploadsRootDirectory));
 app.use("/api/uploads", express.static(uploadsRootDirectory));
 
@@ -27,6 +32,7 @@ app.get("/api/test", (_req, res) => {
 
 app.use("/api/profiles", profileRoutes);
 app.use("/api/composites", compositeRoutes);
+app.use("/api/scrapbooks", scrapbookRoutes);
 app.use("/api/homepage", homepageRoutes);
 app.use("/api/oral-histories", oralHistoryRoutes);
 
@@ -59,6 +65,7 @@ Promise.all([
     ensureCompositeUploadsDirectory(),
     ensureOralHistoryStore(),
     ensureProfileStore(),
+    ensureScrapbookStore(),
 ])
     .then(() => {
         app.listen(PORT, () => {
