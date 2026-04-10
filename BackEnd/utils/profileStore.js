@@ -24,6 +24,11 @@ const requiredCsvHeaders = [
     "Department",
     "Emeritus (C)",
 ];
+const profileExportTagNames = {
+    uploadedViaBulk: "uploadedViaBulk",
+    createdOnSite: "createdOnSite",
+    updatedOnSite: "updatedOnSite",
+};
 
 async function ensureProfileStore() {
     await copyBundledStorageFileIfMissing("profiles.json");
@@ -81,6 +86,29 @@ async function getProfileById(profileId) {
     return profile ? toProfileResponse(profile) : null;
 }
 
+async function exportProfilesToCsv(filters) {
+    const normalizedFilters = normalizeProfileExportFilters(filters);
+
+    if (!hasSelectedProfileExportFilters(normalizedFilters)) {
+        const error = new Error("Select at least one member profile tag before exporting.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const store = await readStore();
+    const matchingProfiles = store.profiles.filter((profile) => matchesProfileExportFilters(profile, normalizedFilters));
+    const csvRows = [
+        requiredCsvHeaders,
+        ...matchingProfiles.map((profile) => buildProfileCsvRow(profile)),
+    ];
+
+    return {
+        csvText: serializeCsvRows(csvRows),
+        exportedCount: matchingProfiles.length,
+        filename: buildProfileExportFilename(normalizedFilters),
+    };
+}
+
 async function createProfile(profileInput) {
     const store = await readStore();
     const now = new Date().toISOString();
@@ -97,6 +125,7 @@ async function createProfile(profileInput) {
         updatedAt: now,
         profileImageMode: "placeholder",
         profileImageUrl: profilePlaceholderImageUrl,
+        ...buildProfileTagState("site-create"),
     };
 
     store.profiles.push(createdProfile);
@@ -136,6 +165,7 @@ async function updateProfile(profileId, profileInput) {
         updatedAt: now,
         profileImageMode: existingProfile.profileImageMode || "placeholder",
         profileImageUrl: existingProfile.profileImageUrl || profilePlaceholderImageUrl,
+        ...buildProfileTagState("site-update", existingProfile),
     };
 
     store.profiles[profileIndex] = updatedProfile;
@@ -201,6 +231,7 @@ async function importProfilesFromCsv(csvText) {
                 updatedAt: now,
                 profileImageMode: existingProfile.profileImageMode || "placeholder",
                 profileImageUrl: existingProfile.profileImageUrl || profilePlaceholderImageUrl,
+                ...buildProfileTagState("bulk-import", existingProfile),
             });
             updatedCount += 1;
             continue;
@@ -213,6 +244,7 @@ async function importProfilesFromCsv(csvText) {
             updatedAt: now,
             profileImageMode: "placeholder",
             profileImageUrl: profilePlaceholderImageUrl,
+            ...buildProfileTagState("bulk-import"),
         };
 
         store.profiles.push(nextProfile);
@@ -259,6 +291,7 @@ function normalizeStoredProfile(profile) {
     const lastName = String(profile.lastName || "").trim();
     const preferredName = String(profile.preferredName || firstName).trim();
     const displayName = buildDisplayName(firstName, lastName, preferredName);
+    const normalizedTagState = normalizeProfileTagState(profile);
 
     return {
         id: String(profile.id || `profile-${crypto.randomUUID()}`),
@@ -278,6 +311,7 @@ function normalizeStoredProfile(profile) {
         profileImageUrl: profile.profileImageUrl || profilePlaceholderImageUrl,
         createdAt: profile.createdAt || new Date().toISOString(),
         updatedAt: profile.updatedAt || new Date().toISOString(),
+        ...normalizedTagState,
     };
 }
 
@@ -345,6 +379,241 @@ function buildManualProfileRecord(profileInput, timestamp) {
         createdAt: timestamp,
         updatedAt: timestamp,
     });
+}
+
+function buildProfileTagState(action, existingProfile = null) {
+    if (action === "site-create") {
+        return {
+            uploadedViaBulk: false,
+            createdOnSite: true,
+            updatedOnSite: false,
+        };
+    }
+
+    if (action === "bulk-import") {
+        if (existingProfile && normalizeProfileTagState(existingProfile).createdOnSite) {
+            return {
+                uploadedViaBulk: false,
+                createdOnSite: true,
+                updatedOnSite: false,
+            };
+        }
+
+        return {
+            uploadedViaBulk: true,
+            createdOnSite: false,
+            updatedOnSite: false,
+        };
+    }
+
+    if (action === "site-update") {
+        const normalizedExistingTagState = normalizeProfileTagState(existingProfile);
+
+        if (normalizedExistingTagState.createdOnSite) {
+            return {
+                uploadedViaBulk: false,
+                createdOnSite: true,
+                updatedOnSite: false,
+            };
+        }
+
+        if (normalizedExistingTagState.uploadedViaBulk || normalizedExistingTagState.updatedOnSite) {
+            return {
+                uploadedViaBulk: false,
+                createdOnSite: false,
+                updatedOnSite: true,
+            };
+        }
+    }
+
+    return {
+        uploadedViaBulk: false,
+        createdOnSite: false,
+        updatedOnSite: false,
+    };
+}
+
+function normalizeProfileTagState(profile) {
+    const hasUploadedViaBulk = Object.prototype.hasOwnProperty.call(profile || {}, "uploadedViaBulk");
+    const hasCreatedOnSite = Object.prototype.hasOwnProperty.call(profile || {}, "createdOnSite");
+    const hasUpdatedOnSite = Object.prototype.hasOwnProperty.call(profile || {}, "updatedOnSite");
+
+    if (!hasUploadedViaBulk && !hasCreatedOnSite && !hasUpdatedOnSite) {
+        return {
+            uploadedViaBulk: true,
+            createdOnSite: false,
+            updatedOnSite: false,
+        };
+    }
+
+    if (parseFlexibleBoolean(profile?.createdOnSite)) {
+        return {
+            uploadedViaBulk: false,
+            createdOnSite: true,
+            updatedOnSite: false,
+        };
+    }
+
+    if (parseFlexibleBoolean(profile?.updatedOnSite)) {
+        return {
+            uploadedViaBulk: false,
+            createdOnSite: false,
+            updatedOnSite: true,
+        };
+    }
+
+    if (parseFlexibleBoolean(profile?.uploadedViaBulk)) {
+        return {
+            uploadedViaBulk: true,
+            createdOnSite: false,
+            updatedOnSite: false,
+        };
+    }
+
+    return {
+        uploadedViaBulk: false,
+        createdOnSite: false,
+        updatedOnSite: false,
+    };
+}
+
+function normalizeProfileExportFilters(filters) {
+    const requestedTags = Array.isArray(filters?.tags)
+        ? filters.tags.join(",")
+        : String(filters?.tags || "");
+    const requestedTagSet = new Set(
+        requestedTags
+            .split(",")
+            .map((tag) => String(tag || "").trim())
+            .filter(Boolean),
+    );
+
+    return {
+        uploadedViaBulk: (
+            requestedTagSet.has(profileExportTagNames.uploadedViaBulk)
+            || parseFlexibleBoolean(filters?.uploadedViaBulk)
+        ),
+        createdOnSite: (
+            requestedTagSet.has(profileExportTagNames.createdOnSite)
+            || parseFlexibleBoolean(filters?.createdOnSite)
+        ),
+        updatedOnSite: (
+            requestedTagSet.has(profileExportTagNames.updatedOnSite)
+            || parseFlexibleBoolean(filters?.updatedOnSite)
+        ),
+    };
+}
+
+function hasSelectedProfileExportFilters(filters) {
+    return (
+        Boolean(filters?.uploadedViaBulk)
+        || Boolean(filters?.createdOnSite)
+        || Boolean(filters?.updatedOnSite)
+    );
+}
+
+function matchesProfileExportFilters(profile, filters) {
+    const normalizedTagState = normalizeProfileTagState(profile);
+
+    return (
+        (filters.uploadedViaBulk && normalizedTagState.uploadedViaBulk)
+        || (filters.createdOnSite && normalizedTagState.createdOnSite)
+        || (filters.updatedOnSite && normalizedTagState.updatedOnSite)
+    );
+}
+
+function buildProfileCsvRow(profile) {
+    return requiredCsvHeaders.map((header) => getProfileCsvValueByHeader(profile, header));
+}
+
+function getProfileCsvValueByHeader(profile, header) {
+    if (header === "Class (C)") {
+        return profile.graduationYear ? String(profile.graduationYear) : "";
+    }
+
+    if (header === "Last Name") {
+        return profile.lastName || "";
+    }
+
+    if (header === "First Name") {
+        return profile.firstName || "";
+    }
+
+    if (header === "Preferred Name") {
+        return profile.preferredName || "";
+    }
+
+    if (header === "City") {
+        return profile.city || "";
+    }
+
+    if (header === "State/Province") {
+        return profile.stateProvince || "";
+    }
+
+    if (header === "Email 1") {
+        return profile.email || "";
+    }
+
+    if (header === "Candlelight Date (C)") {
+        return profile.candlelightDate || "";
+    }
+
+    if (header === "Deceased") {
+        return profile.deceased ? "Yes" : "";
+    }
+
+    if (header === "Department") {
+        return profile.department || "";
+    }
+
+    if (header === "Emeritus (C)") {
+        return profile.emeritus ? "Yes" : "";
+    }
+
+    return "";
+}
+
+function serializeCsvRows(rows) {
+    return rows.map((row) => row.map(serializeCsvField).join(",")).join("\r\n");
+}
+
+function serializeCsvField(value) {
+    const normalizedValue = String(value || "");
+
+    if (/[",\r\n]/.test(normalizedValue)) {
+        return `"${normalizedValue.replace(/"/g, "\"\"")}"`;
+    }
+
+    return normalizedValue;
+}
+
+function buildProfileExportFilename(filters) {
+    const filenameSegments = [];
+
+    if (filters.uploadedViaBulk) {
+        filenameSegments.push("uploaded-via-bulk");
+    }
+
+    if (filters.createdOnSite) {
+        filenameSegments.push("created-on-site");
+    }
+
+    if (filters.updatedOnSite) {
+        filenameSegments.push("updated-on-site");
+    }
+
+    filenameSegments.push(formatDateStamp());
+
+    return `member-profiles-${filenameSegments.join("-")}.csv`;
+}
+
+function formatDateStamp(date = new Date()) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
 }
 
 function buildDisplayName(firstName, lastName, preferredName) {
@@ -497,9 +766,11 @@ module.exports = {
     createProfile,
     deleteProfile,
     ensureProfileStore,
+    exportProfilesToCsv,
     getProfileById,
     importProfilesFromCsv,
     listProfiles,
+    profileExportTagNames,
     profilePlaceholderImageUrl,
     profileStorePath,
     requiredCsvHeaders,

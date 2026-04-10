@@ -5,6 +5,7 @@ const path = require("path");
 const {
     createProfile,
     deleteProfile,
+    exportProfilesToCsv,
     getProfileById,
     importProfilesFromCsv,
     listProfiles,
@@ -46,6 +47,18 @@ router.get("/", async (_req, res, next) => {
         res.json(profiles);
     } catch (error) {
         next(error);
+    }
+});
+
+router.get("/export", async (req, res, next) => {
+    try {
+        const exportSummary = await exportProfilesToCsv(req.query);
+
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${exportSummary.filename}"`);
+        return res.status(200).send(exportSummary.csvText);
+    } catch (error) {
+        return next(error);
     }
 });
 

@@ -170,6 +170,37 @@ export function importProfilesCsv(file) {
   });
 }
 
+export async function exportProfilesCsv(selectedTags = []) {
+  const normalizedTags = Array.from(new Set(
+    (Array.isArray(selectedTags) ? selectedTags : [])
+      .map((tag) => String(tag || '').trim())
+      .filter(Boolean),
+  ));
+
+  if (normalizedTags.length === 0) {
+    throw new Error('Select at least one member profile tag before exporting.');
+  }
+
+  const queryString = new URLSearchParams({
+    tags: normalizedTags.join(','),
+  }).toString();
+  const response = await fetch(buildApiUrl(`/api/profiles/export?${queryString}`));
+
+  if (!response.ok) {
+    const responseText = await response.text();
+    const payload = normalizeResponseUrls(parseResponseBody(responseText));
+    throw new Error(buildErrorMessage(response, payload));
+  }
+
+  const blob = await response.blob();
+  const contentDisposition = response.headers.get('content-disposition');
+
+  return {
+    blob,
+    filename: parseDownloadFilename(contentDisposition) || 'member-profiles-export.csv',
+  };
+}
+
 async function createCompositeUploadSession(file, compositeYear, totalChunks) {
   return requestJson('/api/composites/upload-sessions', {
     method: 'POST',
@@ -555,4 +586,23 @@ export function deleteOralHistory(oralHistoryId) {
   return requestJson(`/api/oral-histories/${oralHistoryId}`, {
     method: 'DELETE',
   });
+}
+
+function parseDownloadFilename(contentDisposition) {
+  const normalizedHeader = String(contentDisposition || '').trim();
+
+  if (!normalizedHeader) {
+    return '';
+  }
+
+  const utf8FilenameMatch = normalizedHeader.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+
+  if (utf8FilenameMatch?.[1]) {
+    return decodeURIComponent(utf8FilenameMatch[1].trim());
+  }
+
+  const filenameMatch = normalizedHeader.match(/filename\s*=\s*"([^"]+)"/i)
+    || normalizedHeader.match(/filename\s*=\s*([^;]+)/i);
+
+  return filenameMatch?.[1] ? filenameMatch[1].trim() : '';
 }

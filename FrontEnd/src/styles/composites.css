@@ -159,6 +159,17 @@
   gap: 14px;
 }
 
+.profileImportPanel__templateLink {
+  margin: 12px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.profileImportPanel__templateLink a {
+  color: var(--deep-purple);
+  font-weight: 600;
+}
+
 .profileDirectoryToolbar {
   display: flex;
   flex-wrap: wrap;
@@ -270,6 +281,34 @@
   margin: 0;
   line-height: 1.55;
   word-break: break-word;
+}
+
+.profileExportGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.profileExportOption {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid rgba(38, 21, 56, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(246, 239, 220, 0.55));
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.profileExportOption:hover {
+  border-color: rgba(42, 24, 70, 0.32);
+  box-shadow: 0 0 0 4px rgba(198, 162, 74, 0.14);
+  transform: translateY(-1px);
+}
+
+.profileExportOption__description {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .compositeUploadForm__grid {

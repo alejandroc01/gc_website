@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   createProfile,
   deleteProfile,
+  exportProfilesCsv,
   getProfiles,
   importProfilesCsv,
   updateProfile,
@@ -23,6 +24,28 @@ const emptyProfileForm = {
   board: false,
   emeritus: false,
 };
+const profileExportOptions = [
+  {
+    id: 'uploadedViaBulk',
+    label: 'Uploaded Via Bulk',
+    description: 'Profiles created or refreshed through the bulk member CSV import.',
+  },
+  {
+    id: 'createdOnSite',
+    label: 'Created On Site',
+    description: 'Profiles created manually from the profile manager or composite editor.',
+  },
+  {
+    id: 'updatedOnSite',
+    label: 'Updated On Site',
+    description: 'Bulk-uploaded profiles that were later edited manually on the site.',
+  },
+];
+const emptyProfileExportFilters = {
+  uploadedViaBulk: false,
+  createdOnSite: false,
+  updatedOnSite: false,
+};
 
 export default function ProfileImportPanel() {
   const [selectedCsvFile, setSelectedCsvFile] = useState(null);
@@ -42,6 +65,10 @@ export default function ProfileImportPanel() {
   const [profileFormSummary, setProfileFormSummary] = useState('');
   const [profileListError, setProfileListError] = useState('');
   const [profileListSummary, setProfileListSummary] = useState('');
+  const [profileExportFilters, setProfileExportFilters] = useState(() => ({ ...emptyProfileExportFilters }));
+  const [isExportingProfiles, setIsExportingProfiles] = useState(false);
+  const [profileExportError, setProfileExportError] = useState('');
+  const [profileExportSummary, setProfileExportSummary] = useState('');
 
   useEffect(() => {
     let isActive = true;
@@ -85,9 +112,20 @@ export default function ProfileImportPanel() {
 
     return profiles.filter((profile) => matchesProfileQuery(profile, normalizedQuery));
   }, [profileSearchQuery, profiles]);
+  const selectedProfileExportTags = useMemo(
+    () => profileExportOptions
+      .filter((option) => profileExportFilters[option.id])
+      .map((option) => option.id),
+    [profileExportFilters],
+  );
+  const matchingExportProfileCount = useMemo(
+    () => profiles.filter((profile) => matchesSelectedProfileExportTags(profile, profileExportFilters)).length,
+    [profileExportFilters, profiles],
+  );
 
   const formTitle = editingProfileId ? 'Edit Member Profile' : 'Create Member Profile';
   const formActionLabel = editingProfileId ? 'Save Changes' : 'Create Member Profile';
+  const memberTemplateDownloadHref = `${import.meta.env.BASE_URL}templates/DA%20Memeber%20Template.csv`;
 
   const handleProfileImportSubmit = async (event) => {
     event.preventDefault();
@@ -134,6 +172,17 @@ export default function ProfileImportPanel() {
     setProfileForm({ ...emptyProfileForm });
     setProfileFormError('');
     setProfileFormSummary('');
+  };
+
+  const handleProfileExportFilterChange = (event) => {
+    const { name, checked } = event.target;
+
+    setProfileExportFilters((currentFilters) => ({
+      ...currentFilters,
+      [name]: checked,
+    }));
+    setProfileExportError('');
+    setProfileExportSummary('');
   };
 
   const handleProfileSaveSubmit = async (event) => {
@@ -234,6 +283,31 @@ export default function ProfileImportPanel() {
     }
   };
 
+  const handleProfileExportSubmit = async (event) => {
+    event.preventDefault();
+
+    if (selectedProfileExportTags.length === 0) {
+      setProfileExportError('Select at least one hidden member profile tag to export.');
+      return;
+    }
+
+    setIsExportingProfiles(true);
+    setProfileExportError('');
+    setProfileExportSummary('');
+
+    try {
+      const { blob, filename } = await exportProfilesCsv(selectedProfileExportTags);
+      downloadBlob(blob, filename);
+      setProfileExportSummary(
+        `Downloaded ${matchingExportProfileCount} profile${matchingExportProfileCount === 1 ? '' : 's'} in template format.`,
+      );
+    } catch (error) {
+      setProfileExportError(error.message);
+    } finally {
+      setIsExportingProfiles(false);
+    }
+  };
+
   return (
     <>
       <article className="compositePanel compositePanel--spacious">
@@ -243,6 +317,11 @@ export default function ProfileImportPanel() {
             <p className="compositePanel__description">
               Import the DA membership CSV to create or update backend member profiles. Imported
               members use the shared plank placeholder until composite coordinates are assigned.
+            </p>
+            <p className="profileImportPanel__templateLink">
+              <a href={memberTemplateDownloadHref} download="DA Memeber Template.csv">
+                Download the DA Member Template.csv
+              </a>
             </p>
           </div>
         </div>
@@ -589,6 +668,61 @@ export default function ProfileImportPanel() {
           </div>
         )}
       </article>
+
+      <article className="compositePanel compositePanel--spacious">
+        <div className="compositePanel__header">
+          <div>
+            <h2 className="compositePanel__title">Export Member Profiles</h2>
+            <p className="compositePanel__description">
+              Choose one or more hidden profile tags to export matching records as a CSV in the DA
+              template format.
+            </p>
+          </div>
+        </div>
+
+        <form className="compositeUploadForm" onSubmit={handleProfileExportSubmit}>
+          <div className="profileExportGrid">
+            {profileExportOptions.map((option) => (
+              <label key={option.id} className="profileExportOption">
+                <span className="compositeCheckbox">
+                  <input
+                    type="checkbox"
+                    name={option.id}
+                    checked={profileExportFilters[option.id]}
+                    onChange={handleProfileExportFilterChange}
+                  />
+                  <span>{option.label}</span>
+                </span>
+
+                <span className="profileExportOption__description">{option.description}</span>
+              </label>
+            ))}
+          </div>
+
+          <div className="compositeUploadForm__actions">
+            <button
+              type="submit"
+              className="button compositeButton compositeButton--filled"
+              disabled={isExportingProfiles}
+            >
+              {isExportingProfiles ? 'Exporting...' : 'Export Matching Profiles'}
+            </button>
+
+            <p className="compositeUploadForm__fileMeta">
+              {selectedProfileExportTags.length > 0
+                ? `${matchingExportProfileCount} profile${matchingExportProfileCount === 1 ? '' : 's'} match the selected tag${selectedProfileExportTags.length === 1 ? '' : 's'}.`
+                : 'Select at least one hidden tag to prepare an export.'}
+            </p>
+          </div>
+
+          {profileExportSummary ? (
+            <p className="compositeMessage compositeMessage--success">{profileExportSummary}</p>
+          ) : null}
+          {profileExportError ? (
+            <p className="compositeMessage compositeMessage--error">{profileExportError}</p>
+          ) : null}
+        </form>
+      </article>
     </>
   );
 }
@@ -663,4 +797,60 @@ function buildProfileLocation(profile) {
 
 function isBoardDepartment(department) {
   return String(department || '').trim().toLowerCase() === 'board';
+}
+
+function matchesSelectedProfileExportTags(profile, selectedFilters) {
+  const normalizedTags = normalizeProfileTags(profile);
+
+  return (
+    (selectedFilters.uploadedViaBulk && normalizedTags.uploadedViaBulk)
+    || (selectedFilters.createdOnSite && normalizedTags.createdOnSite)
+    || (selectedFilters.updatedOnSite && normalizedTags.updatedOnSite)
+  );
+}
+
+function normalizeProfileTags(profile) {
+  if (profile?.createdOnSite) {
+    return {
+      uploadedViaBulk: false,
+      createdOnSite: true,
+      updatedOnSite: false,
+    };
+  }
+
+  if (profile?.updatedOnSite) {
+    return {
+      uploadedViaBulk: false,
+      createdOnSite: false,
+      updatedOnSite: true,
+    };
+  }
+
+  if (profile?.uploadedViaBulk) {
+    return {
+      uploadedViaBulk: true,
+      createdOnSite: false,
+      updatedOnSite: false,
+    };
+  }
+
+  return {
+    uploadedViaBulk: false,
+    createdOnSite: false,
+    updatedOnSite: false,
+  };
+}
+
+function downloadBlob(blob, filename) {
+  const objectUrl = window.URL.createObjectURL(blob);
+  const downloadLink = document.createElement('a');
+
+  downloadLink.href = objectUrl;
+  downloadLink.download = filename;
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  downloadLink.remove();
+  window.setTimeout(() => {
+    window.URL.revokeObjectURL(objectUrl);
+  }, 0);
 }
