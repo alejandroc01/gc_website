@@ -30,7 +30,7 @@ export default function ScrapbookUploadPage() {
           return;
         }
 
-        setScrapbooks(scrapbookRecords);
+        setScrapbooks(sortScrapbooks(scrapbookRecords));
       } catch {
         if (isActive) {
           setScrapbooks([]);
@@ -76,6 +76,7 @@ export default function ScrapbookUploadPage() {
     const existingScrapbook = scrapbooks.find(
       (scrapbook) => String(scrapbook.scrapbookYear || '') === normalizedYear,
     );
+    const isCreatingNewScrapbook = !existingScrapbook;
     const hasDuplicateFilename = Array.isArray(existingScrapbook?.pageOriginalFilenames)
       && existingScrapbook.pageOriginalFilenames.some(
         (filename) => String(filename || '').toLowerCase() === normalizedFileName,
@@ -101,11 +102,15 @@ export default function ScrapbookUploadPage() {
           (entry) => entry.scrapbookId !== createdScrapbook.scrapbookId,
         );
 
-        return [createdScrapbook, ...remainingScrapbooks];
+        return sortScrapbooks([createdScrapbook, ...remainingScrapbooks]);
       });
       setSelectedFile(null);
       setScrapbookYear('');
-      setUploadSuccess(`Added ${selectedFile.name} to ${createdScrapbook.title}.`);
+      setUploadSuccess(
+        isCreatingNewScrapbook
+          ? `Created ${createdScrapbook.title} and added ${selectedFile.name}.`
+          : `Added ${selectedFile.name} to ${createdScrapbook.title}.`,
+      );
       setUploadProgress(null);
       setIsUploading(false);
     } catch (error) {
@@ -231,4 +236,17 @@ function formatUploadProgress(uploadProgress) {
   const uploadPercent = Math.min(100, Math.round((uploadedBytes / totalBytes) * 100));
 
   return `Uploading ${formatFileSize(uploadedBytes)} of ${formatFileSize(totalBytes)} (${uploadPercent}%, chunk ${completedChunks} of ${totalChunks}).`;
+}
+
+function sortScrapbooks(scrapbookRecords) {
+  return [...scrapbookRecords].sort((leftValue, rightValue) => {
+    const leftYear = Number(leftValue?.scrapbookYear || 0);
+    const rightYear = Number(rightValue?.scrapbookYear || 0);
+
+    if (leftYear !== rightYear) {
+      return leftYear - rightYear;
+    }
+
+    return String(leftValue?.title || '').localeCompare(String(rightValue?.title || ''));
+  });
 }

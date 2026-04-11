@@ -59,7 +59,8 @@ export default function ScrapbooksPage() {
               pageCount: scrapbook.pageCount || scrapbook.pageImageUrls.length,
               pdfUrl: scrapbook.pdfUrl || '',
               uploadTimestamp: scrapbook.uploadTimestamp || '',
-            })),
+            }))
+            .sort(compareScrapbooks),
         );
       } catch {
         if (isActive) {
@@ -259,7 +260,7 @@ function compareScrapbooks(leftValue, rightValue) {
   const rightYear = Number(rightValue.year || 0);
 
   if (leftYear !== rightYear) {
-    return rightYear - leftYear;
+    return leftYear - rightYear;
   }
 
   return String(leftValue.title || '').localeCompare(String(rightValue.title || ''));
