@@ -34,6 +34,8 @@ export default function ScrapbooksPage() {
   const [activeBook, setActiveBook] = useState(null);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [uploadedScrapbooks, setUploadedScrapbooks] = useState([]);
+  const [searchYear, setSearchYear] = useState('');
+  const [searchMessage, setSearchMessage] = useState('');
 
   useEffect(() => {
     let isActive = true;
@@ -144,6 +146,31 @@ export default function ScrapbooksPage() {
     setActivePageIndex((current) => Math.min(current + 1, activeBook.pages.length - 1));
   };
 
+  const attemptYearSearch = (nextYear) => {
+    const normalizedYear = nextYear.trim();
+
+    if (!/^\d{4}$/.test(normalizedYear)) {
+      setSearchMessage('Enter a four-digit year to open a scrapbook.');
+      return;
+    }
+
+    const matchingBook = scrapbookCollections.find((book) => String(book.year) === normalizedYear);
+
+    if (!matchingBook) {
+      setSearchMessage(`There is no scrapbook for ${normalizedYear}.`);
+      return;
+    }
+
+    setSearchMessage('');
+    openBook(matchingBook);
+  };
+
+  const handleSearchSubmit = (event) => {
+    event.preventDefault();
+    const normalizedYear = searchYear.trim();
+    attemptYearSearch(normalizedYear);
+  };
+
   return (
     <div className="scrapbooksPage">
       <section className="scrapbooksPage__shelfSection section">
@@ -177,6 +204,32 @@ export default function ScrapbooksPage() {
               </button>
             ))}
           </div>
+
+          <form className="scrapbooksPage__search" onSubmit={handleSearchSubmit}>
+            <label className="scrapbooksPage__searchField" htmlFor="scrapbookYearSearch">
+              <span className="scrapbooksPage__searchLabel">Find a scrapbook by year</span>
+              <input
+                id="scrapbookYearSearch"
+                className="scrapbooksPage__searchInput"
+                type="search"
+                inputMode="numeric"
+                placeholder="Enter year like 1984"
+                maxLength={4}
+                value={searchYear}
+                onChange={(event) => {
+                  const nextYear = event.target.value.replace(/[^\d]/g, '').slice(0, 4);
+                  setSearchYear(nextYear);
+                  setSearchMessage('');
+                }}
+              />
+            </label>
+          </form>
+
+          {searchMessage ? (
+            <p className="scrapbooksPage__searchMessage" role="status" aria-live="polite">
+              {searchMessage}
+            </p>
+          ) : null}
         </div>
       </section>
 
