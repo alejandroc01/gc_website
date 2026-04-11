@@ -20,6 +20,18 @@
   pointer-events: none;
 }
 
+.displayMode::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0) 48%),
+    linear-gradient(180deg, rgba(8, 4, 14, 0.12), rgba(8, 4, 14, 0.22));
+  opacity: 0.75;
+  pointer-events: none;
+}
+
 .displayMode__image {
   position: absolute;
   inset: 0;
@@ -28,16 +40,23 @@
   height: 100%;
   object-fit: contain;
   opacity: 0;
-  transition: opacity 420ms ease;
+  transform: scale(1.018);
+  filter: blur(10px) brightness(0.92);
+  transition:
+    opacity 1100ms ease-in-out,
+    transform 1400ms ease-out,
+    filter 1400ms ease-out;
 }
 
 .displayMode__image.is-active {
   opacity: 1;
+  transform: scale(1);
+  filter: blur(0) brightness(1);
 }
 
 .displayMode__controls {
   position: absolute;
-  z-index: 2;
+  z-index: 3;
   left: 0;
   right: 0;
   bottom: 0;
