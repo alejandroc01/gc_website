@@ -7,6 +7,7 @@ const multer = require("multer");
 const {
     addScrapbookPage,
     deleteScrapbook,
+    deleteScrapbookPage,
     getScrapbookById,
     listScrapbooks,
 } = require("../utils/scrapbookStore");
@@ -241,6 +242,37 @@ router.delete("/upload-sessions/:uploadId", async (req, res, next) => {
         return res.json({
             success: true,
             uploadId: String(req.params.uploadId || ""),
+        });
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.delete("/:scrapbookId/pages/:pageId", async (req, res, next) => {
+    try {
+        const deleteSummary = await deleteScrapbookPage(req.params.scrapbookId, req.params.pageId);
+
+        if (!deleteSummary) {
+            return res.status(404).json({ error: "Scrapbook not found." });
+        }
+
+        if (!deleteSummary.deletedPage?.storedFilePath) {
+            return res.status(404).json({ error: "Scrapbook page not found." });
+        }
+
+        const absolutePagePath = resolveStoredFileAbsolutePath(deleteSummary.deletedPage.storedFilePath);
+        await fs.rm(absolutePagePath, { force: true });
+
+        if (!deleteSummary.scrapbook) {
+            const scrapbookDirectory = path.dirname(path.dirname(absolutePagePath));
+            await fs.rm(scrapbookDirectory, { recursive: true, force: true });
+        }
+
+        return res.json({
+            success: true,
+            scrapbookId: String(req.params.scrapbookId || ""),
+            deletedPageId: deleteSummary.deletedPage.pageId,
+            scrapbook: deleteSummary.scrapbook,
         });
     } catch (error) {
         return next(error);

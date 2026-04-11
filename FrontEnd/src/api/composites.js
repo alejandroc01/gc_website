@@ -571,6 +571,12 @@ export function deleteScrapbook(scrapbookId) {
   });
 }
 
+export function deleteScrapbookPage(scrapbookId, pageId) {
+  return requestJson(`/api/scrapbooks/${scrapbookId}/pages/${encodeURIComponent(pageId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export function getOralHistories() {
   return requestJson('/api/oral-histories');
 }

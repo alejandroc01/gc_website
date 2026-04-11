@@ -366,7 +366,7 @@
 
 .compositeCardGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 22px;
 }
 
@@ -519,6 +519,139 @@
   margin: 0;
   color: var(--muted);
   line-height: 1.6;
+}
+
+.scrapbookAdminPages {
+  display: grid;
+  gap: 0;
+  margin-top: 18px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.scrapbookAdminCard__toggle {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.scrapbookAdminCard__summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.scrapbookAdminCard__copy {
+  min-width: 0;
+}
+
+.scrapbookAdminCard__chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  border: 1px solid rgba(38, 21, 56, 0.12);
+  background: rgba(38, 21, 56, 0.04);
+  color: var(--deep-purple);
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.scrapbookAdminCard__actions {
+  margin-top: 14px;
+  padding-top: 0;
+}
+
+.scrapbookAdminPages__item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 14px;
+  border-top: 1px solid var(--border);
+  background: #fff;
+}
+
+.scrapbookAdminPages__item:first-child {
+  border-top: 0;
+}
+
+.scrapbookAdminPages__preview {
+  flex: 0 0 96px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+.scrapbookAdminPages__image {
+  display: block;
+  width: 100%;
+  height: 56px;
+  object-fit: cover;
+}
+
+.scrapbookAdminPages__details {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.scrapbookAdminPages__name {
+  margin: 0;
+  color: #1d1526;
+  font-size: 0.96rem;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.scrapbookAdminPages__item .compositeButton {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .compositeCardGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .scrapbookAdminPages__item {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .scrapbookAdminPages__preview {
+    flex-basis: auto;
+    grid-row: span 2;
+  }
+
+  .scrapbookAdminPages__image {
+    height: 72px;
+  }
+
+  .scrapbookAdminPages__item .compositeButton {
+    flex: initial;
+    grid-column: 2;
+    justify-self: start;
+    margin-left: 0;
+  }
+
+  .scrapbookAdminPages__name {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 1180px) {
+  .compositeCardGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .homepageEditorPreview {

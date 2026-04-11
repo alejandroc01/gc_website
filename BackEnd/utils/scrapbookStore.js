@@ -88,17 +88,20 @@ function buildAssetUrl(storedFilePath) {
 }
 
 function toScrapbookResponse(scrapbook) {
+    const pageRecords = buildPageRecords(scrapbook);
+
     return {
         ...scrapbook,
         scrapbookYear: scrapbook.scrapbookYear ? String(scrapbook.scrapbookYear) : null,
         title: scrapbook.title || buildScrapbookDisplayName(scrapbook.scrapbookYear),
         pdfUrl: scrapbook.pdfStoredFilePath ? buildAssetUrl(scrapbook.pdfStoredFilePath) : null,
-        pageOriginalFilenames: Array.isArray(scrapbook.pageOriginalFilenames)
-            ? scrapbook.pageOriginalFilenames.map((filename) => String(filename || ""))
-            : [],
-        pageImageUrls: Array.isArray(scrapbook.pageImagePaths)
-            ? scrapbook.pageImagePaths.map((pageImagePath) => buildAssetUrl(pageImagePath))
-            : [],
+        pageOriginalFilenames: pageRecords.map((pageRecord) => pageRecord.originalFilename),
+        pageImageUrls: pageRecords.map((pageRecord) => buildAssetUrl(pageRecord.storedFilePath)),
+        pageEntries: pageRecords.map((pageRecord) => ({
+            pageId: pageRecord.pageId,
+            originalFilename: pageRecord.originalFilename,
+            imageUrl: buildAssetUrl(pageRecord.storedFilePath),
+        })),
     };
 }
 
@@ -160,14 +163,12 @@ async function addScrapbookPage({
         }
 
         existingScrapbook.originalFilename = existingScrapbook.originalFilename || originalFilename;
-        existingScrapbook.pageImagePaths = sortPageImagePaths([
-            ...(Array.isArray(existingScrapbook.pageImagePaths) ? existingScrapbook.pageImagePaths : []),
-            storedFilePath,
+        const updatedPageRecords = sortPageRecords([
+            ...buildPageRecords(existingScrapbook),
+            createPageRecord(storedFilePath, originalFilename),
         ]);
-        existingScrapbook.pageOriginalFilenames = [
-            ...existingOriginalFilenames,
-            originalFilename,
-        ];
+        existingScrapbook.pageImagePaths = updatedPageRecords.map((pageRecord) => pageRecord.storedFilePath);
+        existingScrapbook.pageOriginalFilenames = updatedPageRecords.map((pageRecord) => pageRecord.originalFilename);
         existingScrapbook.pageCount = existingScrapbook.pageImagePaths.length;
         existingScrapbook.uploadTimestamp = uploadTimestamp || new Date().toISOString();
         await writeStore(store);
@@ -193,16 +194,84 @@ async function addScrapbookPage({
 
 async function deleteScrapbook(scrapbookId) {
     const store = await readStore();
-    const scrapbookIndex = store.scrapbooks.findIndex((entry) => entry.scrapbookId === scrapbookId);
+    const discoveredScrapbooks = await listUploadedDirectoryScrapbooks();
+    const mergedScrapbooks = mergeScrapbooks(store.scrapbooks, discoveredScrapbooks);
+    const deletedScrapbook = mergedScrapbooks.find((entry) => entry.scrapbookId === scrapbookId);
 
-    if (scrapbookIndex === -1) {
+    if (!deletedScrapbook) {
         return null;
     }
 
-    const [deletedScrapbook] = store.scrapbooks.splice(scrapbookIndex, 1);
+    store.scrapbooks = store.scrapbooks.filter((entry) => entry.scrapbookId !== scrapbookId);
     await writeStore(store);
 
     return deletedScrapbook;
+}
+
+async function deleteScrapbookPage(scrapbookId, pageId) {
+    const store = await readStore();
+    const discoveredScrapbooks = await listUploadedDirectoryScrapbooks();
+    const mergedScrapbooks = mergeScrapbooks(store.scrapbooks, discoveredScrapbooks);
+    const scrapbook = mergedScrapbooks.find((entry) => entry.scrapbookId === scrapbookId);
+
+    if (!scrapbook) {
+        return null;
+    }
+
+    const existingPageRecords = buildPageRecords(scrapbook);
+    const deletedPageRecord = existingPageRecords.find((pageRecord) => pageRecord.pageId === String(pageId || ""));
+
+    if (!deletedPageRecord) {
+        return {
+            scrapbook: toScrapbookResponse(scrapbook),
+            deletedPage: null,
+        };
+    }
+
+    const remainingPageRecords = existingPageRecords.filter(
+        (pageRecord) => pageRecord.pageId !== deletedPageRecord.pageId,
+    );
+    const storedScrapbookIndex = store.scrapbooks.findIndex((entry) => entry.scrapbookId === scrapbookId);
+
+    if (remainingPageRecords.length === 0) {
+        if (storedScrapbookIndex >= 0) {
+            store.scrapbooks.splice(storedScrapbookIndex, 1);
+        }
+
+        await writeStore(store);
+
+        return {
+            scrapbook: null,
+            deletedPage: deletedPageRecord,
+            deletedScrapbook: {
+                ...scrapbook,
+                pageImagePaths: [],
+                pageOriginalFilenames: [],
+                pageCount: 0,
+            },
+        };
+    }
+
+    const updatedScrapbook = {
+        ...scrapbook,
+        pageImagePaths: remainingPageRecords.map((pageRecord) => pageRecord.storedFilePath),
+        pageOriginalFilenames: remainingPageRecords.map((pageRecord) => pageRecord.originalFilename),
+        pageCount: remainingPageRecords.length,
+        uploadTimestamp: new Date().toISOString(),
+    };
+
+    if (storedScrapbookIndex >= 0) {
+        store.scrapbooks[storedScrapbookIndex] = updatedScrapbook;
+    } else {
+        store.scrapbooks.unshift(updatedScrapbook);
+    }
+
+    await writeStore(store);
+
+    return {
+        scrapbook: toScrapbookResponse(updatedScrapbook),
+        deletedPage: deletedPageRecord,
+    };
 }
 
 function hasScrapbookYear(scrapbooks, scrapbookYear) {
@@ -218,6 +287,7 @@ module.exports = {
     buildScrapbookDisplayName,
     createScrapbook,
     deleteScrapbook,
+    deleteScrapbookPage,
     ensureScrapbookStore,
     getScrapbookById,
     listScrapbooks,
@@ -344,6 +414,49 @@ function sortPageImagePaths(pageImagePaths) {
         .sort((leftValue, rightValue) => {
             const leftFilename = path.basename(leftValue);
             const rightFilename = path.basename(rightValue);
+            const leftPageNumber = extractPageNumber(leftFilename);
+            const rightPageNumber = extractPageNumber(rightFilename);
+
+            if (leftPageNumber !== null && rightPageNumber !== null && leftPageNumber !== rightPageNumber) {
+                return leftPageNumber - rightPageNumber;
+            }
+
+            return leftFilename.localeCompare(rightFilename, undefined, { numeric: true });
+        });
+}
+
+function buildPageRecords(scrapbook) {
+    const pageImagePaths = Array.isArray(scrapbook?.pageImagePaths) ? scrapbook.pageImagePaths : [];
+    const pageOriginalFilenames = Array.isArray(scrapbook?.pageOriginalFilenames) ? scrapbook.pageOriginalFilenames : [];
+
+    return sortPageRecords(
+        pageImagePaths.map((storedFilePath, index) =>
+            createPageRecord(storedFilePath, pageOriginalFilenames[index] || path.basename(String(storedFilePath || ""))),
+        ),
+    );
+}
+
+function createPageRecord(storedFilePath, originalFilename) {
+    const normalizedStoredFilePath = String(storedFilePath || "").trim();
+
+    return {
+        pageId: path.basename(normalizedStoredFilePath),
+        storedFilePath: normalizedStoredFilePath,
+        originalFilename: String(originalFilename || path.basename(normalizedStoredFilePath)),
+    };
+}
+
+function sortPageRecords(pageRecords) {
+    return pageRecords
+        .map((pageRecord) => ({
+            pageId: String(pageRecord?.pageId || path.basename(String(pageRecord?.storedFilePath || "").trim())),
+            storedFilePath: String(pageRecord?.storedFilePath || "").trim(),
+            originalFilename: String(pageRecord?.originalFilename || "").trim(),
+        }))
+        .filter((pageRecord) => pageRecord.storedFilePath)
+        .sort((leftValue, rightValue) => {
+            const leftFilename = path.basename(leftValue.storedFilePath);
+            const rightFilename = path.basename(rightValue.storedFilePath);
             const leftPageNumber = extractPageNumber(leftFilename);
             const rightPageNumber = extractPageNumber(rightFilename);
 

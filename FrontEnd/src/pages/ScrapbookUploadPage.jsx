@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 
 import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
 import {
+  deleteScrapbook as deleteScrapbookRequest,
+  deleteScrapbookPage as deleteScrapbookPageRequest,
   getScrapbooks,
   uploadScrapbook,
 } from '../api/composites.js';
@@ -14,7 +16,12 @@ export default function ScrapbookUploadPage() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [scrapbookYear, setScrapbookYear] = useState('');
   const [scrapbooks, setScrapbooks] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [deletingScrapbookId, setDeletingScrapbookId] = useState(null);
+  const [deletingPageKey, setDeletingPageKey] = useState('');
+  const [expandedScrapbookId, setExpandedScrapbookId] = useState('');
+  const [listError, setListError] = useState('');
   const [uploadError, setUploadError] = useState('');
   const [uploadProgress, setUploadProgress] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState('');
@@ -23,6 +30,9 @@ export default function ScrapbookUploadPage() {
     let isActive = true;
 
     const loadScrapbooks = async () => {
+      setIsLoading(true);
+      setListError('');
+
       try {
         const scrapbookRecords = await getScrapbooks();
 
@@ -34,6 +44,11 @@ export default function ScrapbookUploadPage() {
       } catch {
         if (isActive) {
           setScrapbooks([]);
+          setListError('Unable to load the current scrapbooks.');
+        }
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
         }
       }
     };
@@ -89,6 +104,7 @@ export default function ScrapbookUploadPage() {
 
     setUploadError('');
     setUploadSuccess('');
+    setListError('');
     setIsUploading(true);
     setUploadProgress(null);
 
@@ -104,6 +120,7 @@ export default function ScrapbookUploadPage() {
 
         return sortScrapbooks([createdScrapbook, ...remainingScrapbooks]);
       });
+      setExpandedScrapbookId(createdScrapbook.scrapbookId);
       setSelectedFile(null);
       setScrapbookYear('');
       setUploadSuccess(
@@ -117,6 +134,75 @@ export default function ScrapbookUploadPage() {
       setUploadError(error.message);
       setUploadProgress(null);
       setIsUploading(false);
+    }
+  };
+
+  const handleDeleteScrapbook = async (scrapbook) => {
+    const confirmed = window.confirm(
+      `Delete ${scrapbook.title}? This removes every uploaded page in that scrapbook.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setListError('');
+    setUploadSuccess('');
+    setDeletingScrapbookId(scrapbook.scrapbookId);
+
+    try {
+      await deleteScrapbookRequest(scrapbook.scrapbookId);
+      setScrapbooks((currentScrapbooks) =>
+        currentScrapbooks.filter((entry) => entry.scrapbookId !== scrapbook.scrapbookId),
+      );
+      setExpandedScrapbookId((currentValue) => (
+        currentValue === scrapbook.scrapbookId ? '' : currentValue
+      ));
+    } catch (error) {
+      setListError(error.message);
+    } finally {
+      setDeletingScrapbookId(null);
+    }
+  };
+
+  const toggleScrapbookExpanded = (scrapbookId) => {
+    setExpandedScrapbookId((currentValue) => (
+      currentValue === scrapbookId ? '' : scrapbookId
+    ));
+  };
+
+  const handleDeletePage = async (scrapbook, pageEntry) => {
+    const confirmed = window.confirm(
+      `Delete ${pageEntry.originalFilename || 'this page'} from ${scrapbook.title}? This will update the scrapbook page count.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const pageKey = `${scrapbook.scrapbookId}:${pageEntry.pageId}`;
+    setListError('');
+    setUploadSuccess('');
+    setDeletingPageKey(pageKey);
+
+    try {
+      const deleteSummary = await deleteScrapbookPageRequest(scrapbook.scrapbookId, pageEntry.pageId);
+
+      setScrapbooks((currentScrapbooks) => {
+        if (!deleteSummary?.scrapbook) {
+          return currentScrapbooks.filter((entry) => entry.scrapbookId !== scrapbook.scrapbookId);
+        }
+
+        return sortScrapbooks(
+          currentScrapbooks.map((entry) =>
+            entry.scrapbookId === scrapbook.scrapbookId ? deleteSummary.scrapbook : entry,
+          ),
+        );
+      });
+    } catch (error) {
+      setListError(error.message);
+    } finally {
+      setDeletingPageKey('');
     }
   };
 
@@ -211,9 +297,139 @@ export default function ScrapbookUploadPage() {
             {uploadError ? <p className="compositeMessage compositeMessage--error">{uploadError}</p> : null}
           </form>
         </article>
+
+        <article className="compositePanel compositePanel--spacious">
+          <div className="compositePanel__header">
+            <div>
+              <h2 className="compositePanel__title">Currently Available Scrapbooks</h2>
+              <p className="compositePanel__description">
+                Review uploaded scrapbook years, delete an entire scrapbook, or remove a single page from a book.
+              </p>
+            </div>
+          </div>
+
+          {listError ? <p className="compositeMessage compositeMessage--error">{listError}</p> : null}
+
+          {isLoading ? <p className="compositeMessage">Loading current scrapbooks...</p> : null}
+
+          {!isLoading && !listError && scrapbooks.length === 0 ? (
+            <div className="compositeEmptyState">
+              <h3 className="compositeEmptyState__title">No scrapbooks uploaded yet.</h3>
+              <p className="compositeEmptyState__description">
+                Uploaded scrapbooks will appear here so you can review and edit them later.
+              </p>
+            </div>
+          ) : null}
+
+          {!isLoading && scrapbooks.length > 0 ? (
+            <div className="compositeCardGrid">
+              {scrapbooks.map((scrapbook) => {
+                const pageEntries = Array.isArray(scrapbook.pageEntries) ? scrapbook.pageEntries : [];
+
+                return (
+                  <article key={scrapbook.scrapbookId} className="compositeCard">
+                    <div className="compositeCard__body">
+                      <button
+                        type="button"
+                        className="scrapbookAdminCard__toggle"
+                        onClick={() => toggleScrapbookExpanded(scrapbook.scrapbookId)}
+                        aria-expanded={expandedScrapbookId === scrapbook.scrapbookId}
+                      >
+                        <div className="compositeCard__metaRow">
+                          {scrapbook.scrapbookYear ? (
+                            <span className="compositeCard__pill compositeCard__pill--year">
+                              Scrapbook year {scrapbook.scrapbookYear}
+                            </span>
+                          ) : null}
+                          <span className="compositeCard__pill">
+                            {scrapbook.pageCount || pageEntries.length} page{(scrapbook.pageCount || pageEntries.length) === 1 ? '' : 's'}
+                          </span>
+                        </div>
+
+                        <div className="scrapbookAdminCard__summary">
+                          <div className="scrapbookAdminCard__copy">
+                            <h3 className="compositeCard__title">{scrapbook.title}</h3>
+                            <p className="compositeCard__meta">
+                              Updated {formatDate(scrapbook.uploadTimestamp)}
+                            </p>
+                          </div>
+
+                          <span className="scrapbookAdminCard__chevron" aria-hidden="true">
+                            {expandedScrapbookId === scrapbook.scrapbookId ? '−' : '+'}
+                          </span>
+                        </div>
+                      </button>
+
+                      <div className="compositeCard__actions scrapbookAdminCard__actions">
+                        <button
+                          type="button"
+                          className="button compositeButton compositeButton--danger"
+                          onClick={() => handleDeleteScrapbook(scrapbook)}
+                          disabled={deletingScrapbookId === scrapbook.scrapbookId}
+                        >
+                          {deletingScrapbookId === scrapbook.scrapbookId ? 'Deleting...' : 'Delete Scrapbook'}
+                        </button>
+                      </div>
+
+                      {expandedScrapbookId === scrapbook.scrapbookId && pageEntries.length > 0 ? (
+                        <div className="scrapbookAdminPages">
+                          {pageEntries.map((pageEntry) => {
+                            const pageKey = `${scrapbook.scrapbookId}:${pageEntry.pageId}`;
+
+                            return (
+                              <div key={pageKey} className="scrapbookAdminPages__item">
+                                <div className="scrapbookAdminPages__preview">
+                                  <img
+                                    className="scrapbookAdminPages__image"
+                                    src={pageEntry.imageUrl}
+                                    alt={pageEntry.originalFilename || `${scrapbook.title} page`}
+                                    loading="lazy"
+                                  />
+                                </div>
+
+                                <div className="scrapbookAdminPages__details">
+                                  <p className="scrapbookAdminPages__name">
+                                    {pageEntry.originalFilename || pageEntry.pageId}
+                                  </p>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  className="button compositeButton compositeButton--danger"
+                                  onClick={() => handleDeletePage(scrapbook, pageEntry)}
+                                  disabled={deletingPageKey === pageKey}
+                                >
+                                  {deletingPageKey === pageKey ? 'Deleting...' : 'Delete Page'}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
+        </article>
       </div>
     </section>
   );
+}
+
+function formatDate(value) {
+  if (!value) {
+    return 'recently';
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value));
 }
 
 function formatFileSize(bytes) {
