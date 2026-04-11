@@ -366,13 +366,14 @@
 
 .compositeCardGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 22px;
 }
 
 .compositeCard {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   border: 1px solid var(--border);
   background: var(--surface-muted);
 }
@@ -394,6 +395,7 @@
   display: flex;
   flex: 1;
   flex-direction: column;
+  min-width: 0;
   padding: 18px;
 }
 
@@ -525,6 +527,7 @@
   display: grid;
   gap: 0;
   margin-top: 18px;
+  min-width: 0;
   border: 1px solid var(--border);
   background: #fff;
 }
@@ -569,10 +572,13 @@
 }
 
 .scrapbookAdminPages__item {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr) auto;
   gap: 16px;
   align-items: center;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   padding: 10px 14px;
   border-top: 1px solid var(--border);
   background: #fff;
@@ -583,7 +589,6 @@
 }
 
 .scrapbookAdminPages__preview {
-  flex: 0 0 96px;
   overflow: hidden;
   border: 1px solid var(--border);
   background: #fff;
@@ -597,7 +602,6 @@
 }
 
 .scrapbookAdminPages__details {
-  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -615,6 +619,19 @@
   flex: 0 0 auto;
   align-self: center;
   margin-left: auto;
+  padding: 12px 16px;
+}
+
+@media (min-width: 900px) {
+  .compositeCardGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1480px) {
+  .compositeCardGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -623,7 +640,6 @@
   }
 
   .scrapbookAdminPages__item {
-    display: grid;
     grid-template-columns: 72px minmax(0, 1fr);
   }
 
@@ -637,7 +653,6 @@
   }
 
   .scrapbookAdminPages__item .compositeButton {
-    flex: initial;
     grid-column: 2;
     justify-self: start;
     margin-left: 0;
@@ -648,11 +663,6 @@
   }
 }
 
-@media (max-width: 1180px) {
-  .compositeCardGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
 
 .homepageEditorPreview {
   display: grid;
