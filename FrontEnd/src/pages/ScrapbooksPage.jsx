@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { getScrapbooks } from '../api/composites.js';
 import './ScrapbooksPage.css';
@@ -31,11 +32,14 @@ const legacyScrapbookCollections = [
 ];
 
 export default function ScrapbooksPage() {
+  const [searchParams] = useSearchParams();
   const [activeBook, setActiveBook] = useState(null);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [uploadedScrapbooks, setUploadedScrapbooks] = useState([]);
-  const [searchYear, setSearchYear] = useState('');
+  const [searchYear, setSearchYear] = useState(() => String(searchParams.get('year') || '').trim());
   const [searchMessage, setSearchMessage] = useState('');
+  const [hasHandledLinkedYear, setHasHandledLinkedYear] = useState(false);
+  const requestedYear = String(searchParams.get('year') || '').trim();
 
   useEffect(() => {
     let isActive = true;
@@ -93,6 +97,39 @@ export default function ScrapbooksPage() {
 
     return Array.from(recordsByYear.values()).sort(compareScrapbooks);
   }, [uploadedScrapbooks]);
+
+  useEffect(() => {
+    if (hasHandledLinkedYear) {
+      return;
+    }
+
+    if (!requestedYear) {
+      setHasHandledLinkedYear(true);
+      return;
+    }
+
+    if (scrapbookCollections.length === 0) {
+      return;
+    }
+
+    setHasHandledLinkedYear(true);
+
+    if (!/^\d{4}$/.test(requestedYear)) {
+      setSearchMessage('Enter a four-digit year to open a scrapbook.');
+      return;
+    }
+
+    const matchingBook = scrapbookCollections.find((book) => String(book.year) === requestedYear);
+
+    if (!matchingBook) {
+      setSearchMessage(`There is no scrapbook for ${requestedYear}.`);
+      return;
+    }
+
+    setSearchMessage('');
+    setActiveBook(matchingBook);
+    setActivePageIndex(0);
+  }, [hasHandledLinkedYear, requestedYear, scrapbookCollections]);
 
   useEffect(() => {
     if (!activeBook) return undefined;

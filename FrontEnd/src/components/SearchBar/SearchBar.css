@@ -139,10 +139,13 @@
   left: 0;
   right: 0;
   top: calc(100% - 1px);
+  max-height: min(420px, calc(100vh - 180px));
   background: #fff;
   border: 1px solid var(--border);
   border-top: none;
   box-shadow: var(--shadow-md);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   z-index: 3;
 }
 
@@ -193,6 +196,17 @@
   border: 1px solid rgba(38, 21, 56, 0.1);
   background: rgba(38, 21, 56, 0.04);
   color: var(--deep-purple);
+}
+
+.search__itemTypeGlyph {
+  width: 18px;
+  height: 18px;
+  display: block;
+  flex: 0 0 auto;
+}
+
+.search__itemTypeGlyph--image {
+  object-fit: contain;
 }
 
 .search__itemText {
