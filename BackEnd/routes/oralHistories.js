@@ -20,8 +20,8 @@ const {
 
 const router = express.Router();
 const maxOralHistoryUploadBytes = Math.floor(1.5 * 1024 * 1024 * 1024);
-const oralHistoryUploadChunkSizeBytes = 256 * 1024;
-const maxOralHistoryUploadChunkBytes = 512 * 1024;
+const oralHistoryUploadChunkSizeBytes = 8 * 1024 * 1024;
+const maxOralHistoryUploadChunkBytes = 10 * 1024 * 1024;
 
 const upload = multer({
     storage: multer.diskStorage({

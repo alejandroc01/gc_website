@@ -1,5 +1,7 @@
 const configuredApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
 const compositeUploadChunkSizeBytes = 256 * 1024;
+const oralHistoryUploadChunkSizeBytes = 8 * 1024 * 1024;
+const oralHistoryUploadChunkRetryCount = 3;
 
 async function requestJson(url, options = {}) {
   const response = await fetch(buildApiUrl(url), options);
@@ -575,7 +577,7 @@ export async function uploadHomepageContent(file, title, description, options = 
 }
 
 export async function uploadOralHistory(file, metadata, options = {}) {
-  const totalChunks = Math.max(1, Math.ceil(file.size / compositeUploadChunkSizeBytes));
+  const totalChunks = Math.max(1, Math.ceil(file.size / oralHistoryUploadChunkSizeBytes));
   const onProgress = typeof options?.onProgress === 'function' ? options.onProgress : null;
   let uploadId = '';
 
@@ -590,7 +592,7 @@ export async function uploadOralHistory(file, metadata, options = {}) {
 
     const chunkSize = Number(uploadSession?.chunkSize) > 0
       ? Number(uploadSession.chunkSize)
-      : compositeUploadChunkSizeBytes;
+      : oralHistoryUploadChunkSizeBytes;
     const serverTotalChunks = Number(uploadSession?.totalChunks) > 0
       ? Number(uploadSession.totalChunks)
       : totalChunks;
@@ -608,7 +610,7 @@ export async function uploadOralHistory(file, metadata, options = {}) {
       const start = chunkIndex * chunkSize;
       const end = Math.min(start + chunkSize, file.size);
       const chunk = file.slice(start, end, file.type || undefined);
-      const chunkUploadSummary = await uploadOralHistoryChunk(uploadId, file, chunk, chunkIndex);
+      const chunkUploadSummary = await uploadOralHistoryChunkWithRetry(uploadId, file, chunk, chunkIndex);
       const uploadedBytes = Number(chunkUploadSummary?.uploadedBytes);
 
       if (onProgress) {
@@ -644,6 +646,32 @@ export async function uploadOralHistory(file, metadata, options = {}) {
 
     throw error;
   }
+}
+
+async function uploadOralHistoryChunkWithRetry(uploadId, file, chunk, chunkIndex) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= oralHistoryUploadChunkRetryCount; attempt += 1) {
+    try {
+      return await uploadOralHistoryChunk(uploadId, file, chunk, chunkIndex);
+    } catch (error) {
+      lastError = error;
+
+      if (attempt === oralHistoryUploadChunkRetryCount) {
+        break;
+      }
+
+      await delay(500 * attempt);
+    }
+  }
+
+  throw lastError || new Error('The video chunk upload failed.');
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
 }
 
 export function saveCompositeAnnotations(compositeId, annotations) {
