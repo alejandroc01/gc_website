@@ -3,8 +3,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { getOralHistories } from '../api/composites.js';
 import './OralHistories.css';
 
-const totalEpisodeCount = 16;
-
 /**
  * OralHistories
  *
@@ -15,6 +13,7 @@ export default function OralHistories() {
   const [episodes, setEpisodes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [activeInterviewee, setActiveInterviewee] = useState('');
   const [activeEpisodeNumber, setActiveEpisodeNumber] = useState(1);
 
   useEffect(() => {
@@ -37,6 +36,7 @@ export default function OralHistories() {
         setEpisodes(normalizedEpisodes);
 
         if (normalizedEpisodes.length > 0) {
+          setActiveInterviewee(getIntervieweeOptions(normalizedEpisodes)[0] || '');
           setActiveEpisodeNumber(Number(normalizedEpisodes[0].episodeNumber || 1));
         }
       } catch (error) {
@@ -57,13 +57,51 @@ export default function OralHistories() {
     };
   }, []);
 
-  const activeEpisode = useMemo(() => (
-    episodes.find((episode) => Number(episode?.episodeNumber) === Number(activeEpisodeNumber))
-    || episodes[0]
-    || null
-  ), [activeEpisodeNumber, episodes]);
+  const interviewees = useMemo(() => getIntervieweeOptions(episodes), [episodes]);
 
-  const playlistEpisodes = useMemo(() => buildPlaylistEpisodes(episodes), [episodes]);
+  const visibleEpisodes = useMemo(() => {
+    if (!activeInterviewee) {
+      return episodes;
+    }
+
+    return episodes.filter(
+      (episode) => normalizeIntervieweeName(episode.interviewee) === normalizeIntervieweeName(activeInterviewee),
+    );
+  }, [activeInterviewee, episodes]);
+
+  useEffect(() => {
+    if (!interviewees.length) {
+      setActiveInterviewee('');
+      return;
+    }
+
+    if (!findMatchingIntervieweeName(interviewees, activeInterviewee)) {
+      setActiveInterviewee(interviewees[0]);
+    }
+  }, [activeInterviewee, interviewees]);
+
+  useEffect(() => {
+    if (visibleEpisodes.length === 0) {
+      setActiveEpisodeNumber(1);
+      return;
+    }
+
+    const hasActiveEpisode = visibleEpisodes.some(
+      (episode) => Number(episode?.episodeNumber) === Number(activeEpisodeNumber),
+    );
+
+    if (!hasActiveEpisode) {
+      setActiveEpisodeNumber(Number(visibleEpisodes[0].episodeNumber || 1));
+    }
+  }, [activeEpisodeNumber, visibleEpisodes]);
+
+  const activeEpisode = useMemo(() => (
+    visibleEpisodes.find((episode) => Number(episode?.episodeNumber) === Number(activeEpisodeNumber))
+    || visibleEpisodes[0]
+    || null
+  ), [activeEpisodeNumber, visibleEpisodes]);
+
+  const playlistEpisodes = useMemo(() => buildPlaylistEpisodes(visibleEpisodes), [visibleEpisodes]);
 
   return (
     <div className="oralHistories">
@@ -79,7 +117,9 @@ export default function OralHistories() {
             <p className="oralHistories__copy">
               {activeEpisode
                 ? 'Select an uploaded episode from the playlist to stream it in the player below.'
-                : 'Upload Episode 1 from the admin upload page to begin testing playback here.'}
+                : activeInterviewee
+                  ? `No uploaded episodes for ${activeInterviewee} yet.`
+                  : 'Upload oral history episodes from the admin page to begin testing playback here.'}
             </p>
           </div>
 
@@ -87,13 +127,17 @@ export default function OralHistories() {
             <div className="oralHistories__detailCard">
               <span className="oralHistories__detailLabel">Featured interview</span>
               <strong className="oralHistories__detailValue">
-                {activeEpisode?.interviewee || 'No episode uploaded yet'}
+                {activeInterviewee || activeEpisode?.interviewee || 'No interview selected'}
               </strong>
             </div>
             <div className="oralHistories__detailCard">
               <span className="oralHistories__detailLabel">Collection</span>
               <strong className="oralHistories__detailValue">
-                {activeEpisode ? `Episode ${activeEpisode.episodeNumber}` : 'Awaiting Episode 1'}
+                {activeEpisode
+                  ? `Episode ${activeEpisode.episodeNumber}`
+                  : activeInterviewee
+                    ? 'Awaiting Episode 1'
+                    : 'No episodes loaded'}
               </strong>
             </div>
           </aside>
@@ -110,7 +154,25 @@ export default function OralHistories() {
                   {activeEpisode ? formatEpisodeTitle(activeEpisode.title) : 'Episode 1 will appear here after upload'}
                 </h2>
               </div>
-              {isLoading ? <p className="oralHistories__panelNote">Loading episodes...</p> : null}
+              <div className="oralHistories__panelControls">
+                {interviewees.length > 0 ? (
+                  <label className="oralHistories__selector">
+                    <span className="oralHistories__selectorLabel">Interviewee</span>
+                    <select
+                      className="oralHistories__selectorInput"
+                      value={activeInterviewee}
+                      onChange={(event) => setActiveInterviewee(event.target.value)}
+                    >
+                      {interviewees.map((interviewee) => (
+                        <option key={interviewee} value={interviewee}>
+                          {interviewee}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                {isLoading ? <p className="oralHistories__panelNote">Loading episodes...</p> : null}
+              </div>
             </div>
 
             <div className="oralHistories__contentGrid">
@@ -119,7 +181,7 @@ export default function OralHistories() {
                   className="oralHistories__video"
                   controls
                   preload="metadata"
-                  poster="/images/doug_oral_history_thumbnail.png"
+                  poster={getOralHistoryPoster(activeInterviewee || activeEpisode?.interviewee)}
                   aria-label="Featured oral history video player"
                   key={activeEpisode?.oralHistoryId || 'oral-history-placeholder'}
                 >
@@ -176,6 +238,10 @@ export default function OralHistories() {
 }
 
 function buildPlaylistEpisodes(episodes) {
+  const totalEpisodeCount = Math.max(
+    1,
+    ...episodes.map((episode) => Number(episode?.episodeNumber || 0)),
+  );
   const episodesByNumber = new Map(
     episodes.map((episode) => [Number(episode?.episodeNumber || 0), episode]),
   );
@@ -189,6 +255,42 @@ function buildPlaylistEpisodes(episodes) {
       videoUrl: '',
     };
   });
+}
+
+function getIntervieweeOptions(episodes) {
+  const names = new Map();
+
+  episodes.forEach((episode) => {
+    const intervieweeName = normalizeIntervieweeName(episode?.interviewee);
+
+    if (!intervieweeName || names.has(intervieweeName.toLowerCase())) {
+      return;
+    }
+
+    names.set(intervieweeName.toLowerCase(), intervieweeName);
+  });
+
+  return [...names.values()];
+}
+
+function findMatchingIntervieweeName(names, targetName) {
+  const normalizedTargetName = normalizeIntervieweeName(targetName).toLowerCase();
+
+  return names.find((name) => normalizeIntervieweeName(name).toLowerCase() === normalizedTargetName) || '';
+}
+
+function normalizeIntervieweeName(value) {
+  return String(value || '').trim();
+}
+
+function getOralHistoryPoster(intervieweeName) {
+  const normalizedInterviewee = normalizeIntervieweeName(intervieweeName).toLowerCase();
+
+  if (normalizedInterviewee === 'doug petty') {
+    return '/images/doug_oral_history_thumbnail.png';
+  }
+
+  return '/images/homepageimage.jpg';
 }
 
 function formatEpisodeTitle(title) {

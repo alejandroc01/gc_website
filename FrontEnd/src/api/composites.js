@@ -319,6 +319,45 @@ async function abortHomepageUploadSession(uploadId) {
   });
 }
 
+async function createOralHistoryUploadSession(file, metadata, totalChunks) {
+  return requestJson('/api/oral-histories/upload-sessions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      ...metadata,
+      originalFilename: file.name,
+      mimeType: file.type || '',
+      totalSize: file.size,
+      totalChunks,
+    }),
+  });
+}
+
+async function uploadOralHistoryChunk(uploadId, file, chunk, chunkIndex) {
+  const payload = new FormData();
+  payload.append('chunkIndex', String(chunkIndex));
+  payload.append('chunk', chunk, file.name);
+
+  return requestJson(`/api/oral-histories/upload-sessions/${uploadId}/chunks`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+async function completeOralHistoryUploadSession(uploadId) {
+  return requestJson(`/api/oral-histories/upload-sessions/${uploadId}/complete`, {
+    method: 'POST',
+  });
+}
+
+async function abortOralHistoryUploadSession(uploadId) {
+  return requestJson(`/api/oral-histories/upload-sessions/${uploadId}`, {
+    method: 'DELETE',
+  });
+}
+
 export async function uploadComposite(file, compositeYear, options = {}) {
   const totalChunks = Math.max(1, Math.ceil(file.size / compositeUploadChunkSizeBytes));
   const onProgress = typeof options?.onProgress === 'function' ? options.onProgress : null;
@@ -526,6 +565,78 @@ export async function uploadHomepageContent(file, title, description, options = 
     if (uploadId) {
       try {
         await abortHomepageUploadSession(uploadId);
+      } catch {
+        // Best-effort cleanup only; preserve the original upload error.
+      }
+    }
+
+    throw error;
+  }
+}
+
+export async function uploadOralHistory(file, metadata, options = {}) {
+  const totalChunks = Math.max(1, Math.ceil(file.size / compositeUploadChunkSizeBytes));
+  const onProgress = typeof options?.onProgress === 'function' ? options.onProgress : null;
+  let uploadId = '';
+
+  try {
+    const uploadSession = await createOralHistoryUploadSession(file, metadata, totalChunks);
+
+    uploadId = String(uploadSession?.uploadId || '');
+
+    if (!uploadId) {
+      throw new Error('The server did not return a valid upload session.');
+    }
+
+    const chunkSize = Number(uploadSession?.chunkSize) > 0
+      ? Number(uploadSession.chunkSize)
+      : compositeUploadChunkSizeBytes;
+    const serverTotalChunks = Number(uploadSession?.totalChunks) > 0
+      ? Number(uploadSession.totalChunks)
+      : totalChunks;
+
+    if (onProgress) {
+      onProgress({
+        uploadedBytes: 0,
+        totalBytes: file.size,
+        chunkIndex: -1,
+        totalChunks: serverTotalChunks,
+      });
+    }
+
+    for (let chunkIndex = 0; chunkIndex < serverTotalChunks; chunkIndex += 1) {
+      const start = chunkIndex * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      const chunk = file.slice(start, end, file.type || undefined);
+      const chunkUploadSummary = await uploadOralHistoryChunk(uploadId, file, chunk, chunkIndex);
+      const uploadedBytes = Number(chunkUploadSummary?.uploadedBytes);
+
+      if (onProgress) {
+        onProgress({
+          uploadedBytes: Number.isFinite(uploadedBytes) ? uploadedBytes : end,
+          totalBytes: file.size,
+          chunkIndex,
+          totalChunks: serverTotalChunks,
+        });
+      }
+    }
+
+    const createdOralHistory = await completeOralHistoryUploadSession(uploadId);
+
+    if (onProgress) {
+      onProgress({
+        uploadedBytes: file.size,
+        totalBytes: file.size,
+        chunkIndex: serverTotalChunks - 1,
+        totalChunks: serverTotalChunks,
+      });
+    }
+
+    return createdOralHistory;
+  } catch (error) {
+    if (uploadId) {
+      try {
+        await abortOralHistoryUploadSession(uploadId);
       } catch {
         // Best-effort cleanup only; preserve the original upload error.
       }

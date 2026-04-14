@@ -16,6 +16,7 @@ const oralHistoryUploadsDirectory = path.join(uploadsRootDirectory, "oral-histor
 const compositeUploadSessionsDirectory = path.join(__dirname, "..", ".composite_upload_sessions");
 const scrapbookUploadSessionsDirectory = path.join(__dirname, "..", ".scrapbook_upload_sessions");
 const homepageUploadSessionsDirectory = path.join(__dirname, "..", ".homepage_upload_sessions");
+const oralHistoryUploadSessionsDirectory = path.join(__dirname, "..", ".oral_history_upload_sessions");
 const legacyUploadsDirectory = path.join(defaultUploadsRootDirectory, "composites");
 const extensionByMimeType = {
     "image/jpeg": ".jpg",
@@ -43,6 +44,7 @@ async function ensureCompositeUploadsDirectory() {
     await fs.mkdir(compositeUploadSessionsDirectory, { recursive: true });
     await fs.mkdir(scrapbookUploadSessionsDirectory, { recursive: true });
     await fs.mkdir(homepageUploadSessionsDirectory, { recursive: true });
+    await fs.mkdir(oralHistoryUploadSessionsDirectory, { recursive: true });
     await migrateBundledCompositeUploads();
 }
 
@@ -258,6 +260,7 @@ module.exports = {
     resolveExtensionFromOralHistoryUpload,
     resolveStoredFileAbsolutePath,
     oralHistoryExtensionByMimeType,
+    oralHistoryUploadSessionsDirectory,
     oralHistoryUploadsDirectory,
     scrapbookUploadsDirectory,
     uploadsDirectory,

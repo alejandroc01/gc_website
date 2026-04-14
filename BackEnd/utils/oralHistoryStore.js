@@ -71,6 +71,7 @@ async function createOralHistory(oralHistoryInput) {
     const store = await readStore();
     const normalizedKey = String(oralHistoryInput?.key || "").trim().toLowerCase();
     const normalizedEpisodeNumber = Number(oralHistoryInput?.episodeNumber);
+    const normalizedInterviewee = String(oralHistoryInput?.interviewee || "").trim().toLowerCase();
 
     if (store.oralHistories.some((entry) => String(entry.key || "").trim().toLowerCase() === normalizedKey)) {
         const error = new Error(`An oral history with key "${normalizedKey}" already exists.`);
@@ -78,8 +79,14 @@ async function createOralHistory(oralHistoryInput) {
         throw error;
     }
 
-    if (store.oralHistories.some((entry) => Number(entry.episodeNumber) === normalizedEpisodeNumber)) {
-        const error = new Error(`Episode ${normalizedEpisodeNumber} already exists.`);
+    if (
+        store.oralHistories.some(
+            (entry) =>
+                Number(entry.episodeNumber) === normalizedEpisodeNumber
+                && String(entry.interviewee || "").trim().toLowerCase() === normalizedInterviewee,
+        )
+    ) {
+        const error = new Error(`Episode ${normalizedEpisodeNumber} already exists for ${oralHistoryInput?.interviewee}.`);
         error.statusCode = 409;
         throw error;
     }
@@ -106,12 +113,29 @@ async function createOralHistory(oralHistoryInput) {
     return toOralHistoryResponse(nextOralHistory);
 }
 
+async function deleteOralHistory(oralHistoryId) {
+    const store = await readStore();
+    const oralHistoryIndex = store.oralHistories.findIndex(
+        (entry) => String(entry.oralHistoryId) === String(oralHistoryId),
+    );
+
+    if (oralHistoryIndex === -1) {
+        return null;
+    }
+
+    const [deletedOralHistory] = store.oralHistories.splice(oralHistoryIndex, 1);
+    await writeStore(store);
+
+    return deletedOralHistory;
+}
+
 function compareOralHistories(leftEntry, rightEntry) {
     return Number(leftEntry.episodeNumber || 0) - Number(rightEntry.episodeNumber || 0);
 }
 
 module.exports = {
     createOralHistory,
+    deleteOralHistory,
     ensureOralHistoryStore,
     listOralHistories,
     oralHistoryStorePath,
