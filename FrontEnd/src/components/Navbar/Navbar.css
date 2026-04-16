@@ -168,6 +168,7 @@
   height: 100%;
   width: min(360px, 88vw);
   background: #fff;
+  opacity: 1;
   box-shadow: var(--shadow-md);
   display: flex;
   flex-direction: column;
@@ -199,12 +200,14 @@
   list-style: none;
   padding: 12px;
   margin: 0;
+  background: #fff;
 }
 
 .navbar__mobileLink {
   display: block;
   padding: 12px 12px;
   border-radius: 8px;
+  background: #fff;
 
   font-family: var(--font-smallcaps);
   font-size: 20px;
