@@ -119,7 +119,7 @@ export default function HistoryPage() {
           <div className="historyPage__modalPanel">
             <div className="historyPage__modalHeader">
               <div>
-                <p className="historyPage__modalLabel">History Viewer<br/>© 2026 German Club Alumni Foundation, Inc. All Rights Reserved.</p>
+                <p className="historyPage__modalLabel">History Viewer</p>
                 <h2 id="history-document-title" className="historyPage__modalTitle">
                   {activeDocument.title}
                 </h2>
