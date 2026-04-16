@@ -1,35 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { getScrapbooks } from '../api/composites.js';
 import './ScrapbooksPage.css';
-
-const legacyScrapbookCollections = [
-  {
-    id: 'legacy-1983',
-    year: '1983',
-    title: '1983 Scrapbook',
-    tone: 'purple',
-    accent: 'Club Purple',
-    pages: [
-      '/images/scrapbookImages/1983/1983ScrapB-P1.jpg',
-      '/images/scrapbookImages/1983/1983ScrapB-P2 (1).jpg',
-      '/images/scrapbookImages/1983/1983ScrapB-P3.jpg',
-    ],
-  },
-  {
-    id: 'legacy-1984',
-    year: '1984',
-    title: '1984 Scrapbook',
-    tone: 'gold',
-    accent: 'Club Gold',
-    pages: [
-      '/images/scrapbookImages/1984/1984ScrapB-P1.jpg',
-      '/images/scrapbookImages/1984/1984ScrapB-P2.jpg',
-      '/images/scrapbookImages/1984/1984ScrapB-P3.jpg',
-    ],
-  },
-];
 
 export default function ScrapbooksPage() {
   const [searchParams] = useSearchParams();
@@ -82,21 +55,7 @@ export default function ScrapbooksPage() {
     };
   }, []);
 
-  const scrapbookCollections = useMemo(() => {
-    const recordsByYear = new Map();
-
-    uploadedScrapbooks.forEach((scrapbook) => {
-      recordsByYear.set(String(scrapbook.year || scrapbook.id), scrapbook);
-    });
-
-    legacyScrapbookCollections.forEach((scrapbook) => {
-      if (!recordsByYear.has(String(scrapbook.year || scrapbook.id))) {
-        recordsByYear.set(String(scrapbook.year || scrapbook.id), scrapbook);
-      }
-    });
-
-    return Array.from(recordsByYear.values()).sort(compareScrapbooks);
-  }, [uploadedScrapbooks]);
+  const scrapbookCollections = uploadedScrapbooks;
 
   useEffect(() => {
     if (hasHandledLinkedYear) {
