@@ -53,7 +53,7 @@ export default function ActionCards({ cards = CARDS, ariaLabel = 'Main actions' 
 
   return (
     <section className="actionCards section" aria-label={ariaLabel}>
-      <div className="container">
+      <div>
         <div className={gridClassName}>
           {cards.map((card) => (
             <article key={card.key} className="actionCard">

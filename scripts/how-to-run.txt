@@ -1,0 +1,4 @@
+from one level above /scripts run
+scripts/chapterizer <PATH TO FILE> --output-dir scripts/output/history-classes --force
+if file is in scripts, path is scripts/[FILENAME]
+file MUST be in pdf format

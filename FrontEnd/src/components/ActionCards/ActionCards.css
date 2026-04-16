@@ -1,5 +1,7 @@
 .actionCards {
   padding-top: 8px; /* visually tucks closer to the search bar */
+  margin: 0 auto;
+  width: 90%;
 }
 
 .actionCards__grid {

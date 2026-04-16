@@ -3,15 +3,8 @@ import { useEffect, useState } from 'react';
 import './HistoryPage.css';
 
 const PDF_BASE_PATH = '/pdfs/history';
-
-// Add entries here after you place PDF files in `FrontEnd/public/pdfs/history/`.
-// Example:
-// {
-//   key: 'founding-era',
-//   title: 'Founding Era',
-//   description: 'Short card description shown under the title.',
-//   fileName: 'founding-era.pdf',
-// }
+const PDF_VIEWER_OPTIONS = '#toolbar=0&navpanes=0&scrollbar=0';
+// Remove this placeholder and connect to backend storage when ready to display real documents
 const HISTORY_DOCUMENTS = [{ key: '1984-class-history', title: 'The History of the Class of 1984', description: '', fileName: 'The History of the Class of 1984.docx.pdf' }];
 
 export default function HistoryPage() {
@@ -73,7 +66,10 @@ export default function HistoryPage() {
           <div className="historyPage__sectionHeader">
             <div>
               <p className="historyPage__sectionLabel">Document Library</p>
-              <h2 className="historyPage__sectionTitle">Historical Documents</h2>
+              <div>
+                <h2 className="historyPage__sectionTitle">Historical Documents</h2>
+                {/*Add a search bar to filter years*/}
+              </div>
             </div>
           </div>
 
@@ -123,7 +119,7 @@ export default function HistoryPage() {
           <div className="historyPage__modalPanel">
             <div className="historyPage__modalHeader">
               <div>
-                <p className="historyPage__modalLabel">History Viewer</p>
+                <p className="historyPage__modalLabel">History Viewer<br/>© 2026 German Club Alumni Foundation, Inc. All Rights Reserved.</p>
                 <h2 id="history-document-title" className="historyPage__modalTitle">
                   {activeDocument.title}
                 </h2>
@@ -142,8 +138,13 @@ export default function HistoryPage() {
             <div className="historyPage__viewerFrame">
               <iframe
                 className="historyPage__viewer"
-                src={`${PDF_BASE_PATH}/${activeDocument.fileName}`}
+                src={`${PDF_BASE_PATH}/${activeDocument.fileName}${PDF_VIEWER_OPTIONS}`}
                 title={activeDocument.title}
+              />
+              <div
+                className="historyPage__viewerShield"
+                aria-hidden="true"
+                onContextMenu={(event) => event.preventDefault()}
               />
             </div>
           </div>

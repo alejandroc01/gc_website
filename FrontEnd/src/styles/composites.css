@@ -1082,6 +1082,69 @@
   padding: 22px;
 }
 
+.historyUploadEditor {
+  display: grid;
+  gap: 18px;
+  padding: 20px;
+  border: 1px solid rgba(38, 21, 56, 0.12);
+  background: linear-gradient(180deg, rgba(198, 162, 74, 0.08), rgba(255, 255, 255, 0.96));
+}
+
+.historyUploadEditor__summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.historyUploadEditor__summaryCard,
+.historyUploadEditor__emptyState,
+.historyUploadEditor__metadata {
+  padding: 18px;
+  border: 1px solid rgba(38, 21, 56, 0.1);
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+.historyUploadEditor__summaryLabel {
+  display: block;
+  margin-bottom: 8px;
+  font-family: var(--font-smallcaps);
+  font-size: 0.9rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--deep-purple);
+}
+
+.historyUploadEditor__summaryValue,
+.historyUploadEditor__emptyTitle,
+.historyUploadEditor__metadataTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  color: var(--text);
+}
+
+.historyUploadEditor__summaryValue {
+  font-size: 1.35rem;
+}
+
+.historyUploadEditor__summaryMeta,
+.historyUploadEditor__emptyCopy,
+.historyUploadEditor__metadataDescription {
+  margin: 10px 0 0;
+  color: var(--muted);
+  line-height: 1.6;
+}
+
+.historyUploadEditor__emptyTitle,
+.historyUploadEditor__metadataTitle {
+  font-size: 1.45rem;
+}
+
+.historyUploadEditor__metadata {
+  display: grid;
+  gap: 18px;
+}
+
 .profileSearch {
   position: relative;
 }
@@ -1548,6 +1611,11 @@
   .profileManagerGrid {
     grid-template-columns: 1fr;
   }
+
+  .historyUploadEditor__summary {
+    grid-template-columns: 1fr;
+  }
+  
   .compositeZoomControls__slider {
     width: 100%;
   }

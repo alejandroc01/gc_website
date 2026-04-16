@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PYTHON_BIN="${SCRIPT_DIR}/.venv/bin/python"
+TARGET_SCRIPT="${SCRIPT_DIR}/chapterizer.py"
+
+if [[ ! -x "${PYTHON_BIN}" ]]; then
+  echo "Missing ${PYTHON_BIN}. Create scripts/.venv and install pypdf first." >&2
+  exit 1
+fi
+
+exec "${PYTHON_BIN}" "${TARGET_SCRIPT}" "$@"
