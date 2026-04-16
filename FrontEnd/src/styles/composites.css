@@ -528,6 +528,9 @@
   gap: 0;
   margin-top: 18px;
   min-width: 0;
+  max-height: calc((56px + 20px + 2px) * 5);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--border);
   background: #fff;
 }
@@ -641,6 +644,10 @@
 
   .scrapbookAdminPages__item {
     grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .scrapbookAdminPages {
+    max-height: calc((72px + 20px + 2px) * 5);
   }
 
   .scrapbookAdminPages__preview {
