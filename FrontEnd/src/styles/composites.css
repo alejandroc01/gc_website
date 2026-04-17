@@ -333,6 +333,47 @@
   color: var(--muted);
 }
 
+.scrapbookUploadQueue {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.scrapbookUploadQueue__item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border: 1px solid rgba(38, 21, 56, 0.08);
+  background: #fff;
+}
+
+.scrapbookUploadQueue__details {
+  min-width: 0;
+}
+
+.scrapbookUploadQueue__name,
+.scrapbookUploadQueue__meta {
+  margin: 0;
+}
+
+.scrapbookUploadQueue__name {
+  color: #1d1526;
+  font-size: 0.98rem;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.scrapbookUploadQueue__meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
 .compositeDropzone {
   display: grid;
   gap: 8px;
@@ -368,6 +409,7 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 22px;
+  align-items: start;
 }
 
 .compositeCard {
@@ -1605,6 +1647,10 @@
   }
 
   .compositeUploadForm__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scrapbookUploadQueue__item {
     grid-template-columns: 1fr;
   }
 

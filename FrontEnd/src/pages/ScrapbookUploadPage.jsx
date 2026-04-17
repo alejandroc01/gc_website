@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
@@ -11,9 +11,13 @@ import {
 import '../styles/composites.css';
 
 const acceptedTypes = '.jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp';
+const acceptedFileExtensions = ['.jpg', '.jpeg', '.png', '.webp'];
+const maxQueuedScrapbookFiles = 20;
 
 export default function ScrapbookUploadPage() {
-  const [selectedFile, setSelectedFile] = useState(null);
+  const nextQueueItemId = useRef(0);
+  const [uploadQueue, setUploadQueue] = useState([]);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [scrapbookYear, setScrapbookYear] = useState('');
   const [scrapbooks, setScrapbooks] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,31 +64,78 @@ export default function ScrapbookUploadPage() {
     };
   }, []);
 
+  const updateQueueItem = (queueItemId, updates) => {
+    setUploadQueue((currentQueue) => currentQueue.map((queueItem) => (
+      queueItem.id === queueItemId
+        ? {
+            ...queueItem,
+            ...updates,
+          }
+        : queueItem
+    )));
+  };
+
+  const resetFileInput = () => {
+    setFileInputKey((currentValue) => currentValue + 1);
+  };
+
+  const handleFileSelection = (event) => {
+    const incomingFiles = Array.from(event.target.files || []);
+
+    if (incomingFiles.length === 0) {
+      return;
+    }
+
+    setUploadQueue((currentQueue) => {
+      const remainingSlots = Math.max(maxQueuedScrapbookFiles - currentQueue.length, 0);
+      const filesToQueue = incomingFiles.slice(0, remainingSlots);
+
+      if (remainingSlots === 0) {
+        setUploadError(`The upload queue already has ${maxQueuedScrapbookFiles} files. Remove one to add another.`);
+        return currentQueue;
+      }
+
+      if (incomingFiles.length > remainingSlots) {
+        setUploadError(`Only ${maxQueuedScrapbookFiles} files can be queued at once. Added the first ${remainingSlots} from this selection.`);
+      } else {
+        setUploadError('');
+      }
+
+      setUploadSuccess('');
+      setUploadProgress(null);
+
+      return [
+        ...currentQueue,
+        ...filesToQueue.map((file) => createQueueItem(file, nextQueueItemId)),
+      ];
+    });
+
+    resetFileInput();
+  };
+
+  const removeQueueItem = (queueItemId) => {
+    setUploadQueue((currentQueue) => currentQueue.filter((queueItem) => queueItem.id !== queueItemId));
+    setUploadError('');
+    setUploadSuccess('');
+    setUploadProgress(null);
+  };
+
+  const clearQueue = () => {
+    setUploadQueue([]);
+    setUploadError('');
+    setUploadSuccess('');
+    setUploadProgress(null);
+    resetFileInput();
+  };
+
   const handleUploadSubmit = async (event) => {
     event.preventDefault();
     const normalizedYear = scrapbookYear.trim();
 
-    if (!selectedFile) {
-      setUploadError('Choose a JPG or JPEG scrapbook page image to continue.');
-      return;
-    }
+    const validationError = validateUploadQueue(uploadQueue, normalizedYear, scrapbooks);
 
-    // Safety check: require a numeric four-digit year like 2012 before upload.
-    if (!/^\d{4}$/.test(normalizedYear)) {
-      setUploadError('Enter a valid scrapbook year.');
-      return;
-    }
-
-    if (Number(normalizedYear) < 1962 || Number(normalizedYear) > 9999) {
-      setUploadError('Enter a valid scrapbook year.');
-      return;
-    }
-
-    const normalizedFileName = String(selectedFile.name || '').toLowerCase();
-    const isAcceptedImage = ['.jpg', '.jpeg', '.png', '.webp'].some((extension) => normalizedFileName.endsWith(extension));
-
-    if (!isAcceptedImage) {
-      setUploadError('Please upload a JPG or JPEG scrapbook page image.');
+    if (validationError) {
+      setUploadError(validationError);
       return;
     }
 
@@ -92,15 +143,6 @@ export default function ScrapbookUploadPage() {
       (scrapbook) => String(scrapbook.scrapbookYear || '') === normalizedYear,
     );
     const isCreatingNewScrapbook = !existingScrapbook;
-    const hasDuplicateFilename = Array.isArray(existingScrapbook?.pageOriginalFilenames)
-      && existingScrapbook.pageOriginalFilenames.some(
-        (filename) => String(filename || '').toLowerCase() === normalizedFileName,
-      );
-
-    if (hasDuplicateFilename) {
-      setUploadError('A scrapbook page with that filename already exists. Please rename the file and try again.');
-      return;
-    }
 
     setUploadError('');
     setUploadSuccess('');
@@ -108,30 +150,90 @@ export default function ScrapbookUploadPage() {
     setIsUploading(true);
     setUploadProgress(null);
 
+    const uploadedFileNames = [];
+    const failedUploads = [];
+    let lastCreatedScrapbook = null;
+
     try {
-      const createdScrapbook = await uploadScrapbook(selectedFile, normalizedYear, {
-        onProgress: (nextProgress) => setUploadProgress(nextProgress),
-      });
+      for (let queueIndex = 0; queueIndex < uploadQueue.length; queueIndex += 1) {
+        const queueItem = uploadQueue[queueIndex];
+        updateQueueItem(queueItem.id, {
+          status: 'uploading',
+          error: '',
+        });
 
-      setScrapbooks((currentScrapbooks) => {
-        const remainingScrapbooks = currentScrapbooks.filter(
-          (entry) => entry.scrapbookId !== createdScrapbook.scrapbookId,
-        );
+        try {
+          const createdScrapbook = await uploadScrapbook(queueItem.file, normalizedYear, {
+            onProgress: (nextProgress) => {
+              updateQueueItem(queueItem.id, {
+                progress: nextProgress,
+              });
+              setUploadProgress({
+                ...nextProgress,
+                fileName: queueItem.file.name,
+                queueIndex,
+                totalFiles: uploadQueue.length,
+              });
+            },
+          });
 
-        return sortScrapbooks([createdScrapbook, ...remainingScrapbooks]);
-      });
-      setExpandedScrapbookId(createdScrapbook.scrapbookId);
-      setSelectedFile(null);
-      setScrapbookYear('');
-      setUploadSuccess(
-        isCreatingNewScrapbook
-          ? `Created ${createdScrapbook.title} and added ${selectedFile.name}.`
-          : `Added ${selectedFile.name} to ${createdScrapbook.title}.`,
-      );
+          lastCreatedScrapbook = createdScrapbook;
+          uploadedFileNames.push(queueItem.file.name);
+
+          setScrapbooks((currentScrapbooks) => {
+            const remainingScrapbooks = currentScrapbooks.filter(
+              (entry) => entry.scrapbookId !== createdScrapbook.scrapbookId,
+            );
+
+            return sortScrapbooks([createdScrapbook, ...remainingScrapbooks]);
+          });
+          setExpandedScrapbookId(createdScrapbook.scrapbookId);
+          updateQueueItem(queueItem.id, {
+            status: 'uploaded',
+            error: '',
+            progress: {
+              uploadedBytes: queueItem.file.size,
+              totalBytes: queueItem.file.size,
+              chunkIndex: Number(queueItem.progress?.totalChunks || 1) - 1,
+              totalChunks: Number(queueItem.progress?.totalChunks || 1),
+            },
+          });
+        } catch (error) {
+          failedUploads.push({
+            id: queueItem.id,
+            fileName: queueItem.file.name,
+            message: error.message,
+          });
+          updateQueueItem(queueItem.id, {
+            status: 'failed',
+            error: error.message,
+            progress: null,
+          });
+        }
+      }
+
+      if (uploadedFileNames.length > 0 && lastCreatedScrapbook) {
+        setUploadSuccess(buildUploadSuccessMessage({
+          uploadedFileNames,
+          failedUploads,
+          scrapbookTitle: lastCreatedScrapbook.title,
+          isCreatingNewScrapbook,
+        }));
+      }
+
+      if (failedUploads.length > 0) {
+        setUploadError(buildUploadFailureMessage(failedUploads));
+        setUploadQueue((currentQueue) => currentQueue.filter((queueItem) => (
+          failedUploads.some((failedUpload) => failedUpload.id === queueItem.id)
+        )));
+      } else {
+        setUploadQueue([]);
+        setScrapbookYear('');
+        resetFileInput();
+      }
+
       setUploadProgress(null);
-      setIsUploading(false);
-    } catch (error) {
-      setUploadError(error.message);
+    } finally {
       setUploadProgress(null);
       setIsUploading(false);
     }
@@ -213,8 +315,8 @@ export default function ScrapbookUploadPage() {
           <p className="compositePageHeader__eyebrow">Admin Upload Flow</p>
           <h1 className="compositePageHeader__title">Scrapbook Upload</h1>
           <p className="compositePageHeader__description">
-            Upload one scrapbook page at a time. The archive stores each page image with its scrapbook
-            year so it can be displayed in the public viewer.
+            Queue up to {maxQueuedScrapbookFiles} scrapbook page images at once. Each page is uploaded in order and
+            stored under the scrapbook year you choose here for the public viewer.
           </p>
         </div>
 
@@ -231,7 +333,7 @@ export default function ScrapbookUploadPage() {
             <div>
               <h2 className="compositePanel__title">Upload a New Scrapbook</h2>
               <p className="compositePanel__description">
-                Accepted formats: JPG and JPEG. Use format <em>1991ScrapB-P2</em>.
+                Accepted formats: JPG, JPEG, PNG, and WEBP. Queue up to {maxQueuedScrapbookFiles} files and use format <em>1991ScrapB-P2</em>.
               </p>
             </div>
           </div>
@@ -257,17 +359,14 @@ export default function ScrapbookUploadPage() {
               </label>
 
               <label className="compositeField">
-                <span className="compositeField__label">Scrapbook page image</span>
+                <span className="compositeField__label">Scrapbook page images</span>
                 <input
+                  key={fileInputKey}
                   className="compositeField__input compositeField__input--file"
                   type="file"
                   accept={acceptedTypes}
-                  onChange={(event) => {
-                    setSelectedFile(event.target.files?.[0] || null);
-                    setUploadError('');
-                    setUploadSuccess('');
-                    setUploadProgress(null);
-                  }}
+                  multiple
+                  onChange={handleFileSelection}
                 />
               </label>
             </div>
@@ -276,19 +375,59 @@ export default function ScrapbookUploadPage() {
               <button
                 type="submit"
                 className="button compositeButton compositeButton--filled"
-                disabled={isUploading}
+                disabled={isUploading || uploadQueue.length === 0}
               >
-                {isUploading ? 'Uploading Page...' : 'Upload Scrapbook Page'}
+                {isUploading
+                  ? 'Uploading Queue...'
+                  : uploadQueue.length === 0
+                    ? 'Upload Scrapbook Pages'
+                    : `Upload ${uploadQueue.length} Scrapbook Page${uploadQueue.length === 1 ? '' : 's'}`}
               </button>
 
-              {selectedFile ? (
+              <button
+                type="button"
+                className="button compositeButton compositeButton--subtle"
+                onClick={clearQueue}
+                disabled={isUploading || uploadQueue.length === 0}
+              >
+                Clear Queue
+              </button>
+
+              {uploadQueue.length > 0 ? (
                 <p className="compositeUploadForm__fileMeta">
-                  Selected file: <strong>{selectedFile.name}</strong> ({formatFileSize(selectedFile.size)})
+                  {uploadQueue.length} file{uploadQueue.length === 1 ? '' : 's'} queued for {scrapbookYear || 'this scrapbook year'}.
                 </p>
               ) : (
-                <p className="compositeUploadForm__fileMeta">No file selected yet.</p>
+                <p className="compositeUploadForm__fileMeta">No files queued yet.</p>
               )}
             </div>
+
+            {uploadQueue.length > 0 ? (
+              <div className="scrapbookUploadQueue" aria-live="polite">
+                {uploadQueue.map((queueItem) => (
+                  <div key={queueItem.id} className="scrapbookUploadQueue__item">
+                    <div className="scrapbookUploadQueue__details">
+                      <p className="scrapbookUploadQueue__name">{queueItem.file.name}</p>
+                      <p className="scrapbookUploadQueue__meta">
+                        {formatFileSize(queueItem.file.size)} · {formatQueueItemStatus(queueItem)}
+                      </p>
+                      {queueItem.error ? (
+                        <p className="compositeMessage compositeMessage--error">{queueItem.error}</p>
+                      ) : null}
+                    </div>
+
+                    <button
+                      type="button"
+                      className="button compositeButton compositeButton--subtle"
+                      onClick={() => removeQueueItem(queueItem.id)}
+                      disabled={isUploading}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
 
             {isUploading && uploadProgress ? (
               <p className="compositeMessage">{formatUploadProgress(uploadProgress)}</p>
@@ -418,6 +557,87 @@ export default function ScrapbookUploadPage() {
   );
 }
 
+function createQueueItem(file, nextQueueItemId) {
+  const queueItemId = nextQueueItemId.current;
+  nextQueueItemId.current += 1;
+
+  return {
+    id: queueItemId,
+    file,
+    status: 'queued',
+    error: '',
+    progress: null,
+  };
+}
+
+function validateUploadQueue(uploadQueue, normalizedYear, scrapbooks) {
+  if (uploadQueue.length === 0) {
+    return 'Choose at least one scrapbook page image to continue.';
+  }
+
+  if (uploadQueue.length > maxQueuedScrapbookFiles) {
+    return `Only ${maxQueuedScrapbookFiles} files can be uploaded at once.`;
+  }
+
+  if (!/^\d{4}$/.test(normalizedYear)) {
+    return 'Enter a valid scrapbook year.';
+  }
+
+  if (Number(normalizedYear) < 1962 || Number(normalizedYear) > 9999) {
+    return 'Enter a valid scrapbook year.';
+  }
+
+  const invalidFile = uploadQueue.find((queueItem) => !isAcceptedScrapbookImage(queueItem.file));
+
+  if (invalidFile) {
+    return `Please upload only JPG, JPEG, PNG, or WEBP scrapbook page images. ${invalidFile.file.name} is not supported.`;
+  }
+
+  const existingScrapbook = scrapbooks.find(
+    (scrapbook) => String(scrapbook.scrapbookYear || '') === normalizedYear,
+  );
+  const existingFilenames = new Set(
+    Array.isArray(existingScrapbook?.pageOriginalFilenames)
+      ? existingScrapbook.pageOriginalFilenames.map((filename) => String(filename || '').toLowerCase())
+      : [],
+  );
+  const queuedFilenames = new Set();
+
+  for (const queueItem of uploadQueue) {
+    const normalizedFileName = String(queueItem.file.name || '').toLowerCase();
+
+    if (existingFilenames.has(normalizedFileName)) {
+      return `A scrapbook page named ${queueItem.file.name} already exists for ${normalizedYear}. Rename that file and try again.`;
+    }
+
+    if (queuedFilenames.has(normalizedFileName)) {
+      return `The queue includes ${queueItem.file.name} more than once. Remove the duplicate and try again.`;
+    }
+
+    queuedFilenames.add(normalizedFileName);
+  }
+
+  return '';
+}
+
+function isAcceptedScrapbookImage(file) {
+  const normalizedFileName = String(file?.name || '').toLowerCase();
+  return acceptedFileExtensions.some((extension) => normalizedFileName.endsWith(extension));
+}
+
+function formatQueueItemStatus(queueItem) {
+  switch (queueItem.status) {
+    case 'uploading':
+      return 'Uploading now';
+    case 'uploaded':
+      return 'Uploaded';
+    case 'failed':
+      return 'Failed';
+    default:
+      return 'Queued';
+  }
+}
+
 function formatDate(value) {
   if (!value) {
     return 'recently';
@@ -450,8 +670,44 @@ function formatUploadProgress(uploadProgress) {
   const totalChunks = Math.max(Number(uploadProgress?.totalChunks || 0), 1);
   const completedChunks = Math.min(Math.max(Number(uploadProgress?.chunkIndex || -1) + 1, 0), totalChunks);
   const uploadPercent = Math.min(100, Math.round((uploadedBytes / totalBytes) * 100));
+  const activeFileName = String(uploadProgress?.fileName || '').trim();
+  const currentFileNumber = Number(uploadProgress?.queueIndex) + 1;
+  const totalFiles = Math.max(Number(uploadProgress?.totalFiles || 0), 1);
 
-  return `Uploading ${formatFileSize(uploadedBytes)} of ${formatFileSize(totalBytes)} (${uploadPercent}%, chunk ${completedChunks} of ${totalChunks}).`;
+  return `Uploading file ${currentFileNumber} of ${totalFiles}${activeFileName ? `: ${activeFileName}` : ''}. ${formatFileSize(uploadedBytes)} of ${formatFileSize(totalBytes)} transferred (${uploadPercent}%, chunk ${completedChunks} of ${totalChunks}).`;
+}
+
+function buildUploadSuccessMessage({ uploadedFileNames, failedUploads, scrapbookTitle, isCreatingNewScrapbook }) {
+  if (uploadedFileNames.length === 0) {
+    return '';
+  }
+
+  const uploadedCount = uploadedFileNames.length;
+  const pageLabel = uploadedCount === 1 ? 'page' : 'pages';
+
+  if (failedUploads.length > 0) {
+    return `Uploaded ${uploadedCount} ${pageLabel} to ${scrapbookTitle}.`;
+  }
+
+  if (isCreatingNewScrapbook) {
+    return `Created ${scrapbookTitle} and uploaded ${uploadedCount} ${pageLabel}.`;
+  }
+
+  return `Uploaded ${uploadedCount} ${pageLabel} to ${scrapbookTitle}.`;
+}
+
+function buildUploadFailureMessage(failedUploads) {
+  if (failedUploads.length === 0) {
+    return '';
+  }
+
+  const failedCount = failedUploads.length;
+  const fileLabel = failedCount === 1 ? 'file' : 'files';
+  const fileNames = failedUploads.slice(0, 2).map((failedUpload) => failedUpload.fileName).join(', ');
+  const remainderCount = failedCount - Math.min(failedUploads.length, 2);
+  const remainderText = remainderCount > 0 ? `, and ${remainderCount} more` : '';
+
+  return `Unable to upload ${failedCount} ${fileLabel}: ${fileNames}${remainderText}.`;
 }
 
 function sortScrapbooks(scrapbookRecords) {
