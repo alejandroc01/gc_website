@@ -1,0 +1,11 @@
+.scrapbookCopyrightNotice a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration-thickness: 1.5px;
+  text-underline-offset: 0.16em;
+}
+
+.scrapbookCopyrightNotice a:hover,
+.scrapbookCopyrightNotice a:focus-visible {
+  color: #4b3118;
+}

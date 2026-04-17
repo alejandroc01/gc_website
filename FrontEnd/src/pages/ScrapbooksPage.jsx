@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { getScrapbooks } from '../api/composites.js';
+import ScrapbookCopyrightNotice from '../components/Scrapbook/ScrapbookCopyrightNotice.jsx';
 import './ScrapbooksPage.css';
 
 export default function ScrapbooksPage() {
@@ -116,9 +117,11 @@ export default function ScrapbooksPage() {
     if (!activeBook) return undefined;
 
     const { overflow } = document.body.style;
+    document.body.classList.add('scrapbookViewerOpen');
     document.body.style.overflow = 'hidden';
 
     return () => {
+      document.body.classList.remove('scrapbookViewerOpen');
       document.body.style.overflow = overflow;
     };
   }, [activeBook]);
@@ -220,6 +223,8 @@ export default function ScrapbooksPage() {
               />
             </label>
           </form>
+
+          <ScrapbookCopyrightNotice className="scrapbooksPage__copyrightNotice" />
 
           {searchMessage ? (
             <p className="scrapbooksPage__searchMessage" role="status" aria-live="polite">

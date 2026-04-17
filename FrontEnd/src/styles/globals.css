@@ -72,6 +72,12 @@ a {
   padding-top: var(--nav-height);
 }
 
+body.scrapbookViewerOpen .navbar {
+  transform: translateY(-110%);
+  opacity: 0;
+  pointer-events: none;
+}
+
 /* Utility: visually hidden (screen-reader only) */
 .sr-only {
   position: absolute;
