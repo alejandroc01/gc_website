@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { getScrapbooks } from '../api/composites.js';
@@ -9,10 +9,12 @@ export default function ScrapbooksPage() {
   const [searchParams] = useSearchParams();
   const [activeBook, setActiveBook] = useState(null);
   const [activePageIndex, setActivePageIndex] = useState(0);
+  const [isPageImageReady, setIsPageImageReady] = useState(false);
   const [uploadedScrapbooks, setUploadedScrapbooks] = useState([]);
   const [searchYear, setSearchYear] = useState(() => String(searchParams.get('year') || '').trim());
   const [searchMessage, setSearchMessage] = useState('');
   const [hasHandledLinkedYear, setHasHandledLinkedYear] = useState(false);
+  const pageImageRef = useRef(null);
   const requestedYear = String(searchParams.get('year') || '').trim();
 
   useEffect(() => {
@@ -114,6 +116,46 @@ export default function ScrapbooksPage() {
   }, [activeBook]);
 
   useEffect(() => {
+    if (!activeBook) {
+      setIsPageImageReady(false);
+      return undefined;
+    }
+
+    setIsPageImageReady(false);
+
+    const imageElement = pageImageRef.current;
+    if (!imageElement) {
+      return undefined;
+    }
+
+    let isCancelled = false;
+
+    const finalizeImageReady = () => {
+      if (isCancelled) {
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        if (!isCancelled) {
+          setIsPageImageReady(true);
+        }
+      });
+    };
+
+    if (imageElement.complete && imageElement.naturalWidth > 0) {
+      if (typeof imageElement.decode === 'function') {
+        imageElement.decode().catch(() => {}).finally(finalizeImageReady);
+      } else {
+        finalizeImageReady();
+      }
+    }
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeBook, activePageIndex]);
+
+  useEffect(() => {
     if (!activeBook) return undefined;
 
     const { overflow } = document.body.style;
@@ -168,6 +210,16 @@ export default function ScrapbooksPage() {
     event.preventDefault();
     const normalizedYear = searchYear.trim();
     attemptYearSearch(normalizedYear);
+  };
+
+  const handlePageImageLoad = () => {
+    window.requestAnimationFrame(() => {
+      setIsPageImageReady(true);
+    });
+  };
+
+  const handlePageImageError = () => {
+    setIsPageImageReady(true);
   };
 
   return (
@@ -274,9 +326,15 @@ export default function ScrapbooksPage() {
 
                 <div className="scrapbooksPage__slidePanel">
                   <img
-                    className="scrapbooksPage__pageImage"
+                    ref={pageImageRef}
+                    className={[
+                      'scrapbooksPage__pageImage',
+                      isPageImageReady ? 'scrapbooksPage__pageImage--ready' : 'scrapbooksPage__pageImage--loading',
+                    ].join(' ')}
                     src={activeBook.pages[activePageIndex]}
                     alt={`${activeBook.title} page ${activePageIndex + 1}`}
+                    onLoad={handlePageImageLoad}
+                    onError={handlePageImageError}
                   />
                 </div>
 

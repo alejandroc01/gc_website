@@ -426,7 +426,21 @@
   box-shadow: 0 18px 30px rgba(63, 45, 24, 0.2);
   background: #f7f0dc;
   transform-origin: center;
-  transition: transform 180ms ease;
+  opacity: 1;
+  filter: blur(0);
+  transform-origin: center;
+  transition: opacity 260ms ease, filter 360ms ease, transform 180ms ease;
+  will-change: filter, opacity;
+}
+
+.scrapbooksPage__pageImage--loading {
+  opacity: 0.72;
+  filter: blur(16px);
+}
+
+.scrapbooksPage__pageImage--ready {
+  opacity: 1;
+  filter: blur(0);
 }
 
 .scrapbooksPage__coverYear {
