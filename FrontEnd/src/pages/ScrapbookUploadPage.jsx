@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
+import ScrapbookCopyrightNotice from '../components/Scrapbook/ScrapbookCopyrightNotice.jsx';
 import {
   deleteScrapbook as deleteScrapbookRequest,
   deleteScrapbookPage as deleteScrapbookPageRequest,
@@ -326,7 +326,7 @@ export default function ScrapbookUploadPage() {
           </Link>
         </div>
 
-        <CompositeCopyrightNotice className="compositeUpload__copyrightNotice" />
+        <ScrapbookCopyrightNotice className="compositeUpload__copyrightNotice" />
 
         <article className="compositePanel compositePanel--spacious">
           <div className="compositePanel__header">

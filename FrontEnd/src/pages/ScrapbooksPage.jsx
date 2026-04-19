@@ -28,22 +28,24 @@ export default function ScrapbooksPage() {
           return;
         }
 
-        setUploadedScrapbooks(
-          scrapbookRecords
-            .filter((scrapbook) => Array.isArray(scrapbook.pageImageUrls) && scrapbook.pageImageUrls.length > 0)
-            .map((scrapbook) => ({
-              id: scrapbook.scrapbookId,
-              year: String(scrapbook.scrapbookYear || ''),
-              title: scrapbook.title || `${scrapbook.scrapbookYear} Scrapbook`,
-              tone: deriveScrapbookTone(scrapbook.scrapbookYear),
-              accent: deriveScrapbookAccent(scrapbook.scrapbookYear),
-              pages: scrapbook.pageImageUrls,
-              pageCount: scrapbook.pageCount || scrapbook.pageImageUrls.length,
-              pdfUrl: scrapbook.pdfUrl || '',
-              uploadTimestamp: scrapbook.uploadTimestamp || '',
-            }))
-            .sort(compareScrapbooks),
-        );
+        const sortedScrapbooks = scrapbookRecords
+          .filter((scrapbook) => Array.isArray(scrapbook.pageImageUrls) && scrapbook.pageImageUrls.length > 0)
+          .map((scrapbook) => ({
+            id: scrapbook.scrapbookId,
+            year: String(scrapbook.scrapbookYear || ''),
+            title: scrapbook.title || `${scrapbook.scrapbookYear} Scrapbook`,
+            pages: scrapbook.pageImageUrls,
+            pageCount: scrapbook.pageCount || scrapbook.pageImageUrls.length,
+            pdfUrl: scrapbook.pdfUrl || '',
+            uploadTimestamp: scrapbook.uploadTimestamp || '',
+          }))
+          .sort(compareScrapbooks)
+          .map((scrapbook, index) => ({
+            ...scrapbook,
+            tone: deriveScrapbookTone(index),
+          }));
+
+        setUploadedScrapbooks(sortedScrapbooks);
       } catch {
         if (isActive) {
           setUploadedScrapbooks([]);
@@ -244,9 +246,7 @@ export default function ScrapbooksPage() {
               >
                 <span className="scrapbooksPage__bookShadow" aria-hidden="true" />
                 <span className="scrapbooksPage__bookSpine">
-                  <span className="scrapbooksPage__bookAccent">{book.accent}</span>
-                  <strong className="scrapbooksPage__bookYear">{book.year}</strong>
-                  <span className="scrapbooksPage__bookName">Scrapbook</span>
+                  <strong className="scrapbooksPage__bookYear">German Club {book.year}</strong>
                 </span>
                 <span className="scrapbooksPage__bookFace">
                   <span className="scrapbooksPage__bookFaceYear">{book.year}</span>
@@ -258,13 +258,13 @@ export default function ScrapbooksPage() {
 
           <form className="scrapbooksPage__search" onSubmit={handleSearchSubmit}>
             <label className="scrapbooksPage__searchField" htmlFor="scrapbookYearSearch">
-              <span className="scrapbooksPage__searchLabel">Find a scrapbook by year</span>
+              <span className="scrapbooksPage__searchLabel">Search scrapbooks by year</span>
               <input
                 id="scrapbookYearSearch"
                 className="scrapbooksPage__searchInput"
                 type="search"
                 inputMode="numeric"
-                placeholder="Enter year like 1984"
+                placeholder="Enter a four-digit year"
                 maxLength={4}
                 value={searchYear}
                 onChange={(event) => {
@@ -378,10 +378,6 @@ function compareScrapbooks(leftValue, rightValue) {
   return String(leftValue.title || '').localeCompare(String(rightValue.title || ''));
 }
 
-function deriveScrapbookTone(scrapbookYear) {
-  return Number(scrapbookYear) % 2 === 0 ? 'gold' : 'purple';
-}
-
-function deriveScrapbookAccent(scrapbookYear) {
-  return deriveScrapbookTone(scrapbookYear) === 'gold' ? 'Club Gold' : 'Club Purple';
+function deriveScrapbookTone(shelfIndex) {
+  return shelfIndex % 2 === 0 ? 'gold' : 'purple';
 }
