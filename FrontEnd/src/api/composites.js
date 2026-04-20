@@ -1,5 +1,6 @@
 const configuredApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
 const compositeUploadChunkSizeBytes = 256 * 1024;
+const historyUploadChunkSizeBytes = 1024 * 1024;
 const oralHistoryUploadChunkSizeBytes = 8 * 1024 * 1024;
 const oralHistoryUploadChunkRetryCount = 3;
 
@@ -104,6 +105,10 @@ export function getComposites() {
 
 export function getScrapbooks() {
   return requestJson('/api/scrapbooks');
+}
+
+export function getHistories() {
+  return requestJson('/api/histories');
 }
 
 export function getHomepageContent() {
@@ -334,6 +339,45 @@ async function createOralHistoryUploadSession(file, metadata, totalChunks) {
       totalSize: file.size,
       totalChunks,
     }),
+  });
+}
+
+async function createHistoryUploadSession(file, metadata, totalChunks) {
+  return requestJson('/api/histories/upload-sessions', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      ...metadata,
+      originalFilename: file.name,
+      mimeType: file.type || '',
+      totalSize: file.size,
+      totalChunks,
+    }),
+  });
+}
+
+async function uploadHistoryChunk(uploadId, file, chunk, chunkIndex) {
+  const payload = new FormData();
+  payload.append('chunkIndex', String(chunkIndex));
+  payload.append('chunk', chunk, file.name);
+
+  return requestJson(`/api/histories/upload-sessions/${uploadId}/chunks`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+async function completeHistoryUploadSession(uploadId) {
+  return requestJson(`/api/histories/upload-sessions/${uploadId}/complete`, {
+    method: 'POST',
+  });
+}
+
+async function abortHistoryUploadSession(uploadId) {
+  return requestJson(`/api/histories/upload-sessions/${uploadId}`, {
+    method: 'DELETE',
   });
 }
 
@@ -648,6 +692,78 @@ export async function uploadOralHistory(file, metadata, options = {}) {
   }
 }
 
+export async function uploadHistory(file, metadata, options = {}) {
+  const totalChunks = Math.max(1, Math.ceil(file.size / historyUploadChunkSizeBytes));
+  const onProgress = typeof options?.onProgress === 'function' ? options.onProgress : null;
+  let uploadId = '';
+
+  try {
+    const uploadSession = await createHistoryUploadSession(file, metadata, totalChunks);
+
+    uploadId = String(uploadSession?.uploadId || '');
+
+    if (!uploadId) {
+      throw new Error('The server did not return a valid upload session.');
+    }
+
+    const chunkSize = Number(uploadSession?.chunkSize) > 0
+      ? Number(uploadSession.chunkSize)
+      : historyUploadChunkSizeBytes;
+    const serverTotalChunks = Number(uploadSession?.totalChunks) > 0
+      ? Number(uploadSession.totalChunks)
+      : totalChunks;
+
+    if (onProgress) {
+      onProgress({
+        uploadedBytes: 0,
+        totalBytes: file.size,
+        chunkIndex: -1,
+        totalChunks: serverTotalChunks,
+      });
+    }
+
+    for (let chunkIndex = 0; chunkIndex < serverTotalChunks; chunkIndex += 1) {
+      const start = chunkIndex * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      const chunk = file.slice(start, end, file.type || undefined);
+      const chunkUploadSummary = await uploadHistoryChunk(uploadId, file, chunk, chunkIndex);
+      const uploadedBytes = Number(chunkUploadSummary?.uploadedBytes);
+
+      if (onProgress) {
+        onProgress({
+          uploadedBytes: Number.isFinite(uploadedBytes) ? uploadedBytes : end,
+          totalBytes: file.size,
+          chunkIndex,
+          totalChunks: serverTotalChunks,
+        });
+      }
+    }
+
+    const createdHistory = await completeHistoryUploadSession(uploadId);
+
+    if (onProgress) {
+      onProgress({
+        uploadedBytes: file.size,
+        totalBytes: file.size,
+        chunkIndex: serverTotalChunks - 1,
+        totalChunks: serverTotalChunks,
+      });
+    }
+
+    return createdHistory;
+  } catch (error) {
+    if (uploadId) {
+      try {
+        await abortHistoryUploadSession(uploadId);
+      } catch {
+        // Best-effort cleanup only; preserve the original upload error.
+      }
+    }
+
+    throw error;
+  }
+}
+
 async function uploadOralHistoryChunkWithRetry(uploadId, file, chunk, chunkIndex) {
   let lastError = null;
 
@@ -729,6 +845,12 @@ export function createOralHistory(formData) {
 
 export function deleteOralHistory(oralHistoryId) {
   return requestJson(`/api/oral-histories/${oralHistoryId}`, {
+    method: 'DELETE',
+  });
+}
+
+export function deleteHistory(historyId) {
+  return requestJson(`/api/histories/${historyId}`, {
     method: 'DELETE',
   });
 }

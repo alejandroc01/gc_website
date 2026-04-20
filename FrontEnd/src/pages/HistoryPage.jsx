@@ -1,14 +1,48 @@
 import { useEffect, useState } from 'react';
 
+import { getHistories } from '../api/composites.js';
 import './HistoryPage.css';
 
-const PDF_BASE_PATH = '/pdfs/history';
 const PDF_VIEWER_OPTIONS = '#toolbar=0&navpanes=0&scrollbar=0';
-// Remove this placeholder and connect to backend storage when ready to display real documents
-const HISTORY_DOCUMENTS = [{ key: '1984-class-history', title: 'The History of the Class of 1984', description: '', fileName: 'The History of the Class of 1984.docx.pdf' }];
 
 export default function HistoryPage() {
   const [activeDocument, setActiveDocument] = useState(null);
+  const [historyDocuments, setHistoryDocuments] = useState([]);
+  const [isLoadingHistories, setIsLoadingHistories] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadHistoryDocuments = async () => {
+      setIsLoadingHistories(true);
+      setLoadError('');
+
+      try {
+        const loadedHistories = await getHistories();
+
+        if (!isActive) {
+          return;
+        }
+
+        setHistoryDocuments(normalizeHistories(loadedHistories));
+      } catch (error) {
+        if (isActive) {
+          setLoadError(error.message);
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingHistories(false);
+        }
+      }
+    };
+
+    loadHistoryDocuments();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!activeDocument) return undefined;
@@ -54,7 +88,11 @@ export default function HistoryPage() {
             <div className="historyPage__detailCard">
               <span className="historyPage__detailLabel">Collection status</span>
               <strong className="historyPage__detailValue">
-                {HISTORY_DOCUMENTS.length === 0 ? 'Ready for files' : `${HISTORY_DOCUMENTS.length} document${HISTORY_DOCUMENTS.length === 1 ? '' : 's'}`}
+                {isLoadingHistories
+                  ? 'Loading...'
+                  : historyDocuments.length === 0
+                    ? 'Ready for files'
+                    : `${historyDocuments.length} document${historyDocuments.length === 1 ? '' : 's'}`}
               </strong>
             </div>
           </aside>
@@ -68,15 +106,23 @@ export default function HistoryPage() {
               <p className="historyPage__sectionLabel">Document Library</p>
               <div>
                 <h2 className="historyPage__sectionTitle">Historical Documents</h2>
-                {/*Add a search bar to filter years*/}
               </div>
             </div>
           </div>
 
-          {HISTORY_DOCUMENTS.length > 0 ? (
+          {loadError ? (
+            <div className="historyPage__emptyState">
+              <p className="historyPage__emptyTitle">Unable to load history PDFs.</p>
+              <p className="historyPage__emptyCopy">{loadError}</p>
+            </div>
+          ) : isLoadingHistories ? (
+            <div className="historyPage__emptyState">
+              <p className="historyPage__emptyTitle">Loading history PDFs...</p>
+            </div>
+          ) : historyDocuments.length > 0 ? (
             <div className="historyPage__grid" aria-label="History document cards">
-              {HISTORY_DOCUMENTS.map((document) => (
-                <article key={document.key} className="historyPage__card">
+              {historyDocuments.map((document) => (
+                <article key={document.historyId || document.key} className="historyPage__card">
                   <div className="historyPage__cardBody">
                     <p className="historyPage__cardEyebrow">Historical document</p>
                     <h3 className="historyPage__cardTitle">{document.title}</h3>
@@ -96,7 +142,6 @@ export default function HistoryPage() {
           ) : (
             <div className="historyPage__emptyState">
               <p className="historyPage__emptyTitle">No history PDFs added yet.</p>
-              
             </div>
           )}
         </div>
@@ -138,8 +183,9 @@ export default function HistoryPage() {
             <div className="historyPage__viewerFrame">
               <iframe
                 className="historyPage__viewer"
-                src={`${PDF_BASE_PATH}/${activeDocument.fileName}${PDF_VIEWER_OPTIONS}`}
+                src={`${activeDocument.pdfUrl}${PDF_VIEWER_OPTIONS}`}
                 title={activeDocument.title}
+                tabIndex={-1}
               />
               <div
                 className="historyPage__viewerShield"
@@ -152,4 +198,22 @@ export default function HistoryPage() {
       ) : null}
     </div>
   );
+}
+
+function normalizeHistories(histories) {
+  return (Array.isArray(histories) ? histories : [])
+    .map((history) => ({
+      historyId: String(history?.historyId || ''),
+      key: String(history?.key || ''),
+      title: String(history?.title || ''),
+      description: String(history?.description || ''),
+      pdfUrl: String(history?.pdfUrl || ''),
+      uploadTimestamp: String(history?.uploadTimestamp || ''),
+    }))
+    .filter((history) => history.pdfUrl)
+    .sort((leftHistory, rightHistory) => {
+      const leftTimestamp = new Date(leftHistory.uploadTimestamp || 0).getTime();
+      const rightTimestamp = new Date(rightHistory.uploadTimestamp || 0).getTime();
+      return rightTimestamp - leftTimestamp;
+    });
 }

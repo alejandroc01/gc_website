@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { deleteHistory, getHistories, uploadHistory } from '../api/composites.js';
 import '../styles/composites.css';
 
 const acceptedPdfTypes = '.pdf,application/pdf';
-const localDraftStorageKey = 'gc-history-upload-drafts';
 const emptyForm = {
   key: '',
   name: '',
@@ -14,20 +14,54 @@ const emptyForm = {
 export default function HistoryUploadPage() {
   const [formValues, setFormValues] = useState(emptyForm);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [storedHistories, setStoredHistories] = useState([]);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
+  const [isLoadingHistories, setIsLoadingHistories] = useState(true);
+  const [deletingHistoryId, setDeletingHistoryId] = useState('');
   const [statusError, setStatusError] = useState('');
   const [statusSummary, setStatusSummary] = useState('');
-  const [preparedDrafts, setPreparedDrafts] = useState(() => loadPreparedDrafts());
+  const [uploadProgress, setUploadProgress] = useState(null);
   const fileInputRef = useRef(null);
 
-  const latestPreparedDraft = useMemo(
-    () => (preparedDrafts.length > 0 ? preparedDrafts[0] : null),
-    [preparedDrafts],
-  );
+  useEffect(() => {
+    let isActive = true;
 
-  useEffect(() => () => revokeDraftObjectUrls(preparedDrafts), [preparedDrafts]);
+    const loadHistories = async () => {
+      setIsLoadingHistories(true);
+      setStatusError('');
+
+      try {
+        const loadedHistories = await getHistories();
+
+        if (!isActive) {
+          return;
+        }
+
+        setStoredHistories(normalizeHistories(loadedHistories));
+      } catch (error) {
+        if (isActive) {
+          setStatusError(error.message);
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingHistories(false);
+        }
+      }
+    };
+
+    loadHistories();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  const latestStoredHistory = useMemo(
+    () => (storedHistories.length > 0 ? storedHistories[0] : null),
+    [storedHistories],
+  );
 
   const handleFieldChange = (event) => {
     const { name, value } = event.target;
@@ -77,6 +111,7 @@ export default function HistoryUploadPage() {
 
     setStatusError('');
     setStatusSummary('');
+    setUploadProgress(null);
     setIsPreparing(true);
 
     try {
@@ -93,36 +128,55 @@ export default function HistoryUploadPage() {
 
       await validatePdfFile(selectedFile);
 
-      const preparedDraft = buildPreparedHistoryDraft({
-        key: normalizedKey,
-        title: normalizedName,
-        description: normalizedDescription,
-        file: selectedFile,
-      });
-
-      const retainedDrafts = preparedDrafts.filter((entry) => entry.key !== preparedDraft.key);
-      const nextDrafts = [preparedDraft, ...retainedDrafts].slice(0, 12);
-      const removedDrafts = retainedDrafts.slice(11);
-
-      if (preparedDrafts.length > retainedDrafts.length) {
-        revokeDraftObjectUrls(preparedDrafts.filter((entry) => entry.key === preparedDraft.key));
-      }
-
-      revokeDraftObjectUrls(removedDrafts);
-
-      setPreparedDrafts(nextDrafts);
-      console.log('Prepared history draft:', preparedDraft);
-      persistPreparedDrafts(nextDrafts.map(stripTransientDraftFields));
-      setStatusSummary(
-        `Prepared ${preparedDraft.title} for local save. The browser draft now includes an in-session PDF link for review.`,
+      const createdHistory = normalizeHistory(
+        await uploadHistory(
+          selectedFile,
+          {
+            key: normalizedKey,
+            title: normalizedName,
+            description: normalizedDescription,
+          },
+          {
+            onProgress: (nextProgress) => setUploadProgress(nextProgress),
+          },
+        ),
       );
+
+      setStoredHistories((currentHistories) => normalizeHistories([createdHistory, ...currentHistories]));
+      setStatusSummary(`Uploaded ${createdHistory.title}.`);
       setFormValues(emptyForm);
       setSelectedFile(null);
       setFileInputKey((currentValue) => currentValue + 1);
     } catch (error) {
       setStatusError(error.message);
     } finally {
+      setUploadProgress(null);
       setIsPreparing(false);
+    }
+  };
+
+  const handleDeleteHistory = async (history) => {
+    const confirmed = window.confirm(
+      `Delete "${history.title}"? This will remove the written history PDF from backend storage.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeletingHistoryId(history.historyId);
+    setStatusError('');
+    setStatusSummary('');
+
+    try {
+      await deleteHistory(history.historyId);
+      setStoredHistories((currentHistories) =>
+        currentHistories.filter((entry) => entry.historyId !== history.historyId));
+      setStatusSummary(`Deleted ${history.title}.`);
+    } catch (error) {
+      setStatusError(error.message);
+    } finally {
+      setDeletingHistoryId('');
     }
   };
 
@@ -134,7 +188,7 @@ export default function HistoryUploadPage() {
           <h1 className="compositePageHeader__title">Upload Written History PDF</h1>
           <p className="compositePageHeader__description">
             Start with a PDF, derive a draft title and key from its filename, then adjust the
-            metadata before the backend upload flow is connected.
+            metadata before uploading it to backend storage.
           </p>
         </div>
 
@@ -286,15 +340,22 @@ export default function HistoryUploadPage() {
                 className="button compositeButton compositeButton--filled"
                 disabled={isPreparing || !selectedFile}
               >
-                {isPreparing ? 'Preparing PDF...' : 'Prepare History PDF'}
+                {isPreparing ? 'Uploading History...' : 'Upload History'}
               </button>
 
               <p className="compositeUploadForm__fileMeta">
                 {selectedFile
-                  ? `Ready to prepare ${selectedFile.name}.`
+                  ? `Ready to upload ${selectedFile.name}.`
                   : 'Choose a PDF to generate the editable metadata fields.'}
               </p>
             </div>
+
+            {uploadProgress ? (
+              <p className="compositeUploadForm__fileMeta">
+                Uploaded {formatFileSize(uploadProgress.uploadedBytes)} of {formatFileSize(uploadProgress.totalBytes)}
+                {' '}({Math.round((uploadProgress.uploadedBytes / Math.max(uploadProgress.totalBytes, 1)) * 100)}%)
+              </p>
+            ) : null}
 
             {statusSummary ? (
               <p className="compositeMessage compositeMessage--success">{statusSummary}</p>
@@ -306,65 +367,76 @@ export default function HistoryUploadPage() {
         <article className="compositePanel compositePanel--spacious">
           <div className="compositePanel__header">
             <div>
-              <h2 className="compositePanel__title">Prepared Local History Drafts</h2>
+              <h2 className="compositePanel__title">Stored Written Histories</h2>
               <p className="compositePanel__description">
-                These metadata records passed local validation in this browser and are ready to be
-                connected to backend storage later.
+                These written histories are currently stored by the backend and available to the site.
               </p>
             </div>
           </div>
 
-          {preparedDrafts.length === 0 ? (
+          {isLoadingHistories ? (
             <div className="compositeEmptyState">
-              <h3 className="compositeEmptyState__title">No prepared history drafts yet.</h3>
+              <p className="compositeEmptyState__description">Loading written histories...</p>
+            </div>
+          ) : storedHistories.length === 0 ? (
+            <div className="compositeEmptyState">
+              <h3 className="compositeEmptyState__title">No stored written histories yet.</h3>
               <p className="compositeEmptyState__description">
-                After a PDF passes validation, its key, title, description, and filename will appear
-                here.
+                After a PDF upload completes, the written history will appear here.
               </p>
             </div>
           ) : (
             <div className="compositeCardGrid">
-              {preparedDrafts.map((draft) => (
-                <article key={draft.key} className="compositeCard">
+              {storedHistories.map((history) => (
+                <article key={history.historyId} className="compositeCard">
                   <div className="compositeCard__body">
                     <div className="compositeCard__metaRow">
-                      <span className="compositeCard__pill">{draft.storageStatus}</span>
+                      <span className="compositeCard__pill">stored</span>
                       <span className="compositeCard__pill compositeCard__pill--year">
-                        {formatFileSize(draft.fileSize)}
+                        {formatFileSize(history.fileSize)}
                       </span>
                     </div>
 
-                    <h3 className="compositeCard__title">{draft.title}</h3>
-                    <p className="compositeCard__sourceName">{draft.fileName}</p>
+                    <h3 className="compositeCard__title">{history.title}</h3>
+                    <p className="compositeCard__sourceName">{history.originalFilename || history.fileName}</p>
                     <p className="compositeCard__meta">
-                      Key: <strong>{draft.key}</strong>
+                      Key: <strong>{history.key}</strong>
                     </p>
-                    <p className="compositeCard__meta">{draft.description}</p>
+                    <p className="compositeCard__meta">{history.description}</p>
                     <p className="compositeCard__meta">
-                      Prepared {formatDate(draft.preparedAt)}
+                      Uploaded {formatDate(history.uploadTimestamp || history.updatedAt)}
                     </p>
-                    {draft.masterPdfObjectUrl ? (
-                      <div className="profileDirectoryCard__actions">
+
+                    <div className="profileDirectoryCard__actions">
+                      {history.pdfUrl ? (
                         <a
                           className="button compositeButton"
-                          href={draft.masterPdfObjectUrl}
+                          href={history.pdfUrl}
                           target="_blank"
                           rel="noreferrer"
                         >
                           Open PDF
                         </a>
-                      </div>
-                    ) : null}
+                      ) : null}
+                      <button
+                        type="button"
+                        className="button compositeButton"
+                        onClick={() => void handleDeleteHistory(history)}
+                        disabled={deletingHistoryId === history.historyId}
+                      >
+                        {deletingHistoryId === history.historyId ? 'Deleting...' : 'Delete'}
+                      </button>
+                    </div>
                   </div>
                 </article>
               ))}
             </div>
           )}
 
-          {latestPreparedDraft ? (
+          {latestStoredHistory ? (
             <p className="compositeMessage" style={{ marginTop: '18px' }}>
-              Latest prepared draft: <strong>{latestPreparedDraft.title}</strong> using filename{' '}
-              <strong>{latestPreparedDraft.fileName}</strong>.
+              Latest stored history: <strong>{latestStoredHistory.title}</strong> using filename{' '}
+              <strong>{latestStoredHistory.originalFilename || latestStoredHistory.fileName}</strong>.
             </p>
           ) : null}
         </article>
@@ -461,60 +533,28 @@ function slugify(value) {
   return normalizedValue || 'history-document';
 }
 
-function loadPreparedDrafts() {
-  if (typeof window === 'undefined') {
-    return [];
-  }
-
-  try {
-    const storedValue = window.localStorage.getItem(localDraftStorageKey);
-
-    if (!storedValue) {
-      return [];
-    }
-
-    const parsedValue = JSON.parse(storedValue);
-    return Array.isArray(parsedValue) ? parsedValue : [];
-  } catch (error) {
-    console.error('Unable to read stored history drafts.', error);
-    return [];
-  }
+function normalizeHistories(histories) {
+  return (Array.isArray(histories) ? histories : [])
+    .map((history) => normalizeHistory(history))
+    .sort((leftHistory, rightHistory) => {
+      const leftTimestamp = new Date(leftHistory.uploadTimestamp || leftHistory.updatedAt || 0).getTime();
+      const rightTimestamp = new Date(rightHistory.uploadTimestamp || rightHistory.updatedAt || 0).getTime();
+      return rightTimestamp - leftTimestamp;
+    });
 }
 
-function persistPreparedDrafts(drafts) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(localDraftStorageKey, JSON.stringify(drafts));
-}
-
-function stripTransientDraftFields(draft) {
+function normalizeHistory(history) {
   return {
-    ...draft,
-    masterPdfObjectUrl: '',
-  };
-}
-
-function revokeDraftObjectUrls(drafts) {
-  drafts.forEach((draft) => {
-    if (draft?.masterPdfObjectUrl) {
-      URL.revokeObjectURL(draft.masterPdfObjectUrl);
-    }
-  });
-}
-
-function buildPreparedHistoryDraft({ key, title, description, file }) {
-  return {
-    key,
-    title,
-    description,
-    fileName: file.name,
-    fileSize: file.size,
-    mimeType: file.type || 'application/pdf',
-    preparedAt: new Date().toISOString(),
-    storageStatus: 'ready-for-local-save',
-    masterPdfObjectUrl: URL.createObjectURL(file),
+    historyId: String(history?.historyId || ''),
+    key: String(history?.key || ''),
+    title: String(history?.title || ''),
+    description: String(history?.description || ''),
+    originalFilename: String(history?.originalFilename || ''),
+    fileName: String(history?.fileName || history?.originalFilename || ''),
+    fileSize: Number(history?.fileSize || 0),
+    pdfUrl: String(history?.pdfUrl || ''),
+    uploadTimestamp: String(history?.uploadTimestamp || ''),
+    updatedAt: String(history?.updatedAt || ''),
   };
 }
 

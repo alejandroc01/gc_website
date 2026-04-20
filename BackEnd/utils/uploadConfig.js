@@ -13,10 +13,12 @@ const scrapbookUploadsDirectory = configuredScrapbookUploadsRoot
     : path.join(uploadsRootDirectory, "scrapbooks");
 const homepageUploadsDirectory = path.join(uploadsRootDirectory, "homepage");
 const oralHistoryUploadsDirectory = path.join(uploadsRootDirectory, "oral-histories");
+const historyUploadsDirectory = path.join(uploadsRootDirectory, "histories");
 const compositeUploadSessionsDirectory = path.join(__dirname, "..", ".composite_upload_sessions");
 const scrapbookUploadSessionsDirectory = path.join(__dirname, "..", ".scrapbook_upload_sessions");
 const homepageUploadSessionsDirectory = path.join(__dirname, "..", ".homepage_upload_sessions");
 const oralHistoryUploadSessionsDirectory = path.join(__dirname, "..", ".oral_history_upload_sessions");
+const historyUploadSessionsDirectory = path.join(__dirname, "..", ".history_upload_sessions");
 const legacyUploadsDirectory = path.join(defaultUploadsRootDirectory, "composites");
 const extensionByMimeType = {
     "image/jpeg": ".jpg",
@@ -35,16 +37,23 @@ const oralHistoryExtensionByMimeType = {
 };
 const allowedOralHistoryMimeTypes = new Set(Object.keys(oralHistoryExtensionByMimeType));
 const allowedOralHistoryUploadExtensions = new Set([".mp4", ".mov", ".m4v", ".webm"]);
+const historyExtensionByMimeType = {
+    "application/pdf": ".pdf",
+};
+const allowedHistoryMimeTypes = new Set(Object.keys(historyExtensionByMimeType));
+const allowedHistoryUploadExtensions = new Set([".pdf"]);
 
 async function ensureCompositeUploadsDirectory() {
     await fs.mkdir(uploadsDirectory, { recursive: true });
     await fs.mkdir(scrapbookUploadsDirectory, { recursive: true });
     await fs.mkdir(homepageUploadsDirectory, { recursive: true });
     await fs.mkdir(oralHistoryUploadsDirectory, { recursive: true });
+    await fs.mkdir(historyUploadsDirectory, { recursive: true });
     await fs.mkdir(compositeUploadSessionsDirectory, { recursive: true });
     await fs.mkdir(scrapbookUploadSessionsDirectory, { recursive: true });
     await fs.mkdir(homepageUploadSessionsDirectory, { recursive: true });
     await fs.mkdir(oralHistoryUploadSessionsDirectory, { recursive: true });
+    await fs.mkdir(historyUploadSessionsDirectory, { recursive: true });
     await migrateBundledCompositeUploads();
 }
 
@@ -117,6 +126,27 @@ function resolveExtensionFromOralHistoryUpload(file) {
 
 function buildOralHistoryStoredFilePath(filename) {
     return path.posix.join("uploads", "oral-histories", String(filename || "").trim());
+}
+
+function isAllowedHistoryUpload(file) {
+    const mimeType = String(file?.mimetype || "").trim().toLowerCase();
+    const originalExtension = path.extname(String(file?.originalname || "")).toLowerCase();
+
+    return allowedHistoryMimeTypes.has(mimeType) || allowedHistoryUploadExtensions.has(originalExtension);
+}
+
+function resolveExtensionFromHistoryUpload(file) {
+    const originalExtension = path.extname(file.originalname || "").toLowerCase();
+
+    if (allowedHistoryUploadExtensions.has(originalExtension)) {
+        return originalExtension;
+    }
+
+    return historyExtensionByMimeType[file.mimetype] || ".pdf";
+}
+
+function buildHistoryStoredFilePath(filename) {
+    return path.posix.join("uploads", "histories", String(filename || "").trim());
 }
 
 function normalizeStoredFilePath(storedFilePath) {
@@ -245,20 +275,28 @@ module.exports = {
     buildScrapbookStoredFilePath,
     buildHomepageStoredFilePath,
     buildOralHistoryStoredFilePath,
+    buildHistoryStoredFilePath,
     compositeUploadSessionsDirectory,
     scrapbookUploadSessionsDirectory,
     ensureCompositeUploadsDirectory,
     extensionByMimeType,
+    historyExtensionByMimeType,
+    historyUploadSessionsDirectory,
+    historyUploadsDirectory,
     homepageUploadSessionsDirectory,
     homepageUploadsDirectory,
     isAllowedCompositeUpload,
+    isAllowedHistoryUpload,
     isAllowedScrapbookUpload,
     isAllowedOralHistoryUpload,
     normalizeStoredFilePath,
+    resolveExtensionFromHistoryUpload,
     resolveExtensionFromUpload,
     resolveExtensionFromScrapbookUpload,
     resolveExtensionFromOralHistoryUpload,
     resolveStoredFileAbsolutePath,
+    allowedHistoryMimeTypes,
+    allowedHistoryUploadExtensions,
     oralHistoryExtensionByMimeType,
     oralHistoryUploadSessionsDirectory,
     oralHistoryUploadsDirectory,
