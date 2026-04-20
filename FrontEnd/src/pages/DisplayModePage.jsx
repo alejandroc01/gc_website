@@ -6,16 +6,29 @@ import './DisplayModePage.css';
 
 const ROTATE_MS = 6500;
 const CONTROLS_HIDE_MS = 2500;
+const PRELOAD_AHEAD_COUNT = 5;
+const RENDER_TRAILING_COUNT = 1;
+const RENDER_AHEAD_COUNT = 1;
+const SCRAPBOOK_RIGHTS_URL = 'https://rightsstatements.org/page/InC-RUU/1.0/?language=en';
+const SCRAPBOOK_RIGHTS_NOTICE = 'This Item is protected by copyright and/or related rights. However, for this Item, either (a) no rights-holder(s) have been identified or (b) one or more rights-holder(s) have been identified but none have been located. You are free to use this Item in any way that is permitted by the copyright and related rights legislation that applies to your use.';
 
 export default function DisplayModePage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [displayImages, setDisplayImages] = useState([]);
   const hideControlsTimeoutRef = useRef(null);
+  const loadedImageUrlsRef = useRef(new Set());
+  const preloadingImagePromisesRef = useRef(new Map());
   const navigate = useNavigate();
 
   const imageCount = displayImages.length;
   const hasImages = imageCount > 0;
+  const currentImage = hasImages ? displayImages[currentIndex] : null;
+  const shouldShowScrapbookCopyright = currentImage?.sourceType === 'scrapbook';
+  const renderedImages = useMemo(
+    () => getRenderedImages(displayImages, currentIndex),
+    [displayImages, currentIndex],
+  );
   const imageAlt = useMemo(
     () => `Display slideshow image ${currentIndex + 1} of ${Math.max(imageCount, 1)}`,
     [currentIndex, imageCount],
@@ -42,6 +55,12 @@ export default function DisplayModePage() {
 
         setDisplayImages(nextImages);
         setCurrentIndex(0);
+        loadedImageUrlsRef.current = new Set();
+        preloadingImagePromisesRef.current = new Map();
+        preloadImagesAroundIndex(nextImages, 0, {
+          loadedImageUrlsRef,
+          preloadingImagePromisesRef,
+        });
       } catch {
         if (isActive) {
           setDisplayImages([]);
@@ -66,6 +85,15 @@ export default function DisplayModePage() {
 
     return () => window.clearInterval(timerId);
   }, [hasImages, imageCount]);
+
+  useEffect(() => {
+    if (!hasImages) return;
+
+    preloadImagesAroundIndex(displayImages, currentIndex, {
+      loadedImageUrlsRef,
+      preloadingImagePromisesRef,
+    });
+  }, [currentIndex, displayImages, hasImages]);
 
   useEffect(() => {
     const showControls = () => {
@@ -113,14 +141,29 @@ export default function DisplayModePage() {
 
   return (
     <section className="displayMode" aria-label="Display mode slideshow">
-      {displayImages.map((imageSrc, index) => (
+      {renderedImages.map(({ imageSrc, index }) => (
         <img
-          key={imageSrc}
+          key={`${index}-${imageSrc}`}
           src={imageSrc}
           alt={imageAlt}
           className={['displayMode__image', index === currentIndex ? 'is-active' : ''].join(' ')}
         />
       ))}
+
+      {shouldShowScrapbookCopyright ? (
+        <p
+          className={[
+            'displayMode__scrapbookCopyright',
+            controlsVisible ? 'is-controls-visible' : '',
+          ].filter(Boolean).join(' ')}
+          title="This scrapbook item is protected by copyright and/or related rights."
+        >
+          <span>{SCRAPBOOK_RIGHTS_NOTICE}</span>
+          <a href={SCRAPBOOK_RIGHTS_URL} target="_blank" rel="noreferrer">
+            Learn more
+          </a>
+        </p>
+      ) : null}
 
       <div className={['displayMode__controls', controlsVisible ? 'is-visible' : ''].join(' ')}>
         <div className="displayMode__counter">
@@ -136,6 +179,73 @@ export default function DisplayModePage() {
       </div>
     </section>
   );
+}
+
+function getRenderedImages(imageUrls, currentIndex) {
+  if (!Array.isArray(imageUrls) || imageUrls.length === 0) {
+    return [];
+  }
+
+  const renderedIndexes = new Set([currentIndex]);
+
+  for (let offset = 1; offset <= RENDER_TRAILING_COUNT; offset += 1) {
+    renderedIndexes.add((currentIndex - offset + imageUrls.length) % imageUrls.length);
+  }
+
+  for (let offset = 1; offset <= RENDER_AHEAD_COUNT; offset += 1) {
+    renderedIndexes.add((currentIndex + offset) % imageUrls.length);
+  }
+
+  return Array.from(renderedIndexes)
+    .sort((leftIndex, rightIndex) => leftIndex - rightIndex)
+    .map((index) => ({
+      index,
+      imageSrc: imageUrls[index]?.url,
+    }))
+    .filter((entry) => Boolean(entry.imageSrc));
+}
+
+function preloadImagesAroundIndex(imageUrls, currentIndex, options) {
+  if (!Array.isArray(imageUrls) || imageUrls.length === 0) {
+    return;
+  }
+
+  const preloadCount = Math.min(PRELOAD_AHEAD_COUNT, imageUrls.length);
+
+  for (let offset = 0; offset < preloadCount; offset += 1) {
+    const imageIndex = (currentIndex + offset) % imageUrls.length;
+    preloadImage(imageUrls[imageIndex]?.url, options);
+  }
+}
+
+function preloadImage(imageSrc, { loadedImageUrlsRef, preloadingImagePromisesRef }) {
+  const normalizedImageSrc = String(imageSrc || '').trim();
+
+  if (!normalizedImageSrc || loadedImageUrlsRef.current.has(normalizedImageSrc)) {
+    return Promise.resolve();
+  }
+
+  if (preloadingImagePromisesRef.current.has(normalizedImageSrc)) {
+    return preloadingImagePromisesRef.current.get(normalizedImageSrc);
+  }
+
+  const preloadPromise = new Promise((resolve) => {
+    const image = new Image();
+
+    const markComplete = () => {
+      preloadingImagePromisesRef.current.delete(normalizedImageSrc);
+      loadedImageUrlsRef.current.add(normalizedImageSrc);
+      resolve();
+    };
+
+    image.onload = markComplete;
+    image.onerror = markComplete;
+    image.src = normalizedImageSrc;
+  });
+
+  preloadingImagePromisesRef.current.set(normalizedImageSrc, preloadPromise);
+
+  return preloadPromise;
 }
 
 function extractCompositeImages(composites) {
@@ -177,10 +287,10 @@ function shuffleImages(imageUrls) {
 
   while (groupKeys.some((groupKey) => shuffledGroups[groupKey].length > 0)) {
     for (const groupKey of groupKeys) {
-      const nextImage = shuffledGroups[groupKey].shift();
+        const nextImage = shuffledGroups[groupKey].shift();
 
       if (nextImage) {
-        interleavedImages.push(nextImage.url);
+        interleavedImages.push(nextImage);
       }
     }
   }
