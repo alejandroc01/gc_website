@@ -225,6 +225,12 @@
   gap: 12px;
 }
 
+.member__materialsGrid--scrollable {
+  max-height: 430px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
 .member__materialsGrid--yearOnly {
   grid-template-columns: repeat(auto-fit, minmax(96px, max-content));
   justify-content: start;
@@ -249,6 +255,15 @@
   align-items: center;
   width: auto;
   padding: 12px 14px;
+}
+
+.member__materialCard--stacked {
+  display: flex;
+  min-height: 168px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 24px;
 }
 
 .member__materialCard:hover {
@@ -278,9 +293,23 @@
   background: rgba(38, 21, 56, 0.06);
 }
 
+.member__materialCard--stacked .member__materialYear {
+  min-width: 0;
+  width: fit-content;
+}
+
+.member__materialBody {
+  min-width: 0;
+}
+
+.member__materialCard--stacked .member__materialBody {
+  width: 100%;
+}
+
 .member__materialTitle {
   margin: 0 0 4px;
   font-weight: 600;
+  line-height: 1.3;
 }
 
 .member__materialNote {

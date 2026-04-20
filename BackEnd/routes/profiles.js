@@ -16,6 +16,9 @@ const {
     listProfileCompositeReferences,
     removeProfileReferences,
 } = require("../utils/compositeStore");
+const {
+    listProfileScrapbookReferences,
+} = require("../utils/scrapbookMetadataStore");
 
 const router = express.Router();
 const upload = multer({
@@ -70,7 +73,10 @@ router.get("/:profileId", async (req, res, next) => {
             return res.status(404).json({ error: "Member profile not found." });
         }
 
-        const relatedComposites = await listProfileCompositeReferences(profile.id);
+        const [relatedComposites, relatedScrapbookPages] = await Promise.all([
+            listProfileCompositeReferences(profile.id),
+            listProfileScrapbookReferences(profile),
+        ]);
         const primaryPortraitReference = relatedComposites[0] || null;
 
         return res.json({
@@ -102,6 +108,7 @@ router.get("/:profileId", async (req, res, next) => {
                 updatedAt: reference.updatedAt,
                 annotationId: reference.annotationId,
             })),
+            relatedScrapbookPages,
         });
     } catch (error) {
         return next(error);

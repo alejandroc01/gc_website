@@ -73,6 +73,12 @@ export default function MemberProfileContent({ profile, onArchiveNavigate = null
             items={buildCompositeItems(profile.relatedComposites)}
             onNavigate={onArchiveNavigate}
           />
+          <ArchiveSection
+            label="Featured in Scrapbook Pages"
+            items={buildScrapbookItems(profile.relatedScrapbookPages)}
+            onNavigate={onArchiveNavigate}
+            variant="stacked"
+          />
         </div>
       </div>
     </div>
@@ -117,12 +123,19 @@ function Fact({ label, value }) {
   );
 }
 
-function ArchiveSection({ label, items, onNavigate }) {
+function ArchiveSection({ label, items, onNavigate, variant = 'default' }) {
   const hasItems = Array.isArray(items) && items.length > 0;
   const isYearOnlySection = hasItems && items.every((item) => item.yearOnly);
+  const isScrollableSection = variant === 'stacked' && hasItems && items.length > 6;
 
   return (
-    <section className="member__archiveSection" aria-label={label}>
+    <section
+      className={[
+        'member__archiveSection',
+        variant === 'stacked' ? 'member__archiveSection--stacked' : '',
+      ].filter(Boolean).join(' ')}
+      aria-label={label}
+    >
       <div className="member__archiveHeader">
         <p className="member__archiveLabel">{label}</p>
         <span className="member__archiveCount">
@@ -135,6 +148,7 @@ function ArchiveSection({ label, items, onNavigate }) {
           className={[
             'member__materialsGrid',
             isYearOnlySection ? 'member__materialsGrid--yearOnly' : '',
+            isScrollableSection ? 'member__materialsGrid--scrollable' : '',
           ].filter(Boolean).join(' ')}
         >
           {items.map((item) => (
@@ -142,6 +156,7 @@ function ArchiveSection({ label, items, onNavigate }) {
               key={`${label}-${item.compositeId}-${item.annotationId}`}
               {...item}
               onNavigate={onNavigate}
+              variant={variant}
             />
           ))}
         </div>
@@ -152,10 +167,11 @@ function ArchiveSection({ label, items, onNavigate }) {
   );
 }
 
-function MaterialCard({ title, year, note, to, onNavigate, yearOnly = false }) {
+function MaterialCard({ title, year, note, to, onNavigate, yearOnly = false, variant = 'default' }) {
   const cardClassName = [
     'member__materialCard',
     yearOnly ? 'member__materialCard--yearOnly' : '',
+    variant === 'stacked' ? 'member__materialCard--stacked' : '',
   ].filter(Boolean).join(' ');
 
   if (to) {
@@ -203,12 +219,60 @@ function buildCompositeItems(relatedComposites) {
     }));
 }
 
+function buildScrapbookItems(relatedScrapbookPages) {
+  return [...(Array.isArray(relatedScrapbookPages) ? relatedScrapbookPages : [])]
+    .sort(compareScrapbookArchiveItems)
+    .map((scrapbookPage) => ({
+      compositeId: scrapbookPage.identifier,
+      annotationId: `${scrapbookPage.identifier}-scrapbook`,
+      title: scrapbookPage.title || 'Untitled scrapbook page',
+      year: scrapbookPage.year || 'N/A',
+      note: buildScrapbookNote(scrapbookPage),
+      to: scrapbookPage.to || buildScrapbookLink(scrapbookPage.year),
+    }));
+}
+
 function buildCompositeLink(compositeYear) {
   if (!compositeYear) {
     return '/composites';
   }
 
   return `/composites?year=${encodeURIComponent(compositeYear)}`;
+}
+
+function buildScrapbookLink(scrapbookYear) {
+  if (!scrapbookYear) {
+    return '/scrapbooks';
+  }
+
+  return `/scrapbooks?year=${encodeURIComponent(scrapbookYear)}`;
+}
+
+function buildScrapbookNote(scrapbookPage) {
+  const noteParts = [
+    scrapbookPage.source,
+    scrapbookPage.category,
+    scrapbookPage.pageNumber ? `Page ${scrapbookPage.pageNumber}` : '',
+  ].filter(Boolean);
+  const detailTitles = getMatchedDetailTitles(scrapbookPage);
+  const baseNote = noteParts.join(' | ');
+
+  if (detailTitles.length === 0) {
+    return baseNote;
+  }
+
+  const detailNote = `Includes: ${detailTitles.join('; ')}`;
+  return [baseNote, detailNote].filter(Boolean).join(' - ');
+}
+
+function getMatchedDetailTitles(scrapbookPage) {
+  const parentIdentifier = String(scrapbookPage.identifier || '').trim().toLowerCase();
+
+  return [...(Array.isArray(scrapbookPage.matchedItems) ? scrapbookPage.matchedItems : [])]
+    .filter((item) => item?.isDetail)
+    .filter((item) => String(item.identifier || '').trim().toLowerCase() !== parentIdentifier)
+    .map((item) => item.title || item.identifier)
+    .filter(Boolean);
 }
 
 function buildCompositePortraitStyle(reference) {
@@ -232,6 +296,26 @@ function compareCompositeArchiveItems(leftComposite, rightComposite) {
   const rightTimestamp = new Date(rightComposite.updatedAt || rightComposite.uploadTimestamp || 0).getTime();
 
   return rightTimestamp - leftTimestamp;
+}
+
+function compareScrapbookArchiveItems(leftPage, rightPage) {
+  const leftYear = Number(leftPage.year || 0);
+  const rightYear = Number(rightPage.year || 0);
+
+  if (leftYear !== rightYear) {
+    return rightYear - leftYear;
+  }
+
+  const leftPageNumber = Number(leftPage.pageNumber || 0);
+  const rightPageNumber = Number(rightPage.pageNumber || 0);
+
+  if (leftPageNumber !== rightPageNumber) {
+    return leftPageNumber - rightPageNumber;
+  }
+
+  return String(leftPage.title || '').localeCompare(String(rightPage.title || ''), undefined, {
+    sensitivity: 'base',
+  });
 }
 
 function isBoardDepartment(department) {

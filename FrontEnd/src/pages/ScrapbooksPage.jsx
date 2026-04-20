@@ -16,6 +16,7 @@ export default function ScrapbooksPage() {
   const [hasHandledLinkedYear, setHasHandledLinkedYear] = useState(false);
   const pageImageRef = useRef(null);
   const requestedYear = String(searchParams.get('year') || '').trim();
+  const requestedPage = String(searchParams.get('page') || '').trim();
 
   useEffect(() => {
     let isActive = true;
@@ -91,9 +92,8 @@ export default function ScrapbooksPage() {
     }
 
     setSearchMessage('');
-    setActiveBook(matchingBook);
-    setActivePageIndex(0);
-  }, [hasHandledLinkedYear, requestedYear, scrapbookCollections]);
+    openBook(matchingBook, getRequestedPageIndex(requestedPage, matchingBook.pages.length));
+  }, [hasHandledLinkedYear, requestedPage, requestedYear, scrapbookCollections]);
 
   useEffect(() => {
     if (!activeBook) return undefined;
@@ -170,9 +170,9 @@ export default function ScrapbooksPage() {
     };
   }, [activeBook]);
 
-  const openBook = (book) => {
+  const openBook = (book, pageIndex = 0) => {
     setActiveBook(book);
-    setActivePageIndex(0);
+    setActivePageIndex(getBoundedPageIndex(pageIndex, book.pages.length));
   };
 
   const closeBook = () => {
@@ -380,4 +380,25 @@ function compareScrapbooks(leftValue, rightValue) {
 
 function deriveScrapbookTone(shelfIndex) {
   return shelfIndex % 2 === 0 ? 'gold' : 'purple';
+}
+
+function getRequestedPageIndex(requestedPage, pageCount) {
+  const pageNumber = Number(requestedPage || 1);
+
+  if (!Number.isInteger(pageNumber) || pageNumber < 1) {
+    return 0;
+  }
+
+  return getBoundedPageIndex(pageNumber - 1, pageCount);
+}
+
+function getBoundedPageIndex(pageIndex, pageCount) {
+  const normalizedPageIndex = Number(pageIndex || 0);
+  const normalizedPageCount = Number(pageCount || 0);
+
+  if (!Number.isFinite(normalizedPageIndex) || normalizedPageIndex < 0 || normalizedPageCount <= 0) {
+    return 0;
+  }
+
+  return Math.min(normalizedPageIndex, normalizedPageCount - 1);
 }
