@@ -324,7 +324,8 @@ export default function ScrapbookUploadPage() {
         importScrapbookMetadataCsv(metadataCsvFile),
       ]);
       const nextYears = await refreshMetadataYears();
-      const nextSelectedYear = selectedMetadataYear || (nextYears.length === 1 ? nextYears[0].year : '');
+      const importedYear = getSingleMetadataReviewYear(importedReview);
+      const nextSelectedYear = importedYear || selectedMetadataYear || (nextYears.length === 1 ? nextYears[0].year : '');
       const review = nextSelectedYear
         ? await getScrapbookMetadataReview(nextSelectedYear)
         : importedReview;
@@ -576,8 +577,8 @@ export default function ScrapbookUploadPage() {
           <p className="compositePageHeader__eyebrow">Admin Upload Flow</p>
           <h1 className="compositePageHeader__title">Scrapbook Upload</h1>
           <p className="compositePageHeader__description">
-            Queue up to {maxQueuedScrapbookFiles} scrapbook page images at once. Each page is uploaded in order and
-            stored under the scrapbook year you choose here for the public viewer.
+            Use this page to upload, review, and manage scrapbook pages by year. Up to {maxQueuedScrapbookFiles} images
+            can be queued at once, and uploaded pages will appear in order in the public scrapbook viewer.
           </p>
         </div>
 
@@ -594,7 +595,7 @@ export default function ScrapbookUploadPage() {
             <div>
               <h2 className="compositePanel__title">Upload a New Scrapbook</h2>
               <p className="compositePanel__description">
-                Accepted formats: JPG, JPEG, PNG, and WEBP. Queue up to {maxQueuedScrapbookFiles} files and use format <em>1991ScrapB-P2</em>.
+                Supported image formats include JPG and JPEG. You may queue up to {maxQueuedScrapbookFiles} files, with each file following the naming convention <em>1991ScrapB-P2</em>.
               </p>
             </div>
           </div>
@@ -703,7 +704,7 @@ export default function ScrapbookUploadPage() {
             <div>
               <h2 className="compositePanel__title">Import Scrapbook Metadata</h2>
               <p className="compositePanel__description">
-                Upload the scrapbook metadata CSV, then choose one year at a time to review automatic member matches without loading the full archive into the page.
+                Upload new scrapbook metadata CSVs as each year is added, then choose one stored year at a time to review automatic member matches.
               </p>
             </div>
           </div>
@@ -727,12 +728,12 @@ export default function ScrapbookUploadPage() {
                   className="button compositeButton compositeButton--filled scrapbookMetadataActions__import"
                   disabled={isMetadataImporting || !metadataCsvFile}
                 >
-                  {isMetadataImporting ? 'Importing Metadata...' : 'Import Metadata CSV'}
+                  {isMetadataImporting ? 'Adding Metadata...' : 'Add Metadata CSV'}
                 </button>
               </div>
 
               <p className="compositeUploadForm__fileMeta scrapbookMetadataControlRow__meta">
-                {metadataCsvFile ? metadataCsvFile.name : 'Choose a CSV to replace the stored scrapbook metadata.'}
+                {metadataCsvFile ? metadataCsvFile.name : 'Choose a CSV to add alongside the stored scrapbook metadata.'}
               </p>
             </div>
 
@@ -1041,6 +1042,16 @@ function normalizeMetadataYears(yearsResponse) {
     .sort((leftEntry, rightEntry) => Number(leftEntry.year) - Number(rightEntry.year));
 }
 
+function getSingleMetadataReviewYear(review) {
+  const reviewYears = new Set(
+    (Array.isArray(review?.rows) ? review.rows : [])
+      .map((row) => String(row.year || '').trim())
+      .filter((year) => /^\d{4}$/.test(year)),
+  );
+
+  return reviewYears.size === 1 ? Array.from(reviewYears)[0] : '';
+}
+
 function countUnsavedManualProfileLinks(currentLinks, savedLinks) {
   const currentKeys = Object.keys(currentLinks || {});
   const savedKeys = Object.keys(savedLinks || {});
@@ -1086,7 +1097,7 @@ function buildMetadataImportMessage(review) {
   const peopleCount = Number(review?.peopleCount || 0);
   const needsReviewCount = Number(review?.needsReviewCount || 0);
 
-  return `Imported ${rowCount} metadata row${rowCount === 1 ? '' : 's'} with ${peopleCount} member name${peopleCount === 1 ? '' : 's'}. ${needsReviewCount} need${needsReviewCount === 1 ? 's' : ''} manual review.`;
+  return `Added ${rowCount} metadata row${rowCount === 1 ? '' : 's'} with ${peopleCount} member name${peopleCount === 1 ? '' : 's'} to the stored metadata. ${needsReviewCount} need${needsReviewCount === 1 ? 's' : ''} manual review.`;
 }
 
 function formatMetadataPersonStatus(person, selectedProfileId) {

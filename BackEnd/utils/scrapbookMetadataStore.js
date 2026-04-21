@@ -109,9 +109,11 @@ async function importScrapbookMetadataCsv(csvText, profiles = []) {
     const { headers } = parseCsvRecords(csvText);
     validateMetadataHeaders(headers);
     const rows = parseScrapbookMetadataRows(csvText);
+    const existingCsvText = await readScrapbookMetadataCsvText();
+    const mergedCsvText = mergeScrapbookMetadataCsv(existingCsvText, csvText);
 
     await ensureScrapbookMetadataDirectory();
-    await fs.writeFile(scrapbookMetadataPath, String(csvText || ""));
+    await fs.writeFile(scrapbookMetadataPath, mergedCsvText);
 
     return buildScrapbookMetadataReview(rows, profiles);
 }
@@ -389,6 +391,72 @@ function validateMetadataHeaders(headers) {
         error.statusCode = 400;
         throw error;
     }
+}
+
+async function readScrapbookMetadataCsvText() {
+    try {
+        return await fs.readFile(await resolveScrapbookMetadataPath(), "utf8");
+    } catch (error) {
+        if (error.code === "ENOENT") {
+            return "";
+        }
+
+        throw error;
+    }
+}
+
+function mergeScrapbookMetadataCsv(existingCsvText, incomingCsvText) {
+    const existingRecords = parseCsvRecords(existingCsvText);
+    const incomingRecords = parseCsvRecords(incomingCsvText);
+    const headers = mergeCsvHeaders(existingRecords.headers, incomingRecords.headers);
+    const rowsByIdentifier = new Map();
+
+    [...existingRecords.rows, ...incomingRecords.rows].forEach((row) => {
+        const identifierKey = normalizeIdentifierKey(row.Identifier);
+
+        if (!identifierKey) {
+            return;
+        }
+
+        rowsByIdentifier.set(identifierKey, row);
+    });
+
+    return serializeCsvRecords(headers, Array.from(rowsByIdentifier.values()));
+}
+
+function mergeCsvHeaders(existingHeaders, incomingHeaders) {
+    const headers = [];
+
+    [...existingHeaders, ...incomingHeaders].forEach((header) => {
+        const normalizedHeader = String(header || "").trim();
+
+        if (!normalizedHeader || headers.includes(normalizedHeader)) {
+            return;
+        }
+
+        headers.push(normalizedHeader);
+    });
+
+    return headers;
+}
+
+function serializeCsvRecords(headers, rows) {
+    const csvRows = [
+        headers.map(escapeCsvValue).join(","),
+        ...rows.map((row) => headers.map((header) => escapeCsvValue(row[header])).join(",")),
+    ];
+
+    return `${csvRows.join("\n")}\n`;
+}
+
+function escapeCsvValue(value) {
+    const stringValue = String(value || "");
+
+    if (/[",\n\r]/.test(stringValue)) {
+        return `"${stringValue.replace(/"/g, "\"\"")}"`;
+    }
+
+    return stringValue;
 }
 
 function filterScrapbookMetadataRowsByYear(rows, year) {
