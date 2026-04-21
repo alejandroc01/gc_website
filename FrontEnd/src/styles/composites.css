@@ -333,6 +333,16 @@
   color: var(--muted);
 }
 
+.scrapbookMetadataActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.scrapbookMetadataActions__meta {
+  text-align: left;
+}
+
 .scrapbookUploadQueue {
   display: grid;
   gap: 12px;

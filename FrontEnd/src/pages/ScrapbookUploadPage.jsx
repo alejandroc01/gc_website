@@ -28,7 +28,7 @@ export default function ScrapbookUploadPage() {
   const [scrapbooks, setScrapbooks] = useState([]);
   const [profiles, setProfiles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isMetadataLoading, setIsMetadataLoading] = useState(true);
+  const [isMetadataLoading, setIsMetadataLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isMetadataImporting, setIsMetadataImporting] = useState(false);
   const [isSavingMetadataLinks, setIsSavingMetadataLinks] = useState(false);
@@ -75,46 +75,6 @@ export default function ScrapbookUploadPage() {
     };
 
     loadScrapbooks();
-
-    return () => {
-      isActive = false;
-    };
-  }, []);
-
-  useEffect(() => {
-    let isActive = true;
-
-    const loadMetadataContext = async () => {
-      setIsMetadataLoading(true);
-      setMetadataError('');
-      startMetadataProgress('Loading metadata matches');
-
-      try {
-        const [profileRecords, review] = await Promise.all([
-          getProfiles(),
-          getScrapbookMetadataReview(),
-        ]);
-
-        if (!isActive) {
-          return;
-        }
-
-        setProfiles(Array.isArray(profileRecords) ? profileRecords : []);
-        applyMetadataReview(review);
-      } catch (error) {
-        if (isActive) {
-          setProfiles([]);
-          setMetadataError(error.message || 'Unable to load scrapbook metadata matches.');
-        }
-      } finally {
-        if (isActive) {
-          setIsMetadataLoading(false);
-          completeMetadataProgress('Metadata matches loaded');
-        }
-      }
-    };
-
-    loadMetadataContext();
 
     return () => {
       isActive = false;
@@ -270,6 +230,30 @@ export default function ScrapbookUploadPage() {
     setMetadataSuccess('');
   };
 
+  const handleMetadataReviewLoad = async () => {
+    setIsMetadataLoading(true);
+    setMetadataError('');
+    setMetadataSuccess('');
+    startMetadataProgress('Loading metadata matches');
+
+    try {
+      const [profileRecords, review] = await Promise.all([
+        getProfiles(),
+        getScrapbookMetadataReview(),
+      ]);
+
+      setProfiles(Array.isArray(profileRecords) ? profileRecords : []);
+      applyMetadataReview(review);
+      setMetadataSuccess('Loaded stored scrapbook metadata matches.');
+    } catch (error) {
+      setProfiles([]);
+      setMetadataError(error.message || 'Unable to load scrapbook metadata matches.');
+    } finally {
+      setIsMetadataLoading(false);
+      completeMetadataProgress('Metadata matches loaded');
+    }
+  };
+
   const handleMetadataImportSubmit = async (event) => {
     event.preventDefault();
 
@@ -284,7 +268,12 @@ export default function ScrapbookUploadPage() {
     startMetadataProgress('Importing metadata CSV');
 
     try {
-      const review = await importScrapbookMetadataCsv(metadataCsvFile);
+      const [profileRecords, review] = await Promise.all([
+        getProfiles(),
+        importScrapbookMetadataCsv(metadataCsvFile),
+      ]);
+
+      setProfiles(Array.isArray(profileRecords) ? profileRecords : []);
       applyMetadataReview(review);
       setMetadataSuccess(buildMetadataImportMessage(review));
       setMetadataCsvFile(null);
@@ -673,16 +662,25 @@ export default function ScrapbookUploadPage() {
               </label>
             </div>
 
-            <div className="compositeUploadForm__actions">
+            <div className="compositeUploadForm__actions scrapbookMetadataActions">
+              <button
+                type="button"
+                className="button compositeButton compositeButton--subtle"
+                onClick={handleMetadataReviewLoad}
+                disabled={isMetadataLoading || isMetadataImporting || isSavingMetadataLinks}
+              >
+                {isMetadataLoading ? 'Loading Metadata...' : 'Load Stored Metadata'}
+              </button>
+
               <button
                 type="submit"
-                className="button compositeButton compositeButton--filled"
+                className="button compositeButton compositeButton--filled scrapbookMetadataActions__import"
                 disabled={isMetadataImporting || !metadataCsvFile}
               >
                 {isMetadataImporting ? 'Importing Metadata...' : 'Import Metadata CSV'}
               </button>
 
-              <p className="compositeUploadForm__fileMeta">
+              <p className="compositeUploadForm__fileMeta scrapbookMetadataActions__meta">
                 {metadataCsvFile ? metadataCsvFile.name : 'No metadata CSV selected.'}
               </p>
             </div>
