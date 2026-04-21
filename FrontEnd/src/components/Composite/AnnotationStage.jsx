@@ -14,7 +14,6 @@ const RESIZE_HANDLES = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 export default function AnnotationStage({
   composite,
   annotations,
-  textBoxes = [],
   selectedAnnotationId,
   zoom = 1,
   lastBoxSize = DEFAULT_BOX_SIZE,
@@ -531,21 +530,6 @@ export default function AnnotationStage({
             />
 
             <div className="annotationStage__overlay" onPointerDown={handleOverlayPointerDown}>
-              {textBoxes.map((textBox) => (
-                <div
-                  key={textBox.textBoxId}
-                  className={[
-                    'annotationStage__textBox',
-                    textBox.isSubtext
-                      ? 'annotationStage__textBox--subtext'
-                      : (textBox.isAnchorCandidate ? 'annotationStage__textBox--anchor' : 'annotationStage__textBox--raw'),
-                    textBox.needsReview ? 'annotationStage__textBox--review' : '',
-                  ].filter(Boolean).join(' ')}
-                  style={toDisplayRect(textBox, composite, baseDisplaySize)}
-                  title={textBox.rawText || textBox.text || 'OCR text box'}
-                />
-              ))}
-
               {annotations.map((annotation) => {
                 const displayRect = toDisplayRect(annotation, composite, baseDisplaySize);
                 const isSelected = annotation.annotationId === selectedAnnotationId;

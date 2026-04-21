@@ -35,7 +35,6 @@ export default function CompositeEditorPage() {
   const [saveStatus, setSaveStatus] = useState('idle');
   const [saveError, setSaveError] = useState('');
   const [textBoxes, setTextBoxes] = useState([]);
-  const [showTextBoxes, setShowTextBoxes] = useState(true);
   const [textBoxStatus, setTextBoxStatus] = useState('idle');
   const [textBoxError, setTextBoxError] = useState('');
   const [autoDetectStatus, setAutoDetectStatus] = useState('idle');
@@ -698,23 +697,6 @@ export default function CompositeEditorPage() {
 
         <div className="compositeEditor__content">
           <article ref={canvasPanelRef} className="compositePanel compositePanel--canvas">
-            <div className="compositeCanvasToolbar">
-              <p className="compositeCanvasToolbar__hint">
-                Reusable box size: {Math.round(lastBoxSize.width)} x {Math.round(lastBoxSize.height)} px
-              </p>
-              <p className="compositeCanvasToolbar__hint">
-                {buildTextBoxStatusLabel(textBoxStatus, textBoxes.length)}
-              </p>
-              <button
-                type="button"
-                className="button compositeButton compositeButton--subtle"
-                onClick={() => setShowTextBoxes((currentValue) => !currentValue)}
-                disabled={textBoxStatus === 'loading' || textBoxes.length === 0}
-              >
-                {showTextBoxes ? 'Hide OCR boxes' : 'Show OCR boxes'}
-              </button>
-            </div>
-
             <div className={[
               'compositeCanvasSurface',
               isCanvasProcessing ? 'compositeCanvasSurface--processing' : '',
@@ -722,7 +704,6 @@ export default function CompositeEditorPage() {
               <AnnotationStage
                 composite={composite}
                 annotations={annotations}
-                textBoxes={showTextBoxes ? textBoxes : []}
                 selectedAnnotationId={selectedAnnotationId}
                 zoom={zoomLevel}
                 lastBoxSize={lastBoxSize}
@@ -1145,22 +1126,6 @@ function normalizeTextBoxStatus(status) {
 
 function isOcrBusyStatus(status) {
   return ['idle', 'queued', 'processing'].includes(status);
-}
-
-function buildTextBoxStatusLabel(status, textBoxCount) {
-  if (status === 'loaded') {
-    return `OCR name boxes: ${textBoxCount}`;
-  }
-
-  if (status === 'error') {
-    return 'OCR processing needs attention';
-  }
-
-  if (status === 'processing') {
-    return 'OCR is processing this composite...';
-  }
-
-  return 'OCR queue is preparing this composite...';
 }
 
 function orderAnnotationsByGridPosition(annotations) {
