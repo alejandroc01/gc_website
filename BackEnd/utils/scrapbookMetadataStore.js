@@ -116,9 +116,31 @@ async function importScrapbookMetadataCsv(csvText, profiles = []) {
     return buildScrapbookMetadataReview(rows, profiles);
 }
 
-async function getScrapbookMetadataReview(profiles = []) {
+async function getScrapbookMetadataReview(profiles = [], options = {}) {
     const rows = await readScrapbookMetadataRows();
-    return buildScrapbookMetadataReview(rows, profiles);
+    const selectedYear = normalizeMetadataYear(options.year);
+    const reviewRows = selectedYear ? filterScrapbookMetadataRowsByYear(rows, selectedYear) : rows;
+
+    return buildScrapbookMetadataReview(reviewRows, profiles, { selectedYear });
+}
+
+async function listScrapbookMetadataYears() {
+    const rows = await readScrapbookMetadataRows();
+    const yearCounts = new Map();
+
+    rows.forEach((row) => {
+        const year = extractMetadataYear(row.date);
+
+        if (!year) {
+            return;
+        }
+
+        yearCounts.set(year, (yearCounts.get(year) || 0) + 1);
+    });
+
+    return Array.from(yearCounts.entries())
+        .map(([year, rowCount]) => ({ year, rowCount }))
+        .sort((leftYear, rightYear) => Number(leftYear.year) - Number(rightYear.year));
 }
 
 async function saveScrapbookMetadataProfileLinks(linksInput) {
@@ -181,7 +203,7 @@ function parseScrapbookMetadataRows(csvText) {
     })).filter((row) => row.identifier);
 }
 
-async function buildScrapbookMetadataReview(metadataRows, profiles = []) {
+async function buildScrapbookMetadataReview(metadataRows, profiles = [], options = {}) {
     const profileLinks = await listScrapbookMetadataProfileLinks();
     const profileMap = new Map((Array.isArray(profiles) ? profiles : []).map((profile) => [String(profile.id), profile]));
     const uploadedPagesByIdentifier = await buildUploadedPagesByIdentifier();
@@ -224,6 +246,7 @@ async function buildScrapbookMetadataReview(metadataRows, profiles = []) {
     const people = rows.flatMap((row) => row.people);
 
     return {
+        selectedYear: options.selectedYear || "",
         rowCount: rows.length,
         peopleCount: people.length,
         matchedCount: people.filter((person) => person.profileId).length,
@@ -366,6 +389,25 @@ function validateMetadataHeaders(headers) {
         error.statusCode = 400;
         throw error;
     }
+}
+
+function filterScrapbookMetadataRowsByYear(rows, year) {
+    const selectedYear = normalizeMetadataYear(year);
+
+    if (!selectedYear) {
+        return rows;
+    }
+
+    return rows.filter((row) => extractMetadataYear(row.date) === selectedYear);
+}
+
+function normalizeMetadataYear(year) {
+    const yearMatch = String(year || "").match(/\b(19|20)\d{2}\b/);
+    return yearMatch ? yearMatch[0] : "";
+}
+
+function extractMetadataYear(dateValue) {
+    return normalizeMetadataYear(dateValue);
 }
 
 async function resolveScrapbookMetadataPath() {
@@ -535,6 +577,7 @@ module.exports = {
     getScrapbookMetadataReview,
     importScrapbookMetadataCsv,
     listProfileScrapbookReferences,
+    listScrapbookMetadataYears,
     listScrapbookMetadataProfileLinks,
     readScrapbookMetadataRows,
     saveScrapbookMetadataProfileLinks,

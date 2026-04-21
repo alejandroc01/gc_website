@@ -8,6 +8,7 @@ import {
   deleteScrapbookPage as deleteScrapbookPageRequest,
   getProfiles,
   getScrapbookMetadataReview,
+  getScrapbookMetadataYears,
   getScrapbooks,
   importScrapbookMetadataCsv,
   saveScrapbookMetadataProfileLinks,
@@ -29,6 +30,7 @@ export default function ScrapbookUploadPage() {
   const [profiles, setProfiles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMetadataLoading, setIsMetadataLoading] = useState(false);
+  const [isMetadataYearsLoading, setIsMetadataYearsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isMetadataImporting, setIsMetadataImporting] = useState(false);
   const [isSavingMetadataLinks, setIsSavingMetadataLinks] = useState(false);
@@ -40,6 +42,8 @@ export default function ScrapbookUploadPage() {
   const [metadataError, setMetadataError] = useState('');
   const [metadataSuccess, setMetadataSuccess] = useState('');
   const [metadataReview, setMetadataReview] = useState(null);
+  const [metadataYears, setMetadataYears] = useState([]);
+  const [selectedMetadataYear, setSelectedMetadataYear] = useState('');
   const [metadataCsvFile, setMetadataCsvFile] = useState(null);
   const [metadataFileInputKey, setMetadataFileInputKey] = useState(0);
   const [manualProfileLinks, setManualProfileLinks] = useState({});
@@ -81,20 +85,50 @@ export default function ScrapbookUploadPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let isActive = true;
+
+    const loadInitialMetadataYears = async () => {
+      setIsMetadataYearsLoading(true);
+
+      try {
+        const yearsResponse = await getScrapbookMetadataYears();
+
+        if (!isActive) {
+          return;
+        }
+
+        const nextYears = normalizeMetadataYears(yearsResponse);
+        setMetadataYears(nextYears);
+
+        if (nextYears.length === 1) {
+          setSelectedMetadataYear(nextYears[0].year);
+        }
+      } catch {
+        if (isActive) {
+          setMetadataYears([]);
+        }
+      } finally {
+        if (isActive) {
+          setIsMetadataYearsLoading(false);
+        }
+      }
+    };
+
+    loadInitialMetadataYears();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
   useEffect(() => () => {
     clearMetadataProgressTimer();
   }, []);
 
   const visibleMetadataRows = useMemo(() => {
-    const rows = Array.isArray(metadataReview?.rows) ? metadataReview.rows : [];
-    const activeYear = scrapbookYear.trim();
-
-    if (!activeYear) {
-      return rows;
-    }
-
-    return rows.filter((row) => String(row.year || '') === activeYear);
-  }, [metadataReview, scrapbookYear]);
+    return Array.isArray(metadataReview?.rows) ? metadataReview.rows : [];
+  }, [metadataReview]);
 
   const savedManualProfileLinks = useMemo(
     () => buildManualProfileLinkState(metadataReview),
@@ -108,6 +142,15 @@ export default function ScrapbookUploadPage() {
   const applyMetadataReview = (review) => {
     setMetadataReview(review || null);
     setManualProfileLinks(buildManualProfileLinkState(review));
+  };
+
+  const refreshMetadataYears = async () => {
+    const yearsResponse = await getScrapbookMetadataYears();
+    const nextYears = normalizeMetadataYears(yearsResponse);
+
+    setMetadataYears(nextYears);
+
+    return nextYears;
   };
 
   const clearMetadataProgressTimer = () => {
@@ -231,26 +274,34 @@ export default function ScrapbookUploadPage() {
   };
 
   const handleMetadataReviewLoad = async () => {
+    const metadataYear = selectedMetadataYear.trim();
+
+    if (!metadataYear) {
+      setMetadataError('Choose a metadata year before loading stored metadata.');
+      setMetadataSuccess('');
+      return;
+    }
+
     setIsMetadataLoading(true);
     setMetadataError('');
     setMetadataSuccess('');
-    startMetadataProgress('Loading metadata matches');
+    startMetadataProgress(`Loading ${metadataYear} metadata matches`);
 
     try {
       const [profileRecords, review] = await Promise.all([
         getProfiles(),
-        getScrapbookMetadataReview(),
+        getScrapbookMetadataReview(metadataYear),
       ]);
 
       setProfiles(Array.isArray(profileRecords) ? profileRecords : []);
       applyMetadataReview(review);
-      setMetadataSuccess('Loaded stored scrapbook metadata matches.');
+      setMetadataSuccess(`Loaded stored scrapbook metadata matches for ${metadataYear}.`);
     } catch (error) {
       setProfiles([]);
       setMetadataError(error.message || 'Unable to load scrapbook metadata matches.');
     } finally {
       setIsMetadataLoading(false);
-      completeMetadataProgress('Metadata matches loaded');
+      completeMetadataProgress(`${metadataYear} metadata matches loaded`);
     }
   };
 
@@ -268,10 +319,19 @@ export default function ScrapbookUploadPage() {
     startMetadataProgress('Importing metadata CSV');
 
     try {
-      const [profileRecords, review] = await Promise.all([
+      const [profileRecords, importedReview] = await Promise.all([
         getProfiles(),
         importScrapbookMetadataCsv(metadataCsvFile),
       ]);
+      const nextYears = await refreshMetadataYears();
+      const nextSelectedYear = selectedMetadataYear || (nextYears.length === 1 ? nextYears[0].year : '');
+      const review = nextSelectedYear
+        ? await getScrapbookMetadataReview(nextSelectedYear)
+        : importedReview;
+
+      if (nextSelectedYear && nextSelectedYear !== selectedMetadataYear) {
+        setSelectedMetadataYear(nextSelectedYear);
+      }
 
       setProfiles(Array.isArray(profileRecords) ? profileRecords : []);
       applyMetadataReview(review);
@@ -318,7 +378,7 @@ export default function ScrapbookUploadPage() {
     startMetadataProgress('Saving manual matches');
 
     try {
-      const saveSummary = await saveScrapbookMetadataProfileLinks(links);
+      const saveSummary = await saveScrapbookMetadataProfileLinks(links, selectedMetadataYear);
       applyMetadataReview(saveSummary.review);
       setMetadataSuccess(`Saved ${saveSummary.savedCount || 0} manual scrapbook member match${(saveSummary.savedCount || 0) === 1 ? '' : 'es'}.`);
     } catch (error) {
@@ -643,45 +703,83 @@ export default function ScrapbookUploadPage() {
             <div>
               <h2 className="compositePanel__title">Import Scrapbook Metadata</h2>
               <p className="compositePanel__description">
-                Upload the scrapbook metadata CSV, review automatic member matches, and manually connect nickname tags to member profiles.
+                Upload the scrapbook metadata CSV, then choose one year at a time to review automatic member matches without loading the full archive into the page.
               </p>
             </div>
           </div>
 
-          <form className="compositeUploadForm" onSubmit={handleMetadataImportSubmit}>
-            <div className="compositeUploadForm__grid compositeUploadForm__grid--single">
-              <label className="compositeField">
-                <span className="compositeField__label">Metadata CSV</span>
-                <input
-                  key={metadataFileInputKey}
-                  className="compositeField__input compositeField__input--file"
-                  type="file"
-                  accept=".csv,text/csv"
-                  onChange={handleMetadataFileSelection}
-                />
-              </label>
+          <form className="compositeUploadForm scrapbookMetadataControls" onSubmit={handleMetadataImportSubmit}>
+            <div className="scrapbookMetadataControlRow">
+              <div className="scrapbookMetadataControlRow__body">
+                <label className="compositeField">
+                  <span className="compositeField__label">Metadata CSV</span>
+                  <input
+                    key={metadataFileInputKey}
+                    className="compositeField__input compositeField__input--file"
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={handleMetadataFileSelection}
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  className="button compositeButton compositeButton--filled scrapbookMetadataActions__import"
+                  disabled={isMetadataImporting || !metadataCsvFile}
+                >
+                  {isMetadataImporting ? 'Importing Metadata...' : 'Import Metadata CSV'}
+                </button>
+              </div>
+
+              <p className="compositeUploadForm__fileMeta scrapbookMetadataControlRow__meta">
+                {metadataCsvFile ? metadataCsvFile.name : 'Choose a CSV to replace the stored scrapbook metadata.'}
+              </p>
             </div>
 
-            <div className="compositeUploadForm__actions scrapbookMetadataActions">
-              <button
-                type="button"
-                className="button compositeButton compositeButton--subtle"
-                onClick={handleMetadataReviewLoad}
-                disabled={isMetadataLoading || isMetadataImporting || isSavingMetadataLinks}
-              >
-                {isMetadataLoading ? 'Loading Metadata...' : 'Load Stored Metadata'}
-              </button>
+            <div className="scrapbookMetadataControlRow">
+              <div className="scrapbookMetadataControlRow__body scrapbookMetadataControlRow__body--year">
+                <label className="compositeField">
+                  <span className="compositeField__label">Metadata year</span>
+                  <select
+                    className="compositeField__input"
+                    value={selectedMetadataYear}
+                    onChange={(event) => {
+                      setSelectedMetadataYear(event.target.value);
+                      setMetadataError('');
+                      setMetadataSuccess('');
+                      applyMetadataReview(null);
+                    }}
+                    disabled={isMetadataYearsLoading || metadataYears.length === 0}
+                  >
+                    <option value="">
+                      {isMetadataYearsLoading
+                        ? 'Loading years...'
+                        : metadataYears.length === 0
+                          ? 'No stored metadata years'
+                          : 'Choose a year'}
+                    </option>
+                    {metadataYears.map((metadataYear) => (
+                      <option key={metadataYear.year} value={metadataYear.year}>
+                        {metadataYear.year} ({metadataYear.rowCount} row{metadataYear.rowCount === 1 ? '' : 's'})
+                      </option>
+                    ))}
+                  </select>
+                </label>
 
-              <button
-                type="submit"
-                className="button compositeButton compositeButton--filled scrapbookMetadataActions__import"
-                disabled={isMetadataImporting || !metadataCsvFile}
-              >
-                {isMetadataImporting ? 'Importing Metadata...' : 'Import Metadata CSV'}
-              </button>
+                <button
+                  type="button"
+                  className="button compositeButton compositeButton--subtle"
+                  onClick={handleMetadataReviewLoad}
+                  disabled={isMetadataLoading || isMetadataImporting || isSavingMetadataLinks || !selectedMetadataYear}
+                >
+                  {isMetadataLoading ? 'Loading Metadata...' : 'Load Stored Metadata'}
+                </button>
+              </div>
 
-              <p className="compositeUploadForm__fileMeta scrapbookMetadataActions__meta">
-                {metadataCsvFile ? metadataCsvFile.name : 'No metadata CSV selected.'}
+              <p className="compositeUploadForm__fileMeta scrapbookMetadataControlRow__meta">
+                {selectedMetadataYear
+                  ? `Ready to load ${selectedMetadataYear} metadata only.`
+                  : 'Choose a metadata year to load stored matches.'}
               </p>
             </div>
           </form>
@@ -693,7 +791,7 @@ export default function ScrapbookUploadPage() {
               ) : (
                 <p className="compositeUploadForm__fileMeta">
                   {metadataReview
-                    ? `${metadataReview.rowCount || 0} metadata row${(metadataReview.rowCount || 0) === 1 ? '' : 's'}, ${metadataReview.matchedCount || 0} profile match${(metadataReview.matchedCount || 0) === 1 ? '' : 'es'}, ${metadataReview.needsReviewCount || 0} name${(metadataReview.needsReviewCount || 0) === 1 ? '' : 's'} needing review.`
+                    ? `${metadataReview.selectedYear || selectedMetadataYear || 'Stored'} metadata: ${metadataReview.rowCount || 0} row${(metadataReview.rowCount || 0) === 1 ? '' : 's'}, ${metadataReview.matchedCount || 0} profile match${(metadataReview.matchedCount || 0) === 1 ? '' : 'es'}, ${metadataReview.needsReviewCount || 0} name${(metadataReview.needsReviewCount || 0) === 1 ? '' : 's'} needing review.`
                     : 'No metadata review loaded yet.'}
                 </p>
               )}
@@ -722,7 +820,7 @@ export default function ScrapbookUploadPage() {
               <div className="compositeEmptyState compositeEmptyState--tight">
                 <h3 className="compositeEmptyState__title">No metadata rows for this year.</h3>
                 <p className="compositeEmptyState__description">
-                  Clear or change the scrapbook year field above to review a different set of imported metadata rows.
+                  Choose another metadata year above to review a different set of imported metadata rows.
                 </p>
               </div>
             ) : null}
@@ -929,6 +1027,18 @@ function buildManualProfileLinkState(review) {
 
 function isAcceptedMetadataCsv(file) {
   return String(file?.name || '').trim().toLowerCase().endsWith('.csv');
+}
+
+function normalizeMetadataYears(yearsResponse) {
+  const rawYears = Array.isArray(yearsResponse?.years) ? yearsResponse.years : [];
+
+  return rawYears
+    .map((entry) => ({
+      year: String(entry?.year || '').trim(),
+      rowCount: Number(entry?.rowCount || 0),
+    }))
+    .filter((entry) => /^\d{4}$/.test(entry.year))
+    .sort((leftEntry, rightEntry) => Number(leftEntry.year) - Number(rightEntry.year));
 }
 
 function countUnsavedManualProfileLinks(currentLinks, savedLinks) {

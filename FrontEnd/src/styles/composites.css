@@ -343,6 +343,34 @@
   text-align: left;
 }
 
+.scrapbookMetadataControls {
+  display: grid;
+  gap: 16px;
+}
+
+.scrapbookMetadataControlRow {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(38, 21, 56, 0.1);
+  background: linear-gradient(180deg, rgba(250, 246, 237, 0.72), rgba(255, 255, 255, 0.98));
+}
+
+.scrapbookMetadataControlRow__body {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) auto;
+  gap: 16px;
+  align-items: end;
+}
+
+.scrapbookMetadataControlRow__body--year {
+  grid-template-columns: minmax(260px, 1fr) auto;
+}
+
+.scrapbookMetadataControlRow__meta {
+  min-height: 1.45em;
+}
+
 .scrapbookUploadQueue {
   display: grid;
   gap: 12px;
@@ -1743,6 +1771,11 @@
   }
 
   .scrapbookUploadQueue__item {
+    grid-template-columns: 1fr;
+  }
+
+  .scrapbookMetadataControlRow__body,
+  .scrapbookMetadataControlRow__body--year {
     grid-template-columns: 1fr;
   }
 

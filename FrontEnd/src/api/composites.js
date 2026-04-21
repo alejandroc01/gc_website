@@ -108,8 +108,13 @@ export function getScrapbooks() {
   return requestJson('/api/scrapbooks');
 }
 
-export function getScrapbookMetadataReview() {
-  return requestJson('/api/scrapbooks/metadata/review');
+export function getScrapbookMetadataYears() {
+  return requestJson('/api/scrapbooks/metadata/years');
+}
+
+export function getScrapbookMetadataReview(year = '') {
+  const query = buildOptionalYearQuery(year);
+  return requestJson(`/api/scrapbooks/metadata/review${query}`);
 }
 
 export function importScrapbookMetadataCsv(file) {
@@ -122,14 +127,26 @@ export function importScrapbookMetadataCsv(file) {
   });
 }
 
-export function saveScrapbookMetadataProfileLinks(links) {
-  return requestJson('/api/scrapbooks/metadata/profile-links', {
+export function saveScrapbookMetadataProfileLinks(links, year = '') {
+  const query = buildOptionalYearQuery(year);
+
+  return requestJson(`/api/scrapbooks/metadata/profile-links${query}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({ links }),
   });
+}
+
+function buildOptionalYearQuery(year) {
+  const selectedYear = String(year || '').trim();
+
+  if (!/^\d{4}$/.test(selectedYear)) {
+    return '';
+  }
+
+  return `?${new URLSearchParams({ year: selectedYear }).toString()}`;
 }
 
 export function getHistories() {

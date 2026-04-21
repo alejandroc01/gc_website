@@ -18,6 +18,7 @@ const { listProfiles } = require("../utils/profileStore");
 const {
     getScrapbookMetadataReview,
     importScrapbookMetadataCsv,
+    listScrapbookMetadataYears,
     saveScrapbookMetadataProfileLinks,
 } = require("../utils/scrapbookMetadataStore");
 const {
@@ -82,8 +83,17 @@ router.get("/", async (_req, res, next) => {
 router.get("/metadata/review", async (_req, res, next) => {
     try {
         const profiles = await listProfiles();
-        const metadataReview = await getScrapbookMetadataReview(profiles);
+        const metadataReview = await getScrapbookMetadataReview(profiles, { year: _req.query?.year });
         return res.json(metadataReview);
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.get("/metadata/years", async (_req, res, next) => {
+    try {
+        const years = await listScrapbookMetadataYears();
+        return res.json({ years });
     } catch (error) {
         return next(error);
     }
@@ -107,7 +117,7 @@ router.put("/metadata/profile-links", async (req, res, next) => {
     try {
         const saveSummary = await saveScrapbookMetadataProfileLinks(req.body?.links);
         const profiles = await listProfiles();
-        const metadataReview = await getScrapbookMetadataReview(profiles);
+        const metadataReview = await getScrapbookMetadataReview(profiles, { year: req.query?.year });
 
         return res.json({
             ...saveSummary,
