@@ -1,6 +1,8 @@
 const crypto = require("crypto");
 const fs = require("fs/promises");
 const path = require("path");
+const { execFile } = require("child_process");
+const { promisify } = require("util");
 const express = require("express");
 const multer = require("multer");
 
@@ -9,6 +11,7 @@ const {
     deleteScrapbook,
     deleteScrapbookPage,
     getScrapbookById,
+    getScrapbookPageAsset,
     listScrapbooks,
 } = require("../utils/scrapbookStore");
 const { listProfiles } = require("../utils/profileStore");
@@ -30,6 +33,7 @@ const router = express.Router();
 const maxScrapbookUploadBytes = 25 * 1024 * 1024;
 const scrapbookUploadChunkSizeBytes = 256 * 1024;
 const maxScrapbookUploadChunkBytes = 512 * 1024;
+const execFileAsync = promisify(execFile);
 
 const chunkUpload = multer({
     storage: multer.memoryStorage(),
@@ -109,6 +113,28 @@ router.put("/metadata/profile-links", async (req, res, next) => {
             ...saveSummary,
             review: metadataReview,
         });
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.get("/:scrapbookId/pages/:pageId/thumbnail", async (req, res, next) => {
+    try {
+        const pageAsset = await getScrapbookPageAsset(req.params.scrapbookId, req.params.pageId);
+
+        if (!pageAsset) {
+            return res.status(404).json({ error: "Scrapbook not found." });
+        }
+
+        if (!pageAsset.pageRecord?.storedFilePath) {
+            return res.status(404).json({ error: "Scrapbook page not found." });
+        }
+
+        const originalPagePath = resolveStoredFileAbsolutePath(pageAsset.pageRecord.storedFilePath);
+        const thumbnailPath = await ensureScrapbookPageThumbnail(originalPagePath);
+
+        res.setHeader("Cache-Control", "public, max-age=86400");
+        return res.sendFile(thumbnailPath);
     } catch (error) {
         return next(error);
     }
@@ -325,6 +351,7 @@ router.delete("/:scrapbookId/pages/:pageId", async (req, res, next) => {
 
         const absolutePagePath = resolveStoredFileAbsolutePath(deleteSummary.deletedPage.storedFilePath);
         await fs.rm(absolutePagePath, { force: true });
+        await fs.rm(buildScrapbookThumbnailPath(absolutePagePath), { force: true });
 
         if (!deleteSummary.scrapbook) {
             const scrapbookDirectory = path.dirname(path.dirname(absolutePagePath));
@@ -698,6 +725,51 @@ async function moveFileSafely(sourcePath, destinationPath) {
             }
         }
     }
+}
+
+async function ensureScrapbookPageThumbnail(originalPagePath) {
+    const thumbnailPath = buildScrapbookThumbnailPath(originalPagePath);
+    const [originalStats, thumbnailStats] = await Promise.all([
+        fs.stat(originalPagePath),
+        fs.stat(thumbnailPath).catch((error) => {
+            if (error.code === "ENOENT") {
+                return null;
+            }
+
+            throw error;
+        }),
+    ]);
+
+    if (thumbnailStats && thumbnailStats.mtimeMs >= originalStats.mtimeMs) {
+        return thumbnailPath;
+    }
+
+    await fs.mkdir(path.dirname(thumbnailPath), { recursive: true });
+    await execFileAsync("convert", [
+        originalPagePath,
+        "-auto-orient",
+        "-thumbnail",
+        "220x160>",
+        "-strip",
+        "-quality",
+        "72",
+        thumbnailPath,
+    ], {
+        timeout: 15000,
+        maxBuffer: 1024 * 1024,
+    });
+
+    return thumbnailPath;
+}
+
+function buildScrapbookThumbnailPath(originalPagePath) {
+    const originalDirectory = path.dirname(originalPagePath);
+    const thumbnailDirectory = path.basename(originalDirectory) === "pages"
+        ? path.join(path.dirname(originalDirectory), "thumbnails")
+        : path.join(originalDirectory, "thumbnails");
+    const parsedPath = path.parse(originalPagePath);
+
+    return path.join(thumbnailDirectory, `${parsedPath.name}.jpg`);
 }
 
 module.exports = router;

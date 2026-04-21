@@ -101,6 +101,7 @@ function toScrapbookResponse(scrapbook) {
             pageId: pageRecord.pageId,
             originalFilename: pageRecord.originalFilename,
             imageUrl: buildAssetUrl(pageRecord.storedFilePath),
+            thumbnailUrl: `/api/scrapbooks/${encodeURIComponent(scrapbook.scrapbookId)}/pages/${encodeURIComponent(pageRecord.pageId)}/thumbnail`,
         })),
     };
 }
@@ -120,6 +121,26 @@ async function getScrapbookById(scrapbookId) {
     const scrapbook = mergedScrapbooks.find((entry) => entry.scrapbookId === scrapbookId);
 
     return scrapbook ? toScrapbookResponse(scrapbook) : null;
+}
+
+async function getScrapbookPageAsset(scrapbookId, pageId) {
+    const store = await readStore();
+    const discoveredScrapbooks = await listUploadedDirectoryScrapbooks();
+    const mergedScrapbooks = mergeScrapbooks(store.scrapbooks, discoveredScrapbooks);
+    const scrapbook = mergedScrapbooks.find((entry) => entry.scrapbookId === scrapbookId);
+
+    if (!scrapbook) {
+        return null;
+    }
+
+    const pageRecord = buildPageRecords(scrapbook).find(
+        (record) => record.pageId === String(pageId || ""),
+    );
+
+    return {
+        scrapbook,
+        pageRecord: pageRecord || null,
+    };
 }
 
 async function createScrapbook(metadata) {
@@ -290,6 +311,7 @@ module.exports = {
     deleteScrapbookPage,
     ensureScrapbookStore,
     getScrapbookById,
+    getScrapbookPageAsset,
     listScrapbooks,
 };
 

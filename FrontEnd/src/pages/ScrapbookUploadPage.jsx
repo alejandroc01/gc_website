@@ -875,9 +875,10 @@ export default function ScrapbookUploadPage() {
                                 <div className="scrapbookAdminPages__preview">
                                   <img
                                     className="scrapbookAdminPages__image"
-                                    src={pageEntry.imageUrl}
+                                    src={pageEntry.thumbnailUrl || pageEntry.imageUrl}
                                     alt={pageEntry.originalFilename || `${scrapbook.title} page`}
                                     loading="lazy"
+                                    decoding="async"
                                   />
                                 </div>
 

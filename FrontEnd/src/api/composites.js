@@ -87,6 +87,7 @@ function normalizeResponseUrls(value) {
       if (
         (key === 'imageUrl'
         || key === 'profileImageUrl'
+        || key === 'thumbnailUrl'
         || key === 'videoUrl'
         || key === 'pdfUrl')
         && typeof entryValue === 'string'
