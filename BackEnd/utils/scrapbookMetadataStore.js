@@ -249,6 +249,8 @@ async function buildUploadedPagesByIdentifier() {
             uploadedPagesByIdentifier.set(key, {
                 scrapbookYear: scrapbook.scrapbookYear,
                 pageIndex: index,
+                imageUrl: pageEntry.imageUrl || "",
+                originalFilename: pageEntry.originalFilename || "",
             });
         });
     });
@@ -266,6 +268,8 @@ function enrichScrapbookGroup(group, uploadedPagesByIdentifier) {
         year,
         pageNumber,
         isUploaded: Boolean(uploadedPage),
+        imageUrl: uploadedPage?.imageUrl || "",
+        originalFilename: uploadedPage?.originalFilename || "",
         to: uploadedPage
             ? buildScrapbookLink(uploadedPage.scrapbookYear || year, uploadedPage.pageIndex)
             : buildScrapbookLink(year, null),

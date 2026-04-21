@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import {
   getComposites,
+  getProfile,
   getProfiles,
   getScrapbooks,
 } from '../../api/composites.js';
@@ -24,6 +25,7 @@ export default function SearchBar() {
   const [profiles, setProfiles] = useState([]);
   const [composites, setComposites] = useState([]);
   const [scrapbooks, setScrapbooks] = useState([]);
+  const [memberScrapbookItems, setMemberScrapbookItems] = useState([]);
   const [selectedFilterIds, setSelectedFilterIds] = useState(ALL_FILTER_IDS);
   const [loadError, setLoadError] = useState('');
   const searchRef = useRef(null);
@@ -73,6 +75,54 @@ export default function SearchBar() {
   }, []);
 
   useEffect(() => {
+    let isActive = true;
+    const value = query.trim().toLowerCase();
+
+    if (!value || profiles.length === 0) {
+      setMemberScrapbookItems([]);
+      return () => {
+        isActive = false;
+      };
+    }
+
+    const matchingProfiles = profiles
+      .map((profile) => buildMemberSearchItem(profile, value))
+      .filter(Boolean)
+      .slice(0, 5);
+
+    if (matchingProfiles.length === 0) {
+      setMemberScrapbookItems([]);
+      return () => {
+        isActive = false;
+      };
+    }
+
+    const loadMemberScrapbookItems = async () => {
+      try {
+        const detailedProfiles = await Promise.all(
+          matchingProfiles.map((item) => getProfile(item.profileId)),
+        );
+
+        if (!isActive) {
+          return;
+        }
+
+        setMemberScrapbookItems(buildMemberScrapbookSearchItems(detailedProfiles, value));
+      } catch {
+        if (isActive) {
+          setMemberScrapbookItems([]);
+        }
+      }
+    };
+
+    loadMemberScrapbookItems();
+
+    return () => {
+      isActive = false;
+    };
+  }, [profiles, query]);
+
+  useEffect(() => {
     const handlePointerDown = (event) => {
       if (searchRef.current?.contains(event.target)) {
         return;
@@ -115,9 +165,21 @@ export default function SearchBar() {
         .map((scrapbook) => buildScrapbookSearchItem(scrapbook, value))
         .filter(Boolean)
       : [];
+    const memberScrapbookResults = activeFilterIds.has('scrapbook')
+      ? memberScrapbookItems
+      : [];
+    const sortedArchiveResults = [...compositeResults, ...scrapbookResults, ...memberScrapbookResults]
+      .sort(compareSearchItems);
 
-    return [...memberResults, ...compositeResults, ...scrapbookResults].sort(compareSearchItems);
-  }, [activeFilterIds, composites, noFiltersSelected, profiles, query, scrapbooks]);
+    if (activeFilterIds.has('member')) {
+      return [
+        ...memberResults.sort(compareSearchItems),
+        ...sortedArchiveResults,
+      ];
+    }
+
+    return sortedArchiveResults;
+  }, [activeFilterIds, composites, memberScrapbookItems, noFiltersSelected, profiles, query, scrapbooks]);
 
   const handleInputFocus = () => {
     setIsFilterMenuOpen(false);
@@ -278,9 +340,7 @@ export default function SearchBar() {
                         <li key={result.key} className="search__item">
                           <button type="button" onMouseDown={() => handleSelect(result)}>
                             <span className="search__itemLead">
-                              <span className="search__itemTypeIcon" aria-hidden="true">
-                                <SearchItemIcon kind={result.kind} />
-                              </span>
+                              <SearchResultMedia result={result} />
 
                               <span className="search__itemText">
                                 <span className="search__itemName">{result.label}</span>
@@ -328,6 +388,7 @@ function buildMemberSearchItem(profile, query) {
   return {
     key: `member-${profile.id}`,
     kind: 'member',
+    profileId: profile.id,
     label,
     meta: buildMemberMeta(profile),
     score,
@@ -364,6 +425,44 @@ function buildCompositeSearchItem(composite, query) {
   };
 }
 
+function buildMemberScrapbookSearchItems(profiles, query) {
+  const itemsByKey = new Map();
+
+  (Array.isArray(profiles) ? profiles : []).forEach((profile) => {
+    const profileLabel = profile?.displayName || 'Member';
+    const memberScore = getSearchScore([
+      profileLabel,
+      profile?.firstName,
+      profile?.lastName,
+      profile?.preferredName,
+    ], query);
+
+    if (memberScore <= 0) {
+      return;
+    }
+
+    (Array.isArray(profile?.relatedScrapbookPages) ? profile.relatedScrapbookPages : []).forEach((page) => {
+      const identifier = page.identifier || page.title || page.to;
+      const key = `member-scrapbook-${profile.id}-${identifier}`;
+
+      if (itemsByKey.has(key)) {
+        return;
+      }
+
+      itemsByKey.set(key, {
+        key,
+        kind: 'scrapbook',
+        label: `${profileLabel} in ${page.title || 'scrapbook page'}`,
+        meta: buildMemberScrapbookMeta(page),
+        score: memberScore + 18,
+        to: page.to || buildScrapbookLink(page.year),
+      });
+    });
+  });
+
+  return Array.from(itemsByKey.values()).slice(0, 8);
+}
+
 function buildScrapbookSearchItem(scrapbook, query) {
   const year = String(scrapbook.scrapbookYear || '').trim();
   const label = scrapbook.title || (year ? `${year} Scrapbook` : 'Scrapbook');
@@ -392,6 +491,16 @@ function buildScrapbookSearchItem(scrapbook, query) {
     score,
     to: buildScrapbookLink(year),
   };
+}
+
+function buildMemberScrapbookMeta(page) {
+  const noteParts = [
+    page.year ? `${page.year} Scrapbook` : 'Scrapbook page',
+    page.pageNumber ? `Page ${page.pageNumber}` : '',
+    page.category || '',
+  ].filter(Boolean);
+
+  return noteParts.join(' | ');
 }
 
 function getSearchScore(fields, query, { exactBoost = 0 } = {}) {
@@ -496,6 +605,14 @@ function SearchItemIcon({ kind }) {
   }
 
   return <CompositeIcon />;
+}
+
+function SearchResultMedia({ result }) {
+  return (
+    <span className="search__itemTypeIcon" aria-hidden="true">
+      <SearchItemIcon kind={result.kind} />
+    </span>
+  );
 }
 
 function FilterIcon() {
