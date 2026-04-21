@@ -1,15 +1,49 @@
 .search {
-  padding-top: 0;
+  padding: 56px 0;
+  background: var(--deep-purple);
 }
 
 .search__outer {
   display: flex;
   justify-content: center;
+  width: 100%;
+}
+
+.search__panel {
+  width: min(1080px, 100%);
+}
+
+.search__header {
+  margin-bottom: 22px;
+  text-align: center;
+}
+
+.search__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 2.5vw, 2.7rem);
+  font-weight: 500;
+  line-height: 1.05;
+  color: var(--gold);
+}
+
+.search__description {
+  margin: 10px 0 0;
+  color: rgba(235, 215, 155, 0.9);
+  line-height: 1.6;
 }
 
 .search__inputWrap {
-  width: min(980px, 100%);
+  width: 100%;
   position: relative;
+  border: 2px solid var(--gold);
+  background: #fff;
+  box-shadow: 0 16px 32px rgba(0, 0, 0, 0.18);
+  transition: box-shadow 160ms ease;
+}
+
+.search__inputWrap:focus-within {
+  box-shadow: 0 0 0 4px rgba(235, 215, 155, 0.22), 0 16px 32px rgba(0, 0, 0, 0.18);
 }
 
 .search__icon {
@@ -23,12 +57,12 @@
 .search__input {
   width: 100%;
   padding: 16px 104px 16px 46px;
-  border: 1px solid var(--border);
+  border: none;
   border-radius: 0;
   background: #fff;
   font-size: 16px;
   color: var(--text);
-  transition: box-shadow 160ms ease, border-color 160ms ease;
+  transition: background 160ms ease;
 }
 
 .search__input::-webkit-search-cancel-button {
@@ -50,8 +84,6 @@
 
 .search__input:focus {
   outline: none;
-  border-color: rgba(42, 24, 70, 0.5);
-  box-shadow: 0 0 0 4px rgba(198, 162, 74, 0.25);
 }
 
 .search__filterButton {
@@ -106,7 +138,7 @@
   right: 0;
   min-width: 220px;
   padding: 10px;
-  border: 1px solid var(--border);
+  border: 1px solid rgba(235, 215, 155, 0.55);
   background: #fff;
   box-shadow: var(--shadow-md);
   z-index: 4;
@@ -138,11 +170,10 @@
   position: absolute;
   left: 0;
   right: 0;
-  top: calc(100% - 1px);
+  top: calc(100% + 10px);
   max-height: min(420px, calc(100vh - 180px));
   background: #fff;
-  border: 1px solid var(--border);
-  border-top: none;
+  border: 1px solid rgba(235, 215, 155, 0.55);
   box-shadow: var(--shadow-md);
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -237,6 +268,14 @@
 }
 
 @media (max-width: 720px) {
+  .search {
+    padding: 42px 0;
+  }
+
+  .search__title {
+    font-size: clamp(1.7rem, 8vw, 2.2rem);
+  }
+
   .search__filterMenu {
     left: 0;
     right: 0;

@@ -11,6 +11,7 @@ import './Hero.css';
 export default function Hero({
   imageSrc,
   imageAlt,
+  eyebrow = '',
   title,
   description,
 }) {
@@ -22,6 +23,7 @@ export default function Hero({
             <img className="hero__image" src={imageSrc} alt={imageAlt} />
           </div>
           <div className="hero__content">
+            {eyebrow ? <p className="hero__eyebrow">{eyebrow}</p> : null}
             <h1 className="hero__title">{title}</h1>
             <p className="hero__description">{description}</p>
           </div>

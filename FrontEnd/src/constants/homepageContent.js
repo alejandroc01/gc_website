@@ -1,16 +1,16 @@
-export const DEFAULT_HOMEPAGE_TITLE = 'Alumni Archives';
+export const HOMEPAGE_SITE_EYEBROW = 'German Club of Virginia Tech';
+export const DEFAULT_HOMEPAGE_TITLE = 'Digital Archives';
 export const DEFAULT_HOMEPAGE_DESCRIPTION = 'This is a test description. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec a diam lectus. Sed sit amet ipsum mauris. Maecenas congue ligula ac quam viverra nec consectetur ante hendrerit. Donec et mollis dolor. Praesent et diam eget libero egestas mattis sit amet vitae augue.';
 export const DEFAULT_HOMEPAGE_IMAGE_SRC = '/images/homepageimage.jpg';
 export const DEFAULT_HOMEPAGE_IMAGE_ALT = 'German Club alumni';
 const homepageContentCacheKey = 'gc-homepage-content-cache';
 
 export function normalizeHomepageContent(homepageContent) {
-  const title = String(homepageContent?.title || '').trim() || DEFAULT_HOMEPAGE_TITLE;
   const description = String(homepageContent?.description || '').trim() || DEFAULT_HOMEPAGE_DESCRIPTION;
   const imageUrl = String(homepageContent?.imageUrl || '').trim() || DEFAULT_HOMEPAGE_IMAGE_SRC;
 
   return {
-    title,
+    title: DEFAULT_HOMEPAGE_TITLE,
     description,
     imageUrl,
     imageAlt: DEFAULT_HOMEPAGE_IMAGE_ALT,

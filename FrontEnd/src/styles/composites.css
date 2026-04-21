@@ -743,6 +743,15 @@
   min-height: 100%;
 }
 
+.homepageEditorPreview__eyebrow {
+  margin: 0 0 10px;
+  font-family: var(--font-smallcaps);
+  font-size: clamp(0.8rem, 0.72vw, 1rem);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .homepageEditorPreview__title {
   margin: 0 0 12px;
   font-family: var(--font-display);

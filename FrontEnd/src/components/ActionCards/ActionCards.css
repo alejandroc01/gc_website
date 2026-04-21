@@ -1,41 +1,73 @@
 .actionCards {
-  padding-top: 8px; /* visually tucks closer to the search bar */
-  margin: 0 auto;
-  width: 90%;
+  padding-top: 20px;
+}
+
+.actionCards__header {
+  margin-bottom: 24px;
+  max-width: 760px;
+}
+
+.actionCards__eyebrow {
+  margin: 0 0 8px;
+  font-family: var(--font-smallcaps);
+  font-size: 14px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--deep-purple);
+}
+
+.actionCards__heading {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 2.8vw, 2.9rem);
+  font-weight: 500;
+  line-height: 1.05;
+  color: var(--deep-purple);
+}
+
+.actionCards__intro {
+  margin: 12px 0 0;
+  color: var(--muted);
+  line-height: 1.7;
 }
 
 .actionCards__grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 24px;
 }
 
 .actionCards__grid--single {
+  grid-template-columns: minmax(0, 360px);
   justify-content: center;
 }
 
 .actionCard {
-  display: flex;
-  flex-direction: column;
-  flex: 0 1 calc((100% - 48px) / 3);
-  min-width: 280px;
-  max-width: calc((100% - 48px) / 3);
   background: #fff;
   border: 1px solid var(--border);
   overflow: hidden;
-
   transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
-.actionCard:hover {
+.actionCard:hover,
+.actionCard:focus-within {
   transform: translateY(-4px);
   box-shadow: var(--shadow-md);
 }
 
+.actionCard__link {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.actionCard__link:focus-visible {
+  outline: none;
+}
+
 .actionCard__image {
   width: 100%;
-  height: 260px;
+  aspect-ratio: 4 / 3;
   object-fit: cover;
 }
 
@@ -67,20 +99,27 @@
 
 .actionCard__button {
   width: 100%;
+  pointer-events: none;
 }
 
-@media (max-width: 1000px) {
+.actionCard:hover .actionCard__button,
+.actionCard:focus-within .actionCard__button {
+  background: var(--deep-purple);
+  color: #fff;
+}
+
+@media (max-width: 1200px) {
   .actionCards__grid {
-    flex-direction: column;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .actionCards__grid {
+    grid-template-columns: 1fr;
   }
 
-  .actionCard__image {
-    height: 240px;
-  }
-
-  .actionCard {
-    flex-basis: auto;
-    min-width: 0;
-    max-width: none;
+  .actionCard__title {
+    font-size: 26px;
   }
 }

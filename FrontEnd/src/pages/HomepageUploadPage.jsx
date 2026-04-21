@@ -7,6 +7,8 @@ import {
   uploadHomepageContent,
 } from '../api/composites.js';
 import {
+  HOMEPAGE_SITE_EYEBROW,
+  DEFAULT_HOMEPAGE_TITLE,
   loadStoredHomepageContent,
   normalizeHomepageContent,
   persistHomepageContent,
@@ -110,19 +112,15 @@ export default function HomepageUploadPage() {
     setIsSaving(true);
 
     try {
-      const normalizedTitle = validateRequiredField(
-        formValues.title,
-        'Enter a homepage header before saving.',
-      );
       const normalizedDescription = validateRequiredField(
         formValues.description,
         'Enter a homepage description before saving.',
       );
 
       const savedHomepageContent = normalizeHomepageContent(selectedFile
-        ? await saveWithImage(selectedFile, normalizedTitle, normalizedDescription, setUploadProgress)
+        ? await saveWithImage(selectedFile, normalizedDescription, setUploadProgress)
         : await updateHomepageContent({
-          title: normalizedTitle,
+          title: DEFAULT_HOMEPAGE_TITLE,
           description: normalizedDescription,
         }));
 
@@ -136,7 +134,7 @@ export default function HomepageUploadPage() {
       setStatusSummary(
         selectedFile
           ? 'Saved the homepage content and uploaded a new hero image.'
-          : 'Saved the homepage header and description.',
+          : 'Saved the homepage description.',
       );
     } catch (error) {
       setStatusError(error.message);
@@ -146,7 +144,6 @@ export default function HomepageUploadPage() {
     }
   };
 
-  const previewTitle = formValues.title.trim() || homepageContent.title;
   const previewDescription = formValues.description.trim() || homepageContent.description;
   const previewImageUrl = selectedFilePreviewUrl || homepageContent.imageUrl;
 
@@ -169,25 +166,13 @@ export default function HomepageUploadPage() {
             <div>
               <h2 className="compositePanel__title">Homepage Content</h2>
               <p className="compositePanel__description">
-                Use the options below to edit the header, hero image, and description.
+                Use the options below to edit the hero image and description. The site title is fixed.
               </p>
             </div>
           </div>
 
           <form className="compositeUploadForm" onSubmit={handleSubmit}>
             <div className="profileManagerGrid">
-              <label className="compositeField">
-                <span className="compositeField__label">Homepage Header</span>
-                <input
-                  className="compositeField__input"
-                  type="text"
-                  name="title"
-                  placeholder="enter homepage header"
-                  value={formValues.title}
-                  onChange={handleFieldChange}
-                />
-              </label>
-
               <label className="compositeField">
                 <span className="compositeField__label">Hero Image</span>
                 <input
@@ -196,6 +181,17 @@ export default function HomepageUploadPage() {
                   type="file"
                   accept={acceptedTypes}
                   onChange={(event) => handleFileSelection(event.target.files?.[0] || null)}
+                />
+              </label>
+
+              <label className="compositeField">
+                <span className="compositeField__label">Site Title</span>
+                <input
+                  className="compositeField__input"
+                  type="text"
+                  value={DEFAULT_HOMEPAGE_TITLE}
+                  readOnly
+                  aria-readonly="true"
                 />
               </label>
 
@@ -256,10 +252,10 @@ export default function HomepageUploadPage() {
           {isLoading ? <p className="compositeMessage">Loading saved homepage content...</p> : null}
           {loadError ? <p className="compositeMessage compositeMessage--warning">{loadError}</p> : null}
 
-          <div className="homepageEditorPreview">
-            <div className="homepageEditorPreview__media">
-              <img
-                className="homepageEditorPreview__image"
+            <div className="homepageEditorPreview">
+              <div className="homepageEditorPreview__media">
+                <img
+                  className="homepageEditorPreview__image"
                 src={previewImageUrl}
                 alt={homepageContent.imageAlt}
               />
@@ -267,7 +263,8 @@ export default function HomepageUploadPage() {
 
             <div className="homepageEditorPreview__content">
               <div>
-                <h2 className="homepageEditorPreview__title">{previewTitle}</h2>
+                <p className="homepageEditorPreview__eyebrow">{HOMEPAGE_SITE_EYEBROW}</p>
+                <h2 className="homepageEditorPreview__title">{DEFAULT_HOMEPAGE_TITLE}</h2>
                 <p className="homepageEditorPreview__description">{previewDescription}</p>
               </div>
             </div>
@@ -278,17 +275,16 @@ export default function HomepageUploadPage() {
   );
 }
 
-async function saveWithImage(file, title, description, onProgress) {
+async function saveWithImage(file, description, onProgress) {
   await validateImageFile(file);
 
-  return uploadHomepageContent(file, title, description, {
+  return uploadHomepageContent(file, DEFAULT_HOMEPAGE_TITLE, description, {
     onProgress,
   });
 }
 
 function buildFormValues(homepageContent) {
   return {
-    title: homepageContent.title,
     description: homepageContent.description,
   };
 }

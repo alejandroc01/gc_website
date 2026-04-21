@@ -43,35 +43,48 @@ const CARDS = [
 /**
  * ActionCards
  *
- * A 3-card grid using a "news card" style (image, title, description, button).
- * Buttons use client-side navigation (react-router) so hooking up future pages is easy.
+ * A responsive card grid used on both the public homepage and upload landing page.
  */
-export default function ActionCards({ cards = CARDS, ariaLabel = 'Main actions' }) {
+export default function ActionCards({
+  cards = CARDS,
+  ariaLabel = 'Main actions',
+  eyebrow = null,
+  heading = null,
+  description = null,
+}) {
   const gridClassName = ['actionCards__grid', cards.length === 1 ? 'actionCards__grid--single' : '']
     .filter(Boolean)
     .join(' ');
 
   return (
     <section className="actionCards section" aria-label={ariaLabel}>
-      <div>
+      <div className="container">
+        {eyebrow || heading || description ? (
+          <div className="actionCards__header">
+            {eyebrow ? <p className="actionCards__eyebrow">{eyebrow}</p> : null}
+            {heading ? <h2 className="actionCards__heading">{heading}</h2> : null}
+            {description ? <p className="actionCards__intro">{description}</p> : null}
+          </div>
+        ) : null}
+
         <div className={gridClassName}>
           {cards.map((card) => (
             <article key={card.key} className="actionCard">
-              <img
-                className="actionCard__image"
-                src={card.imageSrc}
-                alt={card.imageAlt}
-              />
-              <div className="actionCard__body">
-                <h2 className="actionCard__title">{card.title}</h2>
-                <p className="actionCard__description">{card.description}</p>
+              <Link className="actionCard__link" to={card.to}>
+                <img
+                  className="actionCard__image"
+                  src={card.imageSrc}
+                  alt={card.imageAlt}
+                />
+                <div className="actionCard__body">
+                  <h2 className="actionCard__title">{card.title}</h2>
+                  <p className="actionCard__description">{card.description}</p>
 
-                <div className="actionCard__buttonRow">
-                  <Link className="button actionCard__button" to={card.to}>
-                    {card.buttonText}
-                  </Link>
+                  <div className="actionCard__buttonRow">
+                    <span className="button actionCard__button">{card.buttonText}</span>
+                  </div>
                 </div>
-              </div>
+              </Link>
             </article>
           ))}
         </div>

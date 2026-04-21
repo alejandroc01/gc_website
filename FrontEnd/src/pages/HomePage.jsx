@@ -6,6 +6,8 @@ import ActionCards from '../components/ActionCards/ActionCards.jsx';
 import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
 import { getHomepageContent } from '../api/composites.js';
 import {
+  HOMEPAGE_SITE_EYEBROW,
+  DEFAULT_HOMEPAGE_TITLE,
   loadStoredHomepageContent,
   normalizeHomepageContent,
   persistHomepageContent,
@@ -60,7 +62,8 @@ export default function HomePage() {
         <Hero
           imageSrc={homepageContent.imageUrl}
           imageAlt={homepageContent.imageAlt}
-          title={homepageContent.title}
+          eyebrow={HOMEPAGE_SITE_EYEBROW}
+          title={DEFAULT_HOMEPAGE_TITLE}
           description={homepageContent.description}
         />
       ) : (
@@ -83,7 +86,11 @@ export default function HomePage() {
 
       <SearchBar />
 
-      <ActionCards />
+      <ActionCards
+        eyebrow="Explore the Archive"
+        heading="Browse by Collection"
+        description="Choose a collection below to start exploring composites, scrapbooks, oral histories, and club history."
+      />
 
       <section className="section compositeCopyrightNoticeSection">
         <div className="container">

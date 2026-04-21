@@ -160,137 +160,146 @@ export default function SearchBar() {
     <section className="search section" aria-label="Search">
       <div className="container">
         <div className="search__outer">
-          <label className="sr-only" htmlFor="archive-search">
-            Search
-          </label>
+          <div className="search__panel">
+            <div className="search__header">
+              <h2 className="search__title">Archive Search</h2>
+              <p className="search__description">
+                Find members, composites, scrapbooks, oral histories, and club history.
+              </p>
+            </div>
 
-          <form
-            ref={searchRef}
-            className="search__inputWrap"
-            onSubmit={(event) => event.preventDefault()}
-            role="search"
-          >
-            <svg
-              className="search__icon"
-              width="18"
-              height="18"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+            <label className="sr-only" htmlFor="archive-search">
+              Search
+            </label>
+
+            <form
+              ref={searchRef}
+              className="search__inputWrap"
+              onSubmit={(event) => event.preventDefault()}
+              role="search"
             >
-              <circle cx="11" cy="11" r="8" />
-              <path d="M21 21l-4.3-4.3" />
-            </svg>
+              <svg
+                className="search__icon"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <circle cx="11" cy="11" r="8" />
+                <path d="M21 21l-4.3-4.3" />
+              </svg>
 
-            <input
-              ref={inputRef}
-              id="archive-search"
-              className="search__input"
-              type="search"
-              placeholder="Search by name, city, state, or year..."
-              autoComplete="off"
-              value={query}
-              onChange={(event) => {
-                setQuery(event.target.value);
-                setIsFilterMenuOpen(false);
-                setOpen(true);
-              }}
-              onFocus={handleInputFocus}
-            />
+              <input
+                ref={inputRef}
+                id="archive-search"
+                className="search__input"
+                type="search"
+                placeholder="Search by name, city, state, or year..."
+                autoComplete="off"
+                value={query}
+                onChange={(event) => {
+                  setQuery(event.target.value);
+                  setIsFilterMenuOpen(false);
+                  setOpen(true);
+                }}
+                onFocus={handleInputFocus}
+              />
 
-            {query ? (
+              {query ? (
+                <button
+                  type="button"
+                  className="search__clearButton"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={handleClearQuery}
+                  aria-label="Clear search"
+                >
+                  <ClearIcon />
+                </button>
+              ) : null}
+
               <button
                 type="button"
-                className="search__clearButton"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={handleClearQuery}
-                aria-label="Clear search"
+                className={[
+                  'search__filterButton',
+                  isFilterMenuOpen ? 'search__filterButton--active' : '',
+                ].filter(Boolean).join(' ')}
+                onClick={handleToggleFilterMenu}
+                aria-label="Open search filters"
+                aria-haspopup="menu"
+                aria-expanded={isFilterMenuOpen ? 'true' : 'false'}
               >
-                <ClearIcon />
+                <FilterIcon />
               </button>
-            ) : null}
 
-            <button
-              type="button"
-              className={[
-                'search__filterButton',
-                isFilterMenuOpen ? 'search__filterButton--active' : '',
-              ].filter(Boolean).join(' ')}
-              onClick={handleToggleFilterMenu}
-              aria-label="Open search filters"
-              aria-haspopup="menu"
-              aria-expanded={isFilterMenuOpen ? 'true' : 'false'}
-            >
-              <FilterIcon />
-            </button>
-
-            {isFilterMenuOpen ? (
-              <div className="search__filterMenu" role="menu" aria-label="Search filters">
-                <label className="search__filterOption">
-                  <input
-                    type="checkbox"
-                    checked={allFiltersSelected}
-                    onChange={handleToggleAllFilters}
-                  />
-                  <span>Select all</span>
-                </label>
-
-                <div className="search__filterDivider" />
-
-                {SEARCH_FILTER_OPTIONS.map((option) => (
-                  <label key={option.id} className="search__filterOption">
+              {isFilterMenuOpen ? (
+                <div className="search__filterMenu" role="menu" aria-label="Search filters">
+                  <label className="search__filterOption">
                     <input
                       type="checkbox"
-                      checked={selectedFilterIds.includes(option.id)}
-                      onChange={() => handleToggleFilter(option.id)}
+                      checked={allFiltersSelected}
+                      onChange={handleToggleAllFilters}
                     />
-                    <span>{option.label}</span>
+                    <span>Select all</span>
                   </label>
-                ))}
-              </div>
-            ) : null}
 
-            {open && !isFilterMenuOpen ? (
-              <div className="search__dropdown" role="listbox" aria-label="Search suggestions">
-                {loadError ? (
-                  <p className="search__empty">{loadError}</p>
-                ) : query.trim().length === 0 ? (
-                  <p className="search__empty">Start typing to see matches.</p>
-                ) : noFiltersSelected ? (
-                  <p className="search__empty">Select at least one filter to search the archive.</p>
-                ) : results.length === 0 ? (
-                  <p className="search__empty">No matching results.</p>
-                ) : (
-                  <ul className="search__list">
-                    {results.map((result) => (
-                      <li key={result.key} className="search__item">
-                        <button type="button" onMouseDown={() => handleSelect(result)}>
-                          <span className="search__itemLead">
-                            <span className="search__itemTypeIcon" aria-hidden="true">
-                              <SearchItemIcon kind={result.kind} />
-                            </span>
+                  <div className="search__filterDivider" />
 
-                            <span className="search__itemText">
-                              <span className="search__itemName">{result.label}</span>
-                              <span className="search__itemMeta search__itemMeta--stacked">
-                                {result.meta}
+                  {SEARCH_FILTER_OPTIONS.map((option) => (
+                    <label key={option.id} className="search__filterOption">
+                      <input
+                        type="checkbox"
+                        checked={selectedFilterIds.includes(option.id)}
+                        onChange={() => handleToggleFilter(option.id)}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                </div>
+              ) : null}
+
+              {open && !isFilterMenuOpen ? (
+                <div className="search__dropdown" role="listbox" aria-label="Search suggestions">
+                  {loadError ? (
+                    <p className="search__empty">{loadError}</p>
+                  ) : query.trim().length === 0 ? (
+                    <p className="search__empty">Start typing to see matches.</p>
+                  ) : noFiltersSelected ? (
+                    <p className="search__empty">Select at least one filter to search the archive.</p>
+                  ) : results.length === 0 ? (
+                    <p className="search__empty">No matching results.</p>
+                  ) : (
+                    <ul className="search__list">
+                      {results.map((result) => (
+                        <li key={result.key} className="search__item">
+                          <button type="button" onMouseDown={() => handleSelect(result)}>
+                            <span className="search__itemLead">
+                              <span className="search__itemTypeIcon" aria-hidden="true">
+                                <SearchItemIcon kind={result.kind} />
+                              </span>
+
+                              <span className="search__itemText">
+                                <span className="search__itemName">{result.label}</span>
+                                <span className="search__itemMeta search__itemMeta--stacked">
+                                  {result.meta}
+                                </span>
                               </span>
                             </span>
-                          </span>
 
-                          <span className="search__itemMeta search__itemMeta--side">{result.meta}</span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            ) : null}
-          </form>
+                            <span className="search__itemMeta search__itemMeta--side">{result.meta}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
+            </form>
+          </div>
         </div>
       </div>
     </section>

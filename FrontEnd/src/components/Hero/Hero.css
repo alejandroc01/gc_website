@@ -21,6 +21,15 @@
   border-radius: 0; /* explicitly no rounded corners */
 }
 
+.hero__eyebrow {
+  margin: 0 0 10px;
+  font-family: var(--font-smallcaps);
+  font-size: clamp(0.8rem, 0.72vw, 1rem);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
 .hero__title {
   margin: 0 0 14px;
   font-family: var(--font-display);
