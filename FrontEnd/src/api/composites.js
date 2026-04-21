@@ -107,6 +107,30 @@ export function getScrapbooks() {
   return requestJson('/api/scrapbooks');
 }
 
+export function getScrapbookMetadataReview() {
+  return requestJson('/api/scrapbooks/metadata/review');
+}
+
+export function importScrapbookMetadataCsv(file) {
+  const payload = new FormData();
+  payload.append('metadataCsv', file);
+
+  return requestJson('/api/scrapbooks/metadata/import', {
+    method: 'POST',
+    body: payload,
+  });
+}
+
+export function saveScrapbookMetadataProfileLinks(links) {
+  return requestJson('/api/scrapbooks/metadata/profile-links', {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ links }),
+  });
+}
+
 export function getHistories() {
   return requestJson('/api/histories');
 }

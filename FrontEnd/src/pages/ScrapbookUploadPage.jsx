@@ -1,11 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import ProfileSearchSelect from '../components/Composite/ProfileSearchSelect.jsx';
 import ScrapbookCopyrightNotice from '../components/Scrapbook/ScrapbookCopyrightNotice.jsx';
 import {
   deleteScrapbook as deleteScrapbookRequest,
   deleteScrapbookPage as deleteScrapbookPageRequest,
+  getProfiles,
+  getScrapbookMetadataReview,
   getScrapbooks,
+  importScrapbookMetadataCsv,
+  saveScrapbookMetadataProfileLinks,
   uploadScrapbook,
 } from '../api/composites.js';
 import '../styles/composites.css';
@@ -16,17 +21,29 @@ const maxQueuedScrapbookFiles = 20;
 
 export default function ScrapbookUploadPage() {
   const nextQueueItemId = useRef(0);
+  const metadataProgressTimer = useRef(null);
   const [uploadQueue, setUploadQueue] = useState([]);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [scrapbookYear, setScrapbookYear] = useState('');
   const [scrapbooks, setScrapbooks] = useState([]);
+  const [profiles, setProfiles] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isMetadataLoading, setIsMetadataLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [isMetadataImporting, setIsMetadataImporting] = useState(false);
+  const [isSavingMetadataLinks, setIsSavingMetadataLinks] = useState(false);
   const [deletingScrapbookId, setDeletingScrapbookId] = useState(null);
   const [deletingPageKey, setDeletingPageKey] = useState('');
   const [expandedScrapbookId, setExpandedScrapbookId] = useState('');
   const [listError, setListError] = useState('');
   const [uploadError, setUploadError] = useState('');
+  const [metadataError, setMetadataError] = useState('');
+  const [metadataSuccess, setMetadataSuccess] = useState('');
+  const [metadataReview, setMetadataReview] = useState(null);
+  const [metadataCsvFile, setMetadataCsvFile] = useState(null);
+  const [metadataFileInputKey, setMetadataFileInputKey] = useState(0);
+  const [manualProfileLinks, setManualProfileLinks] = useState({});
+  const [metadataProgress, setMetadataProgress] = useState(null);
   const [uploadProgress, setUploadProgress] = useState(null);
   const [uploadSuccess, setUploadSuccess] = useState('');
 
@@ -63,6 +80,115 @@ export default function ScrapbookUploadPage() {
       isActive = false;
     };
   }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadMetadataContext = async () => {
+      setIsMetadataLoading(true);
+      setMetadataError('');
+      startMetadataProgress('Loading metadata matches');
+
+      try {
+        const [profileRecords, review] = await Promise.all([
+          getProfiles(),
+          getScrapbookMetadataReview(),
+        ]);
+
+        if (!isActive) {
+          return;
+        }
+
+        setProfiles(Array.isArray(profileRecords) ? profileRecords : []);
+        applyMetadataReview(review);
+      } catch (error) {
+        if (isActive) {
+          setProfiles([]);
+          setMetadataError(error.message || 'Unable to load scrapbook metadata matches.');
+        }
+      } finally {
+        if (isActive) {
+          setIsMetadataLoading(false);
+          completeMetadataProgress('Metadata matches loaded');
+        }
+      }
+    };
+
+    loadMetadataContext();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => () => {
+    clearMetadataProgressTimer();
+  }, []);
+
+  const visibleMetadataRows = useMemo(() => {
+    const rows = Array.isArray(metadataReview?.rows) ? metadataReview.rows : [];
+    const activeYear = scrapbookYear.trim();
+
+    if (!activeYear) {
+      return rows;
+    }
+
+    return rows.filter((row) => String(row.year || '') === activeYear);
+  }, [metadataReview, scrapbookYear]);
+
+  const savedManualProfileLinks = useMemo(
+    () => buildManualProfileLinkState(metadataReview),
+    [metadataReview],
+  );
+  const unsavedManualLinkCount = useMemo(
+    () => countUnsavedManualProfileLinks(manualProfileLinks, savedManualProfileLinks),
+    [manualProfileLinks, savedManualProfileLinks],
+  );
+
+  const applyMetadataReview = (review) => {
+    setMetadataReview(review || null);
+    setManualProfileLinks(buildManualProfileLinkState(review));
+  };
+
+  const clearMetadataProgressTimer = () => {
+    if (metadataProgressTimer.current) {
+      window.clearInterval(metadataProgressTimer.current);
+      metadataProgressTimer.current = null;
+    }
+  };
+
+  const startMetadataProgress = (label) => {
+    clearMetadataProgressTimer();
+    setMetadataProgress({
+      label,
+      percent: 8,
+    });
+
+    metadataProgressTimer.current = window.setInterval(() => {
+      setMetadataProgress((currentProgress) => {
+        if (!currentProgress) {
+          return currentProgress;
+        }
+
+        return {
+          ...currentProgress,
+          percent: Math.min(currentProgress.percent + 7, 92),
+        };
+      });
+    }, 260);
+  };
+
+  const completeMetadataProgress = (label) => {
+    clearMetadataProgressTimer();
+    setMetadataProgress((currentProgress) => ({
+      label: label || currentProgress?.label || 'Metadata action complete',
+      percent: 100,
+    }));
+
+    window.setTimeout(() => {
+      setMetadataProgress(null);
+    }, 900);
+  };
 
   const updateQueueItem = (queueItemId, updates) => {
     setUploadQueue((currentQueue) => currentQueue.map((queueItem) => (
@@ -126,6 +252,92 @@ export default function ScrapbookUploadPage() {
     setUploadSuccess('');
     setUploadProgress(null);
     resetFileInput();
+  };
+
+  const handleMetadataFileSelection = (event) => {
+    const file = event.target.files?.[0] || null;
+
+    if (file && !isAcceptedMetadataCsv(file)) {
+      setMetadataCsvFile(null);
+      setMetadataError('Please choose a .csv file for scrapbook metadata.');
+      setMetadataSuccess('');
+      setMetadataFileInputKey((currentValue) => currentValue + 1);
+      return;
+    }
+
+    setMetadataCsvFile(file);
+    setMetadataError('');
+    setMetadataSuccess('');
+  };
+
+  const handleMetadataImportSubmit = async (event) => {
+    event.preventDefault();
+
+    if (!metadataCsvFile) {
+      setMetadataError('Choose a scrapbook metadata CSV file to import.');
+      return;
+    }
+
+    setIsMetadataImporting(true);
+    setMetadataError('');
+    setMetadataSuccess('');
+    startMetadataProgress('Importing metadata CSV');
+
+    try {
+      const review = await importScrapbookMetadataCsv(metadataCsvFile);
+      applyMetadataReview(review);
+      setMetadataSuccess(buildMetadataImportMessage(review));
+      setMetadataCsvFile(null);
+      setMetadataFileInputKey((currentValue) => currentValue + 1);
+    } catch (error) {
+      setMetadataError(error.message);
+    } finally {
+      setIsMetadataImporting(false);
+      completeMetadataProgress('Metadata CSV imported');
+    }
+  };
+
+  const handleManualProfileSelect = (rowIdentifier, rawName, profileId) => {
+    const matchingLinkKeys = getMatchingManualLinkKeys(metadataReview, rawName);
+    const fallbackLinkKey = buildManualLinkKey(rowIdentifier, rawName);
+    const nextProfileId = profileId || '';
+
+    setManualProfileLinks((currentLinks) => ({
+      ...currentLinks,
+      ...(matchingLinkKeys.length > 0
+        ? Object.fromEntries(matchingLinkKeys.map((linkKey) => [linkKey, nextProfileId]))
+        : { [fallbackLinkKey]: nextProfileId }),
+    }));
+    setMetadataSuccess('');
+  };
+
+  const handleMetadataLinksSave = async () => {
+    const reviewRows = Array.isArray(metadataReview?.rows) ? metadataReview.rows : [];
+    const links = reviewRows.flatMap((row) => (
+      Array.isArray(row.people)
+        ? row.people.map((person) => ({
+            identifier: row.identifier,
+            rawName: person.rawName,
+            profileId: manualProfileLinks[buildManualLinkKey(row.identifier, person.rawName)] || null,
+          }))
+        : []
+    ));
+
+    setIsSavingMetadataLinks(true);
+    setMetadataError('');
+    setMetadataSuccess('');
+    startMetadataProgress('Saving manual matches');
+
+    try {
+      const saveSummary = await saveScrapbookMetadataProfileLinks(links);
+      applyMetadataReview(saveSummary.review);
+      setMetadataSuccess(`Saved ${saveSummary.savedCount || 0} manual scrapbook member match${(saveSummary.savedCount || 0) === 1 ? '' : 'es'}.`);
+    } catch (error) {
+      setMetadataError(error.message);
+    } finally {
+      setIsSavingMetadataLinks(false);
+      completeMetadataProgress('Manual matches saved');
+    }
   };
 
   const handleUploadSubmit = async (event) => {
@@ -440,6 +652,149 @@ export default function ScrapbookUploadPage() {
         <article className="compositePanel compositePanel--spacious">
           <div className="compositePanel__header">
             <div>
+              <h2 className="compositePanel__title">Import Scrapbook Metadata</h2>
+              <p className="compositePanel__description">
+                Upload the scrapbook metadata CSV, review automatic member matches, and manually connect nickname tags to member profiles.
+              </p>
+            </div>
+          </div>
+
+          <form className="compositeUploadForm" onSubmit={handleMetadataImportSubmit}>
+            <div className="compositeUploadForm__grid compositeUploadForm__grid--single">
+              <label className="compositeField">
+                <span className="compositeField__label">Metadata CSV</span>
+                <input
+                  key={metadataFileInputKey}
+                  className="compositeField__input compositeField__input--file"
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleMetadataFileSelection}
+                />
+              </label>
+            </div>
+
+            <div className="compositeUploadForm__actions">
+              <button
+                type="submit"
+                className="button compositeButton compositeButton--filled"
+                disabled={isMetadataImporting || !metadataCsvFile}
+              >
+                {isMetadataImporting ? 'Importing Metadata...' : 'Import Metadata CSV'}
+              </button>
+
+              <p className="compositeUploadForm__fileMeta">
+                {metadataCsvFile ? metadataCsvFile.name : 'No metadata CSV selected.'}
+              </p>
+            </div>
+          </form>
+
+          <div className="scrapbookMetadataReview">
+            <div className="scrapbookMetadataReview__summary">
+              {isMetadataLoading && !metadataProgress ? (
+                <p className="compositeMessage">Loading scrapbook metadata matches...</p>
+              ) : (
+                <p className="compositeUploadForm__fileMeta">
+                  {metadataReview
+                    ? `${metadataReview.rowCount || 0} metadata row${(metadataReview.rowCount || 0) === 1 ? '' : 's'}, ${metadataReview.matchedCount || 0} profile match${(metadataReview.matchedCount || 0) === 1 ? '' : 'es'}, ${metadataReview.needsReviewCount || 0} name${(metadataReview.needsReviewCount || 0) === 1 ? '' : 's'} needing review.`
+                    : 'No metadata review loaded yet.'}
+                </p>
+              )}
+
+              <button
+                type="button"
+                className="button compositeButton compositeButton--filled"
+                onClick={handleMetadataLinksSave}
+                disabled={isMetadataLoading || isSavingMetadataLinks || !metadataReview}
+              >
+                {isSavingMetadataLinks ? 'Saving Matches...' : `Save Manual Matches (${unsavedManualLinkCount})`}
+              </button>
+            </div>
+
+            {metadataProgress ? (
+              <MetadataProgressBar
+                label={metadataProgress.label}
+                percent={metadataProgress.percent}
+              />
+            ) : null}
+
+            {metadataSuccess ? <p className="compositeMessage">{metadataSuccess}</p> : null}
+            {metadataError ? <p className="compositeMessage compositeMessage--error">{metadataError}</p> : null}
+
+            {!isMetadataLoading && metadataReview && visibleMetadataRows.length === 0 ? (
+              <div className="compositeEmptyState compositeEmptyState--tight">
+                <h3 className="compositeEmptyState__title">No metadata rows for this year.</h3>
+                <p className="compositeEmptyState__description">
+                  Clear or change the scrapbook year field above to review a different set of imported metadata rows.
+                </p>
+              </div>
+            ) : null}
+
+            {visibleMetadataRows.length > 0 ? (
+              <div className="scrapbookMetadataRows">
+                {visibleMetadataRows.map((row) => (
+                  <article key={row.identifier} className="scrapbookMetadataRow">
+                    <div className="scrapbookMetadataRow__header">
+                      <div>
+                        <h3 className="scrapbookMetadataRow__title">{row.title || row.identifier}</h3>
+                        <p className="compositeCard__meta">
+                          {row.identifier}
+                          {row.year ? ` | ${row.year}` : ''}
+                          {row.category ? ` | ${row.category}` : ''}
+                        </p>
+                      </div>
+
+                      {row.isUploaded ? (
+                        <span className="compositeCard__pill">Uploaded page</span>
+                      ) : (
+                        <span className="compositeCard__pill compositeCard__pill--muted">Metadata only</span>
+                      )}
+                    </div>
+
+                    {Array.isArray(row.people) && row.people.length > 0 ? (
+                      <div className="scrapbookMetadataPeople">
+                        {row.people.map((person) => {
+                          const linkKey = buildManualLinkKey(row.identifier, person.rawName);
+                          const hasManualOverride = Object.prototype.hasOwnProperty.call(manualProfileLinks, linkKey);
+                          const selectedProfileId = hasManualOverride
+                            ? manualProfileLinks[linkKey]
+                            : person.profileId || '';
+
+                          return (
+                            <div key={linkKey} className="scrapbookMetadataPerson">
+                              <div className="scrapbookMetadataPerson__details">
+                                <p className="scrapbookMetadataPerson__name">{person.rawName}</p>
+                                <p className="scrapbookMetadataPerson__meta">
+                                  {formatMetadataPersonStatus(person, selectedProfileId)}
+                                </p>
+                              </div>
+
+                              <ProfileSearchSelect
+                                profiles={profiles}
+                                selectedProfileId={selectedProfileId}
+                                onSelectProfile={(profileId) => handleManualProfileSelect(row.identifier, person.rawName, profileId)}
+                                inputId={`scrapbook-profile-${row.identifier}-${person.rawName}`.replace(/[^a-z0-9_-]/gi, '-')}
+                                label={`Match ${person.rawName}`}
+                                placeholder={`Search profile for ${person.rawName}`}
+                                hideLabel
+                                invalid={Boolean(person.needsReview && !selectedProfileId)}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="compositeUploadForm__fileMeta">No member names listed in this metadata row.</p>
+                    )}
+                  </article>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </article>
+
+        <article className="compositePanel compositePanel--spacious">
+          <div className="compositePanel__header">
+            <div>
               <h2 className="compositePanel__title">Currently Available Scrapbooks</h2>
               <p className="compositePanel__description">
                 Review uploaded scrapbook years, delete an entire scrapbook, or remove a single page from a book.
@@ -554,6 +909,116 @@ export default function ScrapbookUploadPage() {
         </article>
       </div>
     </section>
+  );
+}
+
+function buildManualProfileLinkState(review) {
+  const nextState = {};
+
+  (Array.isArray(review?.rows) ? review.rows : []).forEach((row) => {
+    (Array.isArray(row.people) ? row.people : []).forEach((person) => {
+      const linkKey = buildManualLinkKey(row.identifier, person.rawName);
+
+      if (person.matchType === 'manual') {
+        nextState[linkKey] = person.profileId || '';
+      }
+    });
+  });
+
+  return nextState;
+}
+
+function isAcceptedMetadataCsv(file) {
+  return String(file?.name || '').trim().toLowerCase().endsWith('.csv');
+}
+
+function countUnsavedManualProfileLinks(currentLinks, savedLinks) {
+  const currentKeys = Object.keys(currentLinks || {});
+  const savedKeys = Object.keys(savedLinks || {});
+  const allKeys = new Set([...currentKeys, ...savedKeys]);
+  const unsavedNames = new Set();
+
+  allKeys.forEach((key) => {
+    const currentProfileId = String(currentLinks?.[key] || '');
+    const savedProfileId = String(savedLinks?.[key] || '');
+
+    if (currentProfileId !== savedProfileId) {
+      unsavedNames.add(extractRawNameFromManualLinkKey(key));
+    }
+  });
+
+  return unsavedNames.size;
+}
+
+function buildManualLinkKey(identifier, rawName) {
+  return `${normalizeMetadataKey(identifier)}::${normalizeMetadataKey(rawName)}`;
+}
+
+function getMatchingManualLinkKeys(review, rawName) {
+  const normalizedRawName = normalizeMetadataKey(rawName);
+
+  return (Array.isArray(review?.rows) ? review.rows : []).flatMap((row) => (
+    (Array.isArray(row.people) ? row.people : [])
+      .filter((person) => normalizeMetadataKey(person.rawName) === normalizedRawName)
+      .map((person) => buildManualLinkKey(row.identifier, person.rawName))
+  ));
+}
+
+function extractRawNameFromManualLinkKey(linkKey) {
+  return String(linkKey || '').split('::').slice(1).join('::') || String(linkKey || '');
+}
+
+function normalizeMetadataKey(value) {
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function buildMetadataImportMessage(review) {
+  const rowCount = Number(review?.rowCount || 0);
+  const peopleCount = Number(review?.peopleCount || 0);
+  const needsReviewCount = Number(review?.needsReviewCount || 0);
+
+  return `Imported ${rowCount} metadata row${rowCount === 1 ? '' : 's'} with ${peopleCount} member name${peopleCount === 1 ? '' : 's'}. ${needsReviewCount} need${needsReviewCount === 1 ? 's' : ''} manual review.`;
+}
+
+function formatMetadataPersonStatus(person, selectedProfileId) {
+  if (!selectedProfileId) {
+    return 'No profile match yet';
+  }
+
+  if (person.matchType === 'manual') {
+    return `Manually matched to ${person.profile?.displayName || 'selected profile'}`;
+  }
+
+  if (person.profile?.displayName) {
+    return `Automatically matched to ${person.profile.displayName}`;
+  }
+
+  return 'Matched to selected profile';
+}
+
+function MetadataProgressBar({ label, percent }) {
+  const normalizedPercent = Math.min(Math.max(Math.round(Number(percent) || 0), 0), 100);
+
+  return (
+    <div className="scrapbookMetadataProgress" role="status" aria-live="polite">
+      <div className="scrapbookMetadataProgress__header">
+        <span>{label}</span>
+        <strong>{normalizedPercent}%</strong>
+      </div>
+      <div
+        className="scrapbookMetadataProgress__track"
+        role="progressbar"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={normalizedPercent}
+      >
+        <span
+          className="scrapbookMetadataProgress__bar"
+          style={{ width: `${normalizedPercent}%` }}
+        />
+      </div>
+    </div>
   );
 }
 

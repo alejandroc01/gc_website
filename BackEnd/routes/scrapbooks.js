@@ -11,6 +11,12 @@ const {
     getScrapbookById,
     listScrapbooks,
 } = require("../utils/scrapbookStore");
+const { listProfiles } = require("../utils/profileStore");
+const {
+    getScrapbookMetadataReview,
+    importScrapbookMetadataCsv,
+    saveScrapbookMetadataProfileLinks,
+} = require("../utils/scrapbookMetadataStore");
 const {
     buildScrapbookStoredFilePath,
     isAllowedScrapbookUpload,
@@ -41,11 +47,68 @@ const chunkUpload = multer({
         fileSize: maxScrapbookUploadChunkBytes,
     },
 });
+const metadataUpload = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: (_req, file, callback) => {
+        const isCsvUpload = path.extname(file.originalname || "").toLowerCase() === ".csv";
+
+        if (!isCsvUpload) {
+            const error = new Error("Upload a .csv file for scrapbook metadata.");
+            error.statusCode = 400;
+            return callback(error);
+        }
+
+        return callback(null, true);
+    },
+    limits: {
+        files: 1,
+        fileSize: 10 * 1024 * 1024,
+    },
+});
 
 router.get("/", async (_req, res, next) => {
     try {
         const scrapbooks = await listScrapbooks();
         return res.json(scrapbooks);
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.get("/metadata/review", async (_req, res, next) => {
+    try {
+        const profiles = await listProfiles();
+        const metadataReview = await getScrapbookMetadataReview(profiles);
+        return res.json(metadataReview);
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.post("/metadata/import", metadataUpload.single("metadataCsv"), async (req, res, next) => {
+    try {
+        if (!req.file?.buffer) {
+            return res.status(400).json({ error: "Attach a CSV file to import scrapbook metadata." });
+        }
+
+        const profiles = await listProfiles();
+        const metadataReview = await importScrapbookMetadataCsv(req.file.buffer.toString("utf8"), profiles);
+        return res.status(201).json(metadataReview);
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.put("/metadata/profile-links", async (req, res, next) => {
+    try {
+        const saveSummary = await saveScrapbookMetadataProfileLinks(req.body?.links);
+        const profiles = await listProfiles();
+        const metadataReview = await getScrapbookMetadataReview(profiles);
+
+        return res.json({
+            ...saveSummary,
+            review: metadataReview,
+        });
     } catch (error) {
         return next(error);
     }

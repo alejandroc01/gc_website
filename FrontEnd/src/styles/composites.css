@@ -374,6 +374,119 @@
   line-height: 1.5;
 }
 
+.scrapbookMetadataReview,
+.scrapbookMetadataRows,
+.scrapbookMetadataPeople {
+  display: grid;
+  gap: 14px;
+}
+
+.scrapbookMetadataReview {
+  margin-top: 18px;
+}
+
+.scrapbookMetadataReview__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  background: var(--surface-muted);
+}
+
+.scrapbookMetadataProgress {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid rgba(42, 24, 70, 0.16);
+  background: linear-gradient(180deg, rgba(235, 215, 155, 0.18), rgba(255, 255, 255, 0.96));
+}
+
+.scrapbookMetadataProgress__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.94rem;
+}
+
+.scrapbookMetadataProgress__header strong {
+  color: var(--deep-purple);
+  font-variant-numeric: tabular-nums;
+}
+
+.scrapbookMetadataProgress__track {
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(42, 24, 70, 0.18);
+  background: rgba(42, 24, 70, 0.08);
+}
+
+.scrapbookMetadataProgress__bar {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--deep-purple), var(--gold));
+  transition: width 220ms ease;
+}
+
+.scrapbookMetadataRows {
+  max-height: 720px;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.scrapbookMetadataRow {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(38, 21, 56, 0.1);
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(38, 21, 56, 0.06);
+}
+
+.scrapbookMetadataRow__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.scrapbookMetadataRow__title {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  color: var(--text);
+  font-size: 1.18rem;
+}
+
+.scrapbookMetadataPerson {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.55fr) minmax(220px, 1fr);
+  gap: 14px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid rgba(38, 21, 56, 0.08);
+  background: linear-gradient(180deg, rgba(250, 246, 237, 0.92), rgba(255, 255, 255, 0.98));
+}
+
+.scrapbookMetadataPerson__name,
+.scrapbookMetadataPerson__meta {
+  margin: 0;
+}
+
+.scrapbookMetadataPerson__name {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.scrapbookMetadataPerson__meta {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .compositeDropzone {
   display: grid;
   gap: 8px;
@@ -1623,6 +1736,16 @@
     grid-template-columns: 1fr;
   }
 
+  .scrapbookMetadataRow__header,
+  .scrapbookMetadataReview__summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .scrapbookMetadataPerson {
+    grid-template-columns: 1fr;
+  }
+
   .profileManagerGrid {
     grid-template-columns: 1fr;
   }
@@ -1630,7 +1753,7 @@
   .historyUploadEditor__summary {
     grid-template-columns: 1fr;
   }
-  
+
   .compositeZoomControls__slider {
     width: 100%;
   }
