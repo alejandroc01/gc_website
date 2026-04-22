@@ -154,10 +154,9 @@ export default function HistoryPage() {
               {filteredHistoryDocuments.map((document) => (
                 <article key={document.historyId || document.key} className="historyPage__card">
                   <div className="historyPage__cardBody">
-                    <p className="historyPage__cardEyebrow">Historical document</p>
                     <h3 className="historyPage__cardTitle">{document.title}</h3>
                     <p className="historyPage__cardDescription">{document.description}</p>
-
+                    <br/>
                     <button
                       type="button"
                       className="button historyPage__cardButton"
