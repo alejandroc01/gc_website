@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { getOralHistories } from '../api/composites.js';
 import './OralHistories.css';
 
+const preferredIntervieweeOrder = ['doug petty', 'randy minix', 'tom dalzell'];
+
 /**
  * OralHistories
  *
@@ -380,7 +382,25 @@ function getIntervieweeOptions(episodes) {
     names.set(intervieweeName.toLowerCase(), intervieweeName);
   });
 
-  return [...names.values()];
+  return [...names.values()].sort(compareIntervieweeNames);
+}
+
+function compareIntervieweeNames(leftName, rightName) {
+  const leftOrder = getPreferredIntervieweeOrder(leftName);
+  const rightOrder = getPreferredIntervieweeOrder(rightName);
+
+  if (leftOrder !== rightOrder) {
+    return leftOrder - rightOrder;
+  }
+
+  return normalizeIntervieweeName(leftName).localeCompare(normalizeIntervieweeName(rightName));
+}
+
+function getPreferredIntervieweeOrder(intervieweeName) {
+  const normalizedInterviewee = normalizeIntervieweeName(intervieweeName).toLowerCase();
+  const preferredIndex = preferredIntervieweeOrder.indexOf(normalizedInterviewee);
+
+  return preferredIndex === -1 ? preferredIntervieweeOrder.length : preferredIndex;
 }
 
 function findMatchingIntervieweeName(names, targetName) {
