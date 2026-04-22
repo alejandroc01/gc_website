@@ -19,9 +19,9 @@ const {
 } = require("../utils/uploadConfig");
 
 const router = express.Router();
-const maxOralHistoryUploadBytes = Math.floor(1.5 * 1024 * 1024 * 1024);
-const oralHistoryUploadChunkSizeBytes = 8 * 1024 * 1024;
-const maxOralHistoryUploadChunkBytes = 10 * 1024 * 1024;
+const maxOralHistoryUploadBytes = 12 * 1024 * 1024 * 1024;
+const oralHistoryUploadChunkSizeBytes = 512 * 1024;
+const maxOralHistoryUploadChunkBytes = 768 * 1024;
 
 const upload = multer({
     storage: multer.diskStorage({
@@ -458,7 +458,7 @@ function sanitizeOralHistoryUploadSize(rawSize) {
     }
 
     if (parsedSize > maxOralHistoryUploadBytes) {
-        const error = new Error("Oral history videos must be 1.5 GB or smaller.");
+        const error = new Error("Oral history videos must be 12 GB or smaller.");
         error.statusCode = 413;
         throw error;
     }

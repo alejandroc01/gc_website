@@ -1,7 +1,7 @@
 const configuredApiBaseUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/+$/, '');
 const compositeUploadChunkSizeBytes = 256 * 1024;
 const historyUploadChunkSizeBytes = 1024 * 1024;
-const oralHistoryUploadChunkSizeBytes = 8 * 1024 * 1024;
+const oralHistoryUploadChunkSizeBytes = 512 * 1024;
 const oralHistoryUploadChunkRetryCount = 3;
 
 async function requestJson(url, options = {}) {
