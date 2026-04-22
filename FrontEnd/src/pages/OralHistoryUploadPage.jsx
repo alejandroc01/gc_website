@@ -80,11 +80,15 @@ export default function OralHistoryUploadPage() {
 
       const nextEntry = {
         ...entry,
-        [fieldName]: value,
+        [fieldName]: fieldName === 'isFullLength' ? Boolean(value) : value,
       };
 
       if (fieldName === 'title' && entry.key === slugifyFilename(entry.file?.name || '')) {
         nextEntry.key = slugifyFilename(value);
+      }
+
+      if (fieldName === 'isFullLength' && value) {
+        nextEntry.episodeNumber = '';
       }
 
       return nextEntry;
@@ -154,6 +158,7 @@ export default function OralHistoryUploadPage() {
         return {
           id: buildClientEntryId(),
           file,
+          isFullLength: false,
           episodeNumber: '',
           title,
           key: nextKey,
@@ -198,7 +203,8 @@ export default function OralHistoryUploadPage() {
 
           const metadata = {
             key: validateOralHistoryKey(entry.key),
-            episodeNumber: String(validateEpisodeNumber(entry.episodeNumber)),
+            isFullLength: Boolean(entry.isFullLength),
+            episodeNumber: entry.isFullLength ? null : String(validateEpisodeNumber(entry.episodeNumber)),
             title: validateRequiredField(entry.title, 'Enter an oral history title.'),
             interviewee: validateRequiredField(entry.interviewee, 'Enter the interviewee name.'),
             description: String(entry.description || '').trim(),
@@ -228,7 +234,7 @@ export default function OralHistoryUploadPage() {
       if (createdEntries.length > 0 && failedEntries.length === 0) {
         setStatusSummary(
           createdEntries.length === 1
-            ? `Uploaded Episode ${createdEntries[0].episodeNumber}: ${createdEntries[0].title}.`
+            ? `Uploaded ${formatEpisodeLabel(createdEntries[0])}: ${createdEntries[0].title}.`
             : `Uploaded ${createdEntries.length} oral history videos.`,
         );
         setFileInputKey((currentValue) => currentValue + 1);
@@ -248,7 +254,7 @@ export default function OralHistoryUploadPage() {
 
   const handleDeleteEpisode = async (episode) => {
     const confirmed = window.confirm(
-      `Delete Episode ${episode.episodeNumber}: ${episode.title}? This will remove the video from backend storage.`,
+      `Delete ${formatEpisodeLabel(episode)}: ${episode.title}? This will remove the video from backend storage.`,
     );
 
     if (!confirmed) {
@@ -264,7 +270,7 @@ export default function OralHistoryUploadPage() {
       setStoredEpisodes((currentEpisodes) => currentEpisodes.filter(
         (entry) => entry.oralHistoryId !== episode.oralHistoryId,
       ));
-      setStatusSummary(`Deleted Episode ${episode.episodeNumber}: ${episode.title}.`);
+      setStatusSummary(`Deleted ${formatEpisodeLabel(episode)}: ${episode.title}.`);
     } catch (error) {
       setStatusError(error.message);
     } finally {
@@ -432,6 +438,15 @@ export default function OralHistoryUploadPage() {
                     </div>
 
                     <div className="profileManagerGrid">
+                      <label className="compositeCheckbox">
+                        <input
+                          type="checkbox"
+                          checked={entry.isFullLength}
+                          onChange={(event) => handleEntryFieldChange(entry.id, 'isFullLength', event.target.checked)}
+                        />
+                        Full-length interview
+                      </label>
+
                       <label className="compositeField">
                         <span className="compositeField__label">Episode Number</span>
                         <input
@@ -439,6 +454,8 @@ export default function OralHistoryUploadPage() {
                           type="text"
                           inputMode="numeric"
                           value={entry.episodeNumber}
+                          disabled={entry.isFullLength}
+                          placeholder={entry.isFullLength ? 'No episode number' : ''}
                           onChange={(event) => handleEntryFieldChange(entry.id, 'episodeNumber', event.target.value)}
                         />
                       </label>
@@ -549,7 +566,7 @@ export default function OralHistoryUploadPage() {
                 <article key={episode.oralHistoryId} className="compositeCard">
                   <div className="compositeCard__body">
                     <div className="compositeCard__metaRow">
-                      <span className="compositeCard__pill">episode {episode.episodeNumber}</span>
+                      <span className="compositeCard__pill">{formatEpisodeLabel(episode)}</span>
                       <span className="compositeCard__pill compositeCard__pill--year">
                         {formatFileSize(episode.fileSize)}
                       </span>
@@ -599,10 +616,16 @@ export default function OralHistoryUploadPage() {
 function validateUploadEntries(uploadEntries, storedEpisodes) {
   const usedKeys = new Set(storedEpisodes.map((episode) => String(episode.key || '').trim().toLowerCase()));
   const usedEpisodeNumbersByInterviewee = buildEpisodeNumbersByInterviewee(storedEpisodes);
+  const fullLengthInterviewees = new Set(
+    storedEpisodes
+      .filter((episode) => episode.isFullLength)
+      .map((episode) => normalizeIntervieweeName(episode.interviewee).toLowerCase())
+      .filter(Boolean),
+  );
 
   uploadEntries.forEach((entry) => {
     const normalizedKey = validateOralHistoryKey(entry.key);
-    const normalizedEpisodeNumber = validateEpisodeNumber(entry.episodeNumber);
+    const normalizedEpisodeNumber = entry.isFullLength ? null : validateEpisodeNumber(entry.episodeNumber);
     const normalizedInterviewee = normalizeIntervieweeName(entry.interviewee);
 
     validateRequiredField(entry.title, 'Enter an oral history title.');
@@ -610,6 +633,16 @@ function validateUploadEntries(uploadEntries, storedEpisodes) {
 
     if (usedKeys.has(normalizedKey)) {
       throw new Error(`The key "${normalizedKey}" is already in use. Update it before uploading.`);
+    }
+
+    if (entry.isFullLength) {
+      if (fullLengthInterviewees.has(normalizedInterviewee.toLowerCase())) {
+        throw new Error(`A full-length interview already exists for ${normalizedInterviewee}.`);
+      }
+
+      usedKeys.add(normalizedKey);
+      fullLengthInterviewees.add(normalizedInterviewee.toLowerCase());
+      return;
     }
 
     const usedEpisodeNumbers = usedEpisodeNumbersByInterviewee.get(normalizedInterviewee.toLowerCase()) || new Set();
@@ -708,10 +741,12 @@ async function validateVideoFile(file) {
 function normalizeOralHistories(oralHistories) {
   return [...(Array.isArray(oralHistories) ? oralHistories : [])]
     .map((entry) => normalizeOralHistory(entry))
-    .sort((leftEntry, rightEntry) => Number(leftEntry.episodeNumber || 0) - Number(rightEntry.episodeNumber || 0));
+    .sort(compareOralHistories);
 }
 
 function normalizeOralHistory(oralHistory) {
+  const isFullLength = Boolean(oralHistory?.isFullLength);
+
   return {
     ...oralHistory,
     oralHistoryId: String(oralHistory?.oralHistoryId || ''),
@@ -719,11 +754,20 @@ function normalizeOralHistory(oralHistory) {
     title: String(oralHistory?.title || ''),
     interviewee: String(oralHistory?.interviewee || ''),
     description: String(oralHistory?.description || ''),
-    episodeNumber: Number(oralHistory?.episodeNumber || 0),
+    isFullLength,
+    episodeNumber: isFullLength ? null : Number(oralHistory?.episodeNumber || 0),
     fileName: String(oralHistory?.originalFilename || ''),
     fileSize: Number(oralHistory?.fileSize || 0),
     preparedAt: oralHistory?.uploadTimestamp || new Date().toISOString(),
   };
+}
+
+function compareOralHistories(leftEntry, rightEntry) {
+  if (Boolean(leftEntry.isFullLength) !== Boolean(rightEntry.isFullLength)) {
+    return leftEntry.isFullLength ? -1 : 1;
+  }
+
+  return Number(leftEntry.episodeNumber || 0) - Number(rightEntry.episodeNumber || 0);
 }
 
 function deriveTitleFromFilename(fileName) {
@@ -783,10 +827,16 @@ function getNextAvailableEpisodeNumber(storedEpisodes, uploadEntries, interviewe
 
   const usedNumbers = new Set([
     ...storedEpisodes
-      .filter((episode) => normalizeIntervieweeName(episode.interviewee).toLowerCase() === normalizedInterviewee.toLowerCase())
+      .filter((episode) =>
+        !episode.isFullLength
+        && normalizeIntervieweeName(episode.interviewee).toLowerCase() === normalizedInterviewee.toLowerCase(),
+      )
       .map((episode) => Number(episode.episodeNumber || 0)),
     ...uploadEntries
-      .filter((entry) => normalizeIntervieweeName(entry.interviewee).toLowerCase() === normalizedInterviewee.toLowerCase())
+      .filter((entry) =>
+        !entry.isFullLength
+        && normalizeIntervieweeName(entry.interviewee).toLowerCase() === normalizedInterviewee.toLowerCase(),
+      )
       .map((entry) => Number(entry.episodeNumber || 0)),
   ]);
 
@@ -802,13 +852,23 @@ function assignEpisodeNumbersForInterviewee(entries, storedEpisodes, interviewee
 
   const usedNumbers = new Set(
     storedEpisodes
-      .filter((episode) => normalizeIntervieweeName(episode.interviewee).toLowerCase() === normalizedInterviewee.toLowerCase())
+      .filter((episode) =>
+        !episode.isFullLength
+        && normalizeIntervieweeName(episode.interviewee).toLowerCase() === normalizedInterviewee.toLowerCase(),
+      )
       .map((episode) => Number(episode.episodeNumber || 0)),
   );
 
   return entries.map((entry) => {
     if (normalizeIntervieweeName(entry.interviewee).toLowerCase() !== normalizedInterviewee.toLowerCase()) {
       return entry;
+    }
+
+    if (entry.isFullLength) {
+      return {
+        ...entry,
+        episodeNumber: '',
+      };
     }
 
     return {
@@ -832,7 +892,7 @@ function buildEpisodeNumbersByInterviewee(entries) {
     const usedNumbers = episodeNumbersByInterviewee.get(normalizedKey) || new Set();
     const episodeNumber = Number(entry.episodeNumber || 0);
 
-    if (episodeNumber > 0) {
+    if (!entry.isFullLength && episodeNumber > 0) {
       usedNumbers.add(episodeNumber);
     }
 
@@ -886,4 +946,8 @@ function formatUploadProgress(uploadProgress) {
   const prefix = fileName ? `${fileName}: ` : '';
 
   return `${prefix}Uploading ${formatFileSize(uploadedBytes)} of ${formatFileSize(totalBytes)} (${uploadPercent}%, chunk ${completedChunks} of ${totalChunks}).`;
+}
+
+function formatEpisodeLabel(episode) {
+  return episode?.isFullLength ? 'Full-length interview' : `Episode ${episode?.episodeNumber}`;
 }

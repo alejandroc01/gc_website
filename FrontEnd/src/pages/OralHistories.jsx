@@ -14,7 +14,7 @@ export default function OralHistories() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [activeInterviewee, setActiveInterviewee] = useState('');
-  const [activeEpisodeNumber, setActiveEpisodeNumber] = useState(1);
+  const [activeOralHistoryId, setActiveOralHistoryId] = useState('');
 
   useEffect(() => {
     let isActive = true;
@@ -31,13 +31,14 @@ export default function OralHistories() {
         }
 
         const normalizedEpisodes = [...(Array.isArray(loadedEpisodes) ? loadedEpisodes : [])]
-          .sort((leftEpisode, rightEpisode) => Number(leftEpisode?.episodeNumber || 0) - Number(rightEpisode?.episodeNumber || 0));
+          .map((episode) => normalizeOralHistory(episode))
+          .sort(compareOralHistories);
 
         setEpisodes(normalizedEpisodes);
 
         if (normalizedEpisodes.length > 0) {
           setActiveInterviewee(getIntervieweeOptions(normalizedEpisodes)[0] || '');
-          setActiveEpisodeNumber(Number(normalizedEpisodes[0].episodeNumber || 1));
+          setActiveOralHistoryId(String(normalizedEpisodes[0].oralHistoryId || ''));
         }
       } catch (error) {
         if (isActive) {
@@ -82,26 +83,27 @@ export default function OralHistories() {
 
   useEffect(() => {
     if (visibleEpisodes.length === 0) {
-      setActiveEpisodeNumber(1);
+      setActiveOralHistoryId('');
       return;
     }
 
     const hasActiveEpisode = visibleEpisodes.some(
-      (episode) => Number(episode?.episodeNumber) === Number(activeEpisodeNumber),
+      (episode) => String(episode?.oralHistoryId || '') === String(activeOralHistoryId),
     );
 
     if (!hasActiveEpisode) {
-      setActiveEpisodeNumber(Number(visibleEpisodes[0].episodeNumber || 1));
+      setActiveOralHistoryId(String(visibleEpisodes[0].oralHistoryId || ''));
     }
-  }, [activeEpisodeNumber, visibleEpisodes]);
+  }, [activeOralHistoryId, visibleEpisodes]);
 
   const activeEpisode = useMemo(() => (
-    visibleEpisodes.find((episode) => Number(episode?.episodeNumber) === Number(activeEpisodeNumber))
+    visibleEpisodes.find((episode) => String(episode?.oralHistoryId || '') === String(activeOralHistoryId))
     || visibleEpisodes[0]
     || null
-  ), [activeEpisodeNumber, visibleEpisodes]);
+  ), [activeOralHistoryId, visibleEpisodes]);
 
   const playlistEpisodes = useMemo(() => buildPlaylistEpisodes(visibleEpisodes), [visibleEpisodes]);
+  const activePoster = useOralHistoryPoster(activeEpisode, activeInterviewee || activeEpisode?.interviewee);
 
   return (
     <div className="oralHistories">
@@ -134,7 +136,7 @@ export default function OralHistories() {
               <span className="oralHistories__detailLabel">Collection</span>
               <strong className="oralHistories__detailValue">
                 {activeEpisode
-                  ? `Episode ${activeEpisode.episodeNumber}`
+                  ? formatEpisodeLabel(activeEpisode)
                   : activeInterviewee
                     ? 'Awaiting Episode 1'
                     : 'No episodes loaded'}
@@ -181,7 +183,7 @@ export default function OralHistories() {
                   className="oralHistories__video"
                   controls
                   preload="metadata"
-                  poster={getOralHistoryPoster(activeInterviewee || activeEpisode?.interviewee)}
+                  poster={activePoster}
                   aria-label="Featured oral history video player"
                   key={activeEpisode?.oralHistoryId || 'oral-history-placeholder'}
                 >
@@ -203,22 +205,22 @@ export default function OralHistories() {
                       key={episode.oralHistoryId || `placeholder-${episode.episodeNumber}`}
                       type="button"
                       className={`oralHistories__playlistItem${
-                        Number(episode.episodeNumber) === Number(activeEpisode?.episodeNumber)
+                        String(episode.oralHistoryId || '') === String(activeEpisode?.oralHistoryId || '')
                           ? ' oralHistories__playlistItem--active'
                           : ''
                       }`}
                       onClick={() => {
                         if (episode.videoUrl) {
-                          setActiveEpisodeNumber(Number(episode.episodeNumber));
+                          setActiveOralHistoryId(String(episode.oralHistoryId || ''));
                         }
                       }}
                       disabled={!episode.videoUrl}
                     >
                       <span className="oralHistories__playlistNumber">
-                        {String(episode.episodeNumber).padStart(2, '0')}
+                        {episode.isFullLength ? 'Full' : String(episode.episodeNumber).padStart(2, '0')}
                       </span>
                       <span className="oralHistories__playlistText">
-                        Episode {episode.episodeNumber}
+                        {formatEpisodeLabel(episode)}
                         <span className="oralHistories__playlistSubtitle">
                           {episode.videoUrl
                             ? formatEpisodeTitle(episode.title)
@@ -237,24 +239,132 @@ export default function OralHistories() {
   );
 }
 
+function useOralHistoryPoster(activeEpisode, intervieweeName) {
+  const [generatedPoster, setGeneratedPoster] = useState('');
+  const videoUrl = activeEpisode?.videoUrl || '';
+  const staticPoster = getStaticOralHistoryPoster(intervieweeName);
+
+  useEffect(() => {
+    setGeneratedPoster('');
+
+    if (staticPoster || !videoUrl || typeof document === 'undefined') {
+      return undefined;
+    }
+
+    let isActive = true;
+    let hasRequestedSeek = false;
+    const previewVideo = document.createElement('video');
+
+    previewVideo.crossOrigin = 'anonymous';
+    previewVideo.muted = true;
+    previewVideo.playsInline = true;
+    previewVideo.preload = 'metadata';
+
+    const capturePreviewFrame = () => {
+      if (!isActive || previewVideo.videoWidth <= 0 || previewVideo.videoHeight <= 0) {
+        return;
+      }
+
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = previewVideo.videoWidth;
+        canvas.height = previewVideo.videoHeight;
+
+        const context = canvas.getContext('2d');
+
+        if (!context) {
+          return;
+        }
+
+        context.drawImage(previewVideo, 0, 0, canvas.width, canvas.height);
+        setGeneratedPoster(canvas.toDataURL('image/jpeg', 0.82));
+      } catch {
+        setGeneratedPoster('');
+      }
+    };
+
+    const seekToPreviewFrame = () => {
+      if (hasRequestedSeek) {
+        return;
+      }
+
+      hasRequestedSeek = true;
+      const duration = Number(previewVideo.duration);
+      const previewTime = Number.isFinite(duration) && duration > 1
+        ? Math.min(Math.max(duration * 0.08, 0.5), 5)
+        : 0;
+
+      if (previewTime > 0) {
+        try {
+          previewVideo.currentTime = previewTime;
+          return;
+        } catch {
+          // Fall through and capture the first available frame.
+        }
+      }
+
+      capturePreviewFrame();
+    };
+
+    previewVideo.addEventListener('loadedmetadata', seekToPreviewFrame);
+    previewVideo.addEventListener('loadeddata', seekToPreviewFrame);
+    previewVideo.addEventListener('seeked', capturePreviewFrame);
+    previewVideo.src = videoUrl;
+    previewVideo.load();
+
+    return () => {
+      isActive = false;
+      previewVideo.removeAttribute('src');
+      previewVideo.load();
+    };
+  }, [staticPoster, videoUrl]);
+
+  return staticPoster || generatedPoster || '/images/homepageimage.jpg';
+}
+
 function buildPlaylistEpisodes(episodes) {
+  const uploadedEpisodes = [...episodes].sort(compareOralHistories);
+  const numberedEpisodes = uploadedEpisodes.filter((episode) => !episode.isFullLength);
+  const fullLengthEpisodes = uploadedEpisodes.filter((episode) => episode.isFullLength);
   const totalEpisodeCount = Math.max(
     1,
-    ...episodes.map((episode) => Number(episode?.episodeNumber || 0)),
+    ...numberedEpisodes.map((episode) => Number(episode?.episodeNumber || 0)),
   );
   const episodesByNumber = new Map(
-    episodes.map((episode) => [Number(episode?.episodeNumber || 0), episode]),
+    numberedEpisodes.map((episode) => [Number(episode?.episodeNumber || 0), episode]),
   );
 
-  return Array.from({ length: totalEpisodeCount }, (_, index) => {
+  const placeholderEpisodes = Array.from({ length: totalEpisodeCount }, (_, index) => {
     const episodeNumber = index + 1;
     return episodesByNumber.get(episodeNumber) || {
       oralHistoryId: '',
+      isFullLength: false,
       episodeNumber,
       title: '',
       videoUrl: '',
     };
   });
+
+  return [...fullLengthEpisodes, ...placeholderEpisodes];
+}
+
+function normalizeOralHistory(oralHistory) {
+  const isFullLength = Boolean(oralHistory?.isFullLength);
+
+  return {
+    ...oralHistory,
+    oralHistoryId: String(oralHistory?.oralHistoryId || ''),
+    isFullLength,
+    episodeNumber: isFullLength ? null : Number(oralHistory?.episodeNumber || 0),
+  };
+}
+
+function compareOralHistories(leftEpisode, rightEpisode) {
+  if (Boolean(leftEpisode.isFullLength) !== Boolean(rightEpisode.isFullLength)) {
+    return leftEpisode.isFullLength ? -1 : 1;
+  }
+
+  return Number(leftEpisode.episodeNumber || 0) - Number(rightEpisode.episodeNumber || 0);
 }
 
 function getIntervieweeOptions(episodes) {
@@ -283,14 +393,22 @@ function normalizeIntervieweeName(value) {
   return String(value || '').trim();
 }
 
-function getOralHistoryPoster(intervieweeName) {
+function getStaticOralHistoryPoster(intervieweeName) {
   const normalizedInterviewee = normalizeIntervieweeName(intervieweeName).toLowerCase();
 
   if (normalizedInterviewee === 'doug petty') {
     return '/images/doug_oral_history_thumbnail.png';
   }
 
-  return '/images/homepageimage.jpg';
+  if (normalizedInterviewee === 'randy minix') {
+    return '/images/randy_minix.png';
+  }
+
+  if (normalizedInterviewee === 'tom dalzell') {
+    return '/images/tom_dalzell.png';
+  }
+
+  return '';
 }
 
 function formatEpisodeTitle(title) {
@@ -301,6 +419,10 @@ function formatEpisodeTitle(title) {
   }
 
   return normalizedTitle.replace(/^episode\s+\d+\s*(?:-|:|\u2013|\u2014)\s*/i, '').trim();
+}
+
+function formatEpisodeLabel(episode) {
+  return episode?.isFullLength ? 'Full Interview' : `Episode ${episode?.episodeNumber}`;
 }
 
 function getPlaceholderTitle(episodeNumber) {
