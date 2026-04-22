@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   { label: 'Composites', to: '/composites' },
   { label: 'Scrapbooks', to: '/scrapbooks' },
   { label: 'Oral Histories', to: '/oral-histories' },
-  { label: 'History', to: '/history' },
+  { label: 'Written History', to: '/written-history' },
   { label: 'Search', to: '/search' },
   { label: 'Upload', to: '/upload' },
   {label: 'Display', to: '/display-mode'},

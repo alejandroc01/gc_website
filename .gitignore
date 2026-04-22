@@ -12,3 +12,4 @@ BackEnd/.composite_upload_sessions/
 BackEnd/.scrapbook_upload_sessions/
 BackEnd/.homepage_upload_sessions/
 BackEnd/.oral_history_upload_sessions/
+build-and-push-to-amd.sh

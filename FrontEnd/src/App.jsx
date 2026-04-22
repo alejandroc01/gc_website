@@ -42,7 +42,7 @@ export default function App() {
           <Route path="/composites" element={<CompositesPage />} />
           <Route path="/scrapbooks" element={<ScrapbooksPage />} />
           <Route path="/oral-histories" element={<OralHistories />} />
-          <Route path="/history" element={<HistoryPage />} />
+          <Route path="/written-history" element={<HistoryPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/display-mode" element={<DisplayModePage />} />
           <Route path="/upload" element={<UploadPage />} />
@@ -50,7 +50,7 @@ export default function App() {
           <Route path="/upload/profiles" element={<ProfileUploadPage />} />
           <Route path="/upload/homepage" element={<HomepageUploadPage />} />
           <Route path="/upload/oral-histories" element={<OralHistoryUploadPage />} />
-          <Route path="/upload/history" element={<HistoryUploadPage />} />
+          <Route path="/upload/written-history" element={<HistoryUploadPage />} />
           <Route path="/upload/scrapbooks" element={<ScrapbookUploadPage />} />
           <Route path="/upload/composites/:compositeId" element={<CompositeEditorPage />} />
           <Route path="/member" element={<MemberPage />} />
