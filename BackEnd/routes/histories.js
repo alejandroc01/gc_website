@@ -8,7 +8,6 @@ const {
     createHistory,
     deleteHistory,
     listHistories,
-    updateHistory,
 } = require("../utils/historyStore");
 const {
     buildHistoryStoredFilePath,
@@ -316,25 +315,6 @@ router.post("/", upload.single("historyPdf"), async (req, res, next) => {
         return res.status(201).json(createdHistory);
     } catch (error) {
         await cleanupUploadedFile();
-        return next(error);
-    }
-});
-
-router.put("/:historyId", async (req, res, next) => {
-    try {
-        const title = sanitizeRequiredText(req.body?.title, "Written history title");
-        const description = sanitizeOptionalText(req.body?.description);
-        const updatedHistory = await updateHistory(req.params.historyId, {
-            title,
-            description,
-        });
-
-        if (!updatedHistory) {
-            return res.status(404).json({ error: "Written history not found." });
-        }
-
-        return res.json(updatedHistory);
-    } catch (error) {
         return next(error);
     }
 });

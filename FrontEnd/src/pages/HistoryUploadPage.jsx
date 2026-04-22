@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { deleteHistory, getHistories, updateHistory, uploadHistory } from '../api/composites.js';
+import { deleteHistory, getHistories, uploadHistory } from '../api/composites.js';
 import '../styles/composites.css';
 
 const acceptedPdfTypes = '.pdf,application/pdf';
@@ -19,7 +19,6 @@ export default function HistoryUploadPage() {
   const [isDraggingFile, setIsDraggingFile] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
   const [isLoadingHistories, setIsLoadingHistories] = useState(true);
-  const [editingHistoryId, setEditingHistoryId] = useState('');
   const [deletingHistoryId, setDeletingHistoryId] = useState('');
   const [statusError, setStatusError] = useState('');
   const [statusSummary, setStatusSummary] = useState('');
@@ -63,11 +62,6 @@ export default function HistoryUploadPage() {
     () => (storedHistories.length > 0 ? storedHistories[0] : null),
     [storedHistories],
   );
-  const editingHistory = useMemo(
-    () => storedHistories.find((history) => history.historyId === editingHistoryId) || null,
-    [editingHistoryId, storedHistories],
-  );
-  const isEditingHistory = Boolean(editingHistory);
 
   const handleFieldChange = (event) => {
     const { name, value } = event.target;
@@ -87,7 +81,6 @@ export default function HistoryUploadPage() {
     if (!nextFile) {
       setSelectedFile(null);
       setFormValues(emptyForm);
-      setEditingHistoryId('');
       return;
     }
 
@@ -97,7 +90,6 @@ export default function HistoryUploadPage() {
       const derivedMetadata = deriveHistoryMetadata(nextFile.name);
 
       setSelectedFile(nextFile);
-      setEditingHistoryId('');
       setFormValues({
         key: derivedMetadata.key,
         name: derivedMetadata.name,
@@ -123,31 +115,12 @@ export default function HistoryUploadPage() {
     setIsPreparing(true);
 
     try {
+      const normalizedKey = validateHistoryKey(formValues.key);
       const normalizedName = validateRequiredField(formValues.name, 'Enter a history name.');
       const normalizedDescription = validateRequiredField(
         formValues.description,
         'Enter a description for this history document.',
       );
-
-      if (isEditingHistory) {
-        const updatedHistory = normalizeHistory(
-          await updateHistory(editingHistory.historyId, {
-            title: normalizedName,
-            description: normalizedDescription,
-          }),
-        );
-
-        setStoredHistories((currentHistories) =>
-          normalizeHistories(currentHistories.map((history) =>
-            history.historyId === updatedHistory.historyId ? updatedHistory : history)));
-        setStatusSummary(`Updated ${updatedHistory.title}.`);
-        setFormValues(emptyForm);
-        setSelectedFile(null);
-        setEditingHistoryId('');
-        return;
-      }
-
-      const normalizedKey = validateHistoryKey(formValues.key);
 
       if (!selectedFile) {
         throw new Error('Choose a PDF file before preparing the history upload.');
@@ -182,29 +155,6 @@ export default function HistoryUploadPage() {
     }
   };
 
-  const handleEditHistory = (history) => {
-    setEditingHistoryId(history.historyId);
-    setSelectedFile(null);
-    setFileInputKey((currentValue) => currentValue + 1);
-    setUploadProgress(null);
-    setStatusError('');
-    setStatusSummary(`Editing ${history.title}.`);
-    setFormValues({
-      key: history.key,
-      name: history.title,
-      description: history.description,
-    });
-  };
-
-  const handleCancelEdit = () => {
-    setEditingHistoryId('');
-    setSelectedFile(null);
-    setFormValues(emptyForm);
-    setStatusError('');
-    setStatusSummary('');
-    setUploadProgress(null);
-  };
-
   const handleDeleteHistory = async (history) => {
     const confirmed = window.confirm(
       `Delete "${history.title}"? This will remove the written history PDF from backend storage.`,
@@ -222,11 +172,6 @@ export default function HistoryUploadPage() {
       await deleteHistory(history.historyId);
       setStoredHistories((currentHistories) =>
         currentHistories.filter((entry) => entry.historyId !== history.historyId));
-      if (editingHistoryId === history.historyId) {
-        setEditingHistoryId('');
-        setFormValues(emptyForm);
-        setSelectedFile(null);
-      }
       setStatusSummary(`Deleted ${history.title}.`);
     } catch (error) {
       setStatusError(error.message);
@@ -239,7 +184,12 @@ export default function HistoryUploadPage() {
     <section className="section compositeAdmin">
       <div className="container">
         <div className="compositePageHeader">
+          <p className="compositePageHeader__eyebrow">Admin Upload Flow</p>
           <h1 className="compositePageHeader__title">Upload Written History PDF</h1>
+          <p className="compositePageHeader__description">
+            Start with a PDF, derive a draft title and key from its filename, then adjust the
+            metadata before uploading it to backend storage.
+          </p>
         </div>
 
         <div style={{ marginBottom: '24px' }}>
@@ -280,29 +230,16 @@ export default function HistoryUploadPage() {
                   onDrop={(event) => {
                     event.preventDefault();
                     setIsDraggingFile(false);
-                    if (isEditingHistory) {
-                      return;
-                    }
                     void handleFileSelection(event.dataTransfer.files?.[0] || null);
                   }}
-                  onClick={() => {
-                    if (!isEditingHistory) {
-                      fileInputRef.current?.click();
-                    }
-                  }}
-                  disabled={isEditingHistory}
+                  onClick={() => fileInputRef.current?.click()}
                 >
                   <span className="compositeDropzone__title">
-                    {isEditingHistory
-                      ? 'PDF locked while editing metadata'
-                      : selectedFile
-                        ? 'Replace the selected PDF'
-                        : 'Drop a PDF here or click to browse'}
+                    {selectedFile ? 'Replace the selected PDF' : 'Drop a PDF here or click to browse'}
                   </span>
                   <span className="compositeDropzone__copy">
-                    {isEditingHistory
-                      ? 'The stored file cannot be changed from this edit flow'
-                      : 'Accepted format: PDF. Filename parsing runs immediately after selection so the form is prefilled.'}
+                    Accepted format: PDF. Filename parsing runs immediately after selection so the
+                    form is prefilled.
                   </span>
                 </button>
 
@@ -316,28 +253,18 @@ export default function HistoryUploadPage() {
                 />
               </div>
 
-              {selectedFile || isEditingHistory ? (
+              {selectedFile ? (
                 <div className="historyUploadEditor__summary">
                   <div className="historyUploadEditor__summaryCard">
-                    <span className="historyUploadEditor__summaryLabel">
-                      {isEditingHistory ? 'Locked file' : 'Selected file'}
-                    </span>
-                    <strong className="historyUploadEditor__summaryValue">
-                      {isEditingHistory
-                        ? editingHistory.originalFilename || editingHistory.fileName || 'Stored PDF'
-                        : selectedFile.name}
-                    </strong>
+                    <span className="historyUploadEditor__summaryLabel">Selected file</span>
+                    <strong className="historyUploadEditor__summaryValue">{selectedFile.name}</strong>
                     <p className="historyUploadEditor__summaryMeta">
-                      {isEditingHistory
-                        ? `${formatFileSize(editingHistory.fileSize)} · PDF remains unchanged`
-                        : `${formatFileSize(selectedFile.size)} · PDF draft ready for metadata review`}
+                      {formatFileSize(selectedFile.size)} · PDF draft ready for metadata review
                     </p>
                   </div>
 
                   <div className="historyUploadEditor__summaryCard">
-                    <span className="historyUploadEditor__summaryLabel">
-                      {isEditingHistory ? 'Stored metadata' : 'Derived draft'}
-                    </span>
+                    <span className="historyUploadEditor__summaryLabel">Derived draft</span>
                     <strong className="historyUploadEditor__summaryValue">{formValues.name || 'Untitled history'}</strong>
                     <p className="historyUploadEditor__summaryMeta">
                       Key: <strong>{formValues.key || 'pending'}</strong>
@@ -355,13 +282,11 @@ export default function HistoryUploadPage() {
               )}
             </div>
 
-            {selectedFile || isEditingHistory ? (
+            {selectedFile ? (
               <div className="historyUploadEditor__metadata">
                 <div className="compositePanel__header compositePanel__header--compact">
                   <div>
-                    <h3 className="historyUploadEditor__metadataTitle">
-                      {isEditingHistory ? 'Edit Metadata' : 'Metadata Review'}
-                    </h3>
+                    <h3 className="historyUploadEditor__metadataTitle">Metadata Review</h3>
                     <p className="historyUploadEditor__metadataDescription">
                       Edit the derived values if the filename was not quite right, then add the public
                       description shown with the history card.
@@ -391,7 +316,6 @@ export default function HistoryUploadPage() {
                       placeholder="for example: history-of-the-class-of-1984"
                       value={formValues.key}
                       onChange={handleFieldChange}
-                      disabled={isEditingHistory}
                     />
                   </label>
 
@@ -414,33 +338,14 @@ export default function HistoryUploadPage() {
               <button
                 type="submit"
                 className="button compositeButton compositeButton--filled"
-                disabled={isPreparing || (!selectedFile && !isEditingHistory)}
+                disabled={isPreparing || !selectedFile}
               >
-                {isPreparing
-                  ? isEditingHistory
-                    ? 'Saving Changes...'
-                    : 'Uploading History...'
-                  : isEditingHistory
-                    ? 'Save Changes'
-                    : 'Upload History'}
+                {isPreparing ? 'Uploading History...' : 'Upload History'}
               </button>
 
-              {isEditingHistory ? (
-                <button
-                  type="button"
-                  className="button compositeButton"
-                  onClick={handleCancelEdit}
-                  disabled={isPreparing}
-                >
-                  Cancel Edit
-                </button>
-              ) : null}
-
               <p className="compositeUploadForm__fileMeta">
-                {isEditingHistory
-                  ? 'Ready to save metadata changes. Key and PDF are locked.'
-                  : selectedFile
-                    ? `Ready to upload ${selectedFile.name}.`
+                {selectedFile
+                  ? `Ready to upload ${selectedFile.name}.`
                   : 'Choose a PDF to generate the editable metadata fields.'}
               </p>
             </div>
@@ -497,10 +402,10 @@ export default function HistoryUploadPage() {
                     <p className="compositeCard__meta">
                       Key: <strong>{history.key}</strong>
                     </p>
+                    <p className="compositeCard__meta">{history.description}</p>
                     <p className="compositeCard__meta">
-                      Uploaded {formatDate(history.uploadTimestamp || history.updatedAt)} <br/>
+                      Uploaded {formatDate(history.uploadTimestamp || history.updatedAt)}
                     </p>
-                    <p className="compositeCard__meta">{history.description}</p> <br/>
 
                     <div className="profileDirectoryCard__actions">
                       {history.pdfUrl ? (
@@ -516,16 +421,8 @@ export default function HistoryUploadPage() {
                       <button
                         type="button"
                         className="button compositeButton"
-                        onClick={() => handleEditHistory(history)}
-                        disabled={isPreparing || deletingHistoryId === history.historyId}
-                      >
-                        {editingHistoryId === history.historyId ? 'Editing' : 'Edit'}
-                      </button>
-                      <button
-                        type="button"
-                        className="button compositeButton"
                         onClick={() => void handleDeleteHistory(history)}
-                        disabled={isPreparing || deletingHistoryId === history.historyId}
+                        disabled={deletingHistoryId === history.historyId}
                       >
                         {deletingHistoryId === history.historyId ? 'Deleting...' : 'Delete'}
                       </button>

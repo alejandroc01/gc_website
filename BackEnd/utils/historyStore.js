@@ -93,30 +93,6 @@ async function createHistory(historyInput) {
     return toHistoryResponse(nextHistory);
 }
 
-async function updateHistory(historyId, historyInput) {
-    const store = await readStore();
-    const historyIndex = store.histories.findIndex(
-        (entry) => String(entry.historyId) === String(historyId),
-    );
-
-    if (historyIndex === -1) {
-        return null;
-    }
-
-    const currentHistory = store.histories[historyIndex];
-    const updatedHistory = {
-        ...currentHistory,
-        title: String(historyInput?.title || "").trim(),
-        description: String(historyInput?.description || "").trim(),
-        updatedAt: new Date().toISOString(),
-    };
-
-    store.histories[historyIndex] = updatedHistory;
-    await writeStore(store);
-
-    return toHistoryResponse(updatedHistory);
-}
-
 async function deleteHistory(historyId) {
     const store = await readStore();
     const historyIndex = store.histories.findIndex(
@@ -139,5 +115,4 @@ module.exports = {
     ensureHistoryStore,
     historyStorePath,
     listHistories,
-    updateHistory,
 };

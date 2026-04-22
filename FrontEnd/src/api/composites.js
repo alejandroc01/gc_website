@@ -153,16 +153,6 @@ export function getHistories() {
   return requestJson('/api/histories');
 }
 
-export function updateHistory(historyId, metadata) {
-  return requestJson(`/api/histories/${historyId}`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(metadata),
-  });
-}
-
 export function getHomepageContent() {
   return requestJson('/api/homepage');
 }
