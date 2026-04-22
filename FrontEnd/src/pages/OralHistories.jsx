@@ -4,6 +4,14 @@ import { getOralHistories } from '../api/composites.js';
 import './OralHistories.css';
 
 const preferredIntervieweeOrder = ['doug petty', 'randy minix', 'tom dalzell'];
+const defaultOralHistoryCategories = [
+  'Why Virginia Tech?',
+  'German Club Life',
+  'Traditions & Values',
+  'Athletics & Student Life',
+  'Alumni, Giving & GCAF',
+  'Military, Career & Personal Stories',
+];
 
 /**
  * OralHistories
@@ -16,6 +24,7 @@ export default function OralHistories() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [activeInterviewee, setActiveInterviewee] = useState('');
+  const [activeCategory, setActiveCategory] = useState('');
   const [activeOralHistoryId, setActiveOralHistoryId] = useState('');
 
   useEffect(() => {
@@ -61,8 +70,9 @@ export default function OralHistories() {
   }, []);
 
   const interviewees = useMemo(() => getIntervieweeOptions(episodes), [episodes]);
+  const categories = useMemo(() => getCategoryOptions(episodes), [episodes]);
 
-  const visibleEpisodes = useMemo(() => {
+  const intervieweeEpisodes = useMemo(() => {
     if (!activeInterviewee) {
       return episodes;
     }
@@ -71,6 +81,17 @@ export default function OralHistories() {
       (episode) => normalizeIntervieweeName(episode.interviewee) === normalizeIntervieweeName(activeInterviewee),
     );
   }, [activeInterviewee, episodes]);
+
+  const visibleEpisodes = useMemo(() => {
+    if (!activeCategory) {
+      return intervieweeEpisodes;
+    }
+
+    return intervieweeEpisodes.filter(
+      (episode) =>
+        normalizeCategoryName(episode.category).toLowerCase() === normalizeCategoryName(activeCategory).toLowerCase(),
+    );
+  }, [activeCategory, intervieweeEpisodes]);
 
   useEffect(() => {
     if (!interviewees.length) {
@@ -82,6 +103,16 @@ export default function OralHistories() {
       setActiveInterviewee(interviewees[0]);
     }
   }, [activeInterviewee, interviewees]);
+
+  useEffect(() => {
+    if (!activeCategory) {
+      return;
+    }
+
+    if (!findMatchingCategoryName(categories, activeCategory)) {
+      setActiveCategory('');
+    }
+  }, [activeCategory, categories]);
 
   useEffect(() => {
     if (visibleEpisodes.length === 0) {
@@ -120,8 +151,10 @@ export default function OralHistories() {
             </p>
             <p className="oralHistories__copy">
               {activeEpisode
-                ? 'Explore the episodes by selecting a featured interviewee and choosing a recording from the playlist.'
-                : activeInterviewee
+                ? 'Explore the episodes by selecting a featured interviewee, filtering by category, and choosing a recording from the playlist.'
+                : activeCategory
+                  ? `No uploaded episodes are currently categorized under ${activeCategory}.`
+                  : activeInterviewee
                   ? `No uploaded episodes for ${activeInterviewee} yet.`
                   : 'Oral history recordings will appear here as they are added to the archive.'}
             </p>
@@ -135,12 +168,12 @@ export default function OralHistories() {
               </strong>
             </div>
             <div className="oralHistories__detailCard">
-              <span className="oralHistories__detailLabel">Collection</span>
+              <span className="oralHistories__detailLabel">Category</span>
               <strong className="oralHistories__detailValue">
                 {activeEpisode
-                  ? formatEpisodeLabel(activeEpisode)
+                  ? activeEpisode.category
                   : activeInterviewee
-                    ? 'Awaiting Episode 1'
+                    ? 'No category selected'
                     : 'No episodes loaded'}
               </strong>
             </div>
@@ -167,9 +200,27 @@ export default function OralHistories() {
                       value={activeInterviewee}
                       onChange={(event) => setActiveInterviewee(event.target.value)}
                     >
+                      <option value="">All interviewees</option>
                       {interviewees.map((interviewee) => (
                         <option key={interviewee} value={interviewee}>
                           {interviewee}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+                {categories.length > 0 ? (
+                  <label className="oralHistories__selector">
+                    <span className="oralHistories__selectorLabel">Category</span>
+                    <select
+                      className="oralHistories__selectorInput"
+                      value={activeCategory}
+                      onChange={(event) => setActiveCategory(event.target.value)}
+                    >
+                      <option value="">All categories</option>
+                      {categories.map((category) => (
+                        <option key={category} value={category}>
+                          {category}
                         </option>
                       ))}
                     </select>
@@ -225,7 +276,7 @@ export default function OralHistories() {
                         {formatEpisodeLabel(episode)}
                         <span className="oralHistories__playlistSubtitle">
                           {episode.videoUrl
-                            ? formatEpisodeTitle(episode.title)
+                            ? `${formatEpisodeTitle(episode.title)} | ${episode.category}`
                             : getPlaceholderTitle(episode.episodeNumber)}
                         </span>
                       </span>
@@ -356,6 +407,7 @@ function normalizeOralHistory(oralHistory) {
   return {
     ...oralHistory,
     oralHistoryId: String(oralHistory?.oralHistoryId || ''),
+    category: normalizeCategoryName(oralHistory?.category || getCategoryForTitle(oralHistory?.title)),
     isFullLength,
     episodeNumber: isFullLength ? null : Number(oralHistory?.episodeNumber || 0),
   };
@@ -409,8 +461,61 @@ function findMatchingIntervieweeName(names, targetName) {
   return names.find((name) => normalizeIntervieweeName(name).toLowerCase() === normalizedTargetName) || '';
 }
 
+function findMatchingCategoryName(names, targetName) {
+  const normalizedTargetName = normalizeCategoryName(targetName).toLowerCase();
+
+  return names.find((name) => normalizeCategoryName(name).toLowerCase() === normalizedTargetName) || '';
+}
+
 function normalizeIntervieweeName(value) {
   return String(value || '').trim();
+}
+
+function normalizeCategoryName(value) {
+  return String(value || '').trim();
+}
+
+function getCategoryOptions(episodes) {
+  const categories = new Map();
+
+  [...defaultOralHistoryCategories, ...episodes.map((episode) => episode.category)]
+    .map((category) => normalizeCategoryName(category))
+    .filter(Boolean)
+    .forEach((category) => {
+      const normalizedKey = category.toLowerCase();
+
+      if (!categories.has(normalizedKey)) {
+        categories.set(normalizedKey, category);
+      }
+    });
+
+  return [...categories.values()];
+}
+
+function getCategoryForTitle(title) {
+  const normalizedTitle = String(title || '').trim().toLowerCase();
+
+  if (/why.*tech|come to tech|love of va tech|special memory of tech/.test(normalizedTitle)) {
+    return 'Why Virginia Tech?';
+  }
+
+  if (/joining|club like|club member|life as a gc member|get involved with the gc/.test(normalizedTitle)) {
+    return 'German Club Life';
+  }
+
+  if (/ritual|gentleman|independent|special door|message.*club members/.test(normalizedTitle)) {
+    return 'Traditions & Values';
+  }
+
+  if (/football|athlete|dances|cotillion|entertainment|dumb jock/.test(normalizedTitle)) {
+    return 'Athletics & Student Life';
+  }
+
+  if (/alumni|gcaf|foundation|manor|give|generously|pamplin/.test(normalizedTitle)) {
+    return 'Alumni, Giving & GCAF';
+  }
+
+  return 'Military, Career & Personal Stories';
 }
 
 function getStaticOralHistoryPoster(intervieweeName) {

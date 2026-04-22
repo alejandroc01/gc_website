@@ -6,6 +6,14 @@ import '../styles/composites.css';
 
 const acceptedVideoTypes = 'video/*,.mp4,.mov,.m4v,.webm';
 const defaultInterviewees = ['Doug Petty', 'Randy Minix', 'Tom Dalzell'];
+const defaultOralHistoryCategories = [
+  'Why Virginia Tech?',
+  'German Club Life',
+  'Traditions & Values',
+  'Athletics & Student Life',
+  'Alumni, Giving & GCAF',
+  'Military, Career & Personal Stories',
+];
 
 export default function OralHistoryUploadPage() {
   const [uploadEntries, setUploadEntries] = useState([]);
@@ -22,6 +30,9 @@ export default function OralHistoryUploadPage() {
   const [customInterviewees, setCustomInterviewees] = useState([]);
   const [isAddingInterviewee, setIsAddingInterviewee] = useState(false);
   const [newIntervieweeName, setNewIntervieweeName] = useState('');
+  const [customCategories, setCustomCategories] = useState([]);
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -70,6 +81,11 @@ export default function OralHistoryUploadPage() {
   const availableInterviewees = useMemo(
     () => buildIntervieweeOptions(defaultInterviewees, storedEpisodes, customInterviewees),
     [storedEpisodes, customInterviewees],
+  );
+
+  const availableCategories = useMemo(
+    () => buildCategoryOptions(defaultOralHistoryCategories, storedEpisodes, customCategories),
+    [storedEpisodes, customCategories],
   );
 
   const handleEntryFieldChange = (entryId, fieldName, value) => {
@@ -138,6 +154,34 @@ export default function OralHistoryUploadPage() {
     }
   };
 
+  const handleCreateCategory = () => {
+    try {
+      const normalizedName = validateRequiredField(newCategoryName, 'Enter a new category name.');
+      const existingName = findMatchingCategoryName(availableCategories, normalizedName);
+      const nextCategoryName = existingName || normalizedName;
+
+      setCustomCategories((currentNames) => {
+        if (findMatchingCategoryName(currentNames, nextCategoryName)) {
+          return currentNames;
+        }
+
+        return existingName ? currentNames : [...currentNames, nextCategoryName];
+      });
+
+      setUploadEntries((currentEntries) => currentEntries.map((entry) => ({
+        ...entry,
+        category: entry.category || nextCategoryName,
+      })));
+      setIsAddingCategory(false);
+      setNewCategoryName('');
+      setStatusError('');
+      setStatusSummary('');
+    } catch (error) {
+      setStatusError(error.message);
+      setStatusSummary('');
+    }
+  };
+
   const handleFilesSelection = (fileList) => {
     const nextFiles = Array.from(fileList || []).filter(Boolean);
 
@@ -163,6 +207,7 @@ export default function OralHistoryUploadPage() {
           title,
           key: nextKey,
           interviewee: selectedInterviewee,
+          category: getCategoryForTitle(title),
           description: '',
         };
       });
@@ -207,6 +252,7 @@ export default function OralHistoryUploadPage() {
             episodeNumber: entry.isFullLength ? null : String(validateEpisodeNumber(entry.episodeNumber)),
             title: validateRequiredField(entry.title, 'Enter an oral history title.'),
             interviewee: validateRequiredField(entry.interviewee, 'Enter the interviewee name.'),
+            category: validateRequiredField(entry.category, 'Choose a category for the oral history.'),
             description: String(entry.description || '').trim(),
           };
 
@@ -371,6 +417,46 @@ export default function OralHistoryUploadPage() {
                   </button>
                 )}
               </div>
+
+              <div className="compositeField">
+                <span className="compositeField__label">Add New Category</span>
+                {isAddingCategory ? (
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                    <input
+                      className="compositeField__input"
+                      type="text"
+                      value={newCategoryName}
+                      placeholder="Enter a new category"
+                      onChange={(event) => setNewCategoryName(event.target.value)}
+                    />
+                    <button
+                      type="button"
+                      className="button compositeButton compositeButton--filled"
+                      onClick={handleCreateCategory}
+                    >
+                      Save Category
+                    </button>
+                    <button
+                      type="button"
+                      className="button compositeButton"
+                      onClick={() => {
+                        setIsAddingCategory(false);
+                        setNewCategoryName('');
+                      }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="button compositeButton"
+                    onClick={() => setIsAddingCategory(true)}
+                  >
+                    Add Category
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="compositeField">
@@ -490,6 +576,22 @@ export default function OralHistoryUploadPage() {
                         />
                       </label>
 
+                      <label className="compositeField">
+                        <span className="compositeField__label">Category</span>
+                        <select
+                          className="compositeField__input"
+                          value={entry.category}
+                          onChange={(event) => handleEntryFieldChange(entry.id, 'category', event.target.value)}
+                        >
+                          <option value="">Choose a category</option>
+                          {availableCategories.map((categoryName) => (
+                            <option key={categoryName} value={categoryName}>
+                              {categoryName}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
                       <label className="compositeField profileManagerGrid__fullWidth">
                         <span className="compositeField__label">Description</span>
                         <textarea
@@ -576,6 +678,9 @@ export default function OralHistoryUploadPage() {
                     <p className="compositeCard__meta">
                       Interviewee: <strong>{episode.interviewee}</strong>
                     </p>
+                    <p className="compositeCard__meta">
+                      Category: <strong>{episode.category}</strong>
+                    </p>
                     <p className="compositeCard__sourceName">{episode.fileName}</p>
                     <p className="compositeCard__meta">
                       Key: <strong>{episode.key}</strong>
@@ -630,6 +735,7 @@ function validateUploadEntries(uploadEntries, storedEpisodes) {
 
     validateRequiredField(entry.title, 'Enter an oral history title.');
     validateRequiredField(normalizedInterviewee, 'Enter the interviewee name.');
+    validateRequiredField(entry.category, 'Choose a category for the oral history.');
 
     if (usedKeys.has(normalizedKey)) {
       throw new Error(`The key "${normalizedKey}" is already in use. Update it before uploading.`);
@@ -676,7 +782,34 @@ function buildIntervieweeOptions(defaultNames, storedEpisodes, customNames) {
   return [...knownNames.values()];
 }
 
+function buildCategoryOptions(defaultNames, storedEpisodes, customNames) {
+  const knownNames = new Map();
+
+  [...defaultNames, ...customNames, ...storedEpisodes.map((episode) => episode.category)]
+    .map((name) => String(name || '').trim())
+    .filter(Boolean)
+    .forEach((name) => {
+      const normalizedKey = name.toLowerCase();
+
+      if (!knownNames.has(normalizedKey)) {
+        knownNames.set(normalizedKey, name);
+      }
+    });
+
+  return [...knownNames.values()];
+}
+
 function findMatchingIntervieweeName(names, targetName) {
+  const normalizedTargetName = String(targetName || '').trim().toLowerCase();
+
+  if (!normalizedTargetName) {
+    return '';
+  }
+
+  return names.find((name) => String(name || '').trim().toLowerCase() === normalizedTargetName) || '';
+}
+
+function findMatchingCategoryName(names, targetName) {
   const normalizedTargetName = String(targetName || '').trim().toLowerCase();
 
   if (!normalizedTargetName) {
@@ -753,6 +886,7 @@ function normalizeOralHistory(oralHistory) {
     key: String(oralHistory?.key || ''),
     title: String(oralHistory?.title || ''),
     interviewee: String(oralHistory?.interviewee || ''),
+    category: String(oralHistory?.category || getCategoryForTitle(oralHistory?.title)),
     description: String(oralHistory?.description || ''),
     isFullLength,
     episodeNumber: isFullLength ? null : Number(oralHistory?.episodeNumber || 0),
@@ -785,6 +919,32 @@ function slugifyFilename(value) {
     .replace(/^-+|-+$/g, '');
 
   return normalizedValue || 'oral-history';
+}
+
+function getCategoryForTitle(title) {
+  const normalizedTitle = String(title || '').trim().toLowerCase();
+
+  if (/why.*tech|come to tech|love of va tech|special memory of tech/.test(normalizedTitle)) {
+    return 'Why Virginia Tech?';
+  }
+
+  if (/joining|club like|club member|life as a gc member|get involved with the gc/.test(normalizedTitle)) {
+    return 'German Club Life';
+  }
+
+  if (/ritual|gentleman|independent|special door|message.*club members/.test(normalizedTitle)) {
+    return 'Traditions & Values';
+  }
+
+  if (/football|athlete|dances|cotillion|entertainment|dumb jock/.test(normalizedTitle)) {
+    return 'Athletics & Student Life';
+  }
+
+  if (/alumni|gcaf|foundation|manor|give|generously|pamplin/.test(normalizedTitle)) {
+    return 'Alumni, Giving & GCAF';
+  }
+
+  return 'Military, Career & Personal Stories';
 }
 
 function getUniqueKey(baseKey, existingKeys) {

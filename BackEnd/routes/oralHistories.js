@@ -83,6 +83,7 @@ router.post("/upload-sessions", async (req, res, next) => {
         const title = sanitizeRequiredText(req.body?.title, "Oral history title");
         const description = sanitizeOptionalText(req.body?.description);
         const interviewee = sanitizeRequiredText(req.body?.interviewee, "Interviewee name");
+        const category = sanitizeRequiredText(req.body?.category, "Oral history category");
         const isFullLength = sanitizeBoolean(req.body?.isFullLength);
         const episodeNumber = sanitizeEpisodeNumber(req.body?.episodeNumber, { isRequired: !isFullLength });
         const originalFilename = sanitizeOriginalFilename(req.body?.originalFilename);
@@ -103,6 +104,7 @@ router.post("/upload-sessions", async (req, res, next) => {
             title,
             description,
             interviewee,
+            category,
             isFullLength,
             episodeNumber,
             originalFilename,
@@ -230,6 +232,7 @@ router.post("/upload-sessions/:uploadId/complete", async (req, res, next) => {
             title: uploadSession.title,
             description: uploadSession.description,
             interviewee: uploadSession.interviewee,
+            category: uploadSession.category,
             isFullLength: uploadSession.isFullLength,
             episodeNumber: uploadSession.episodeNumber,
             originalFilename: uploadSession.originalFilename,
@@ -304,6 +307,7 @@ router.post("/", upload.single("video"), async (req, res, next) => {
         const title = sanitizeRequiredText(req.body?.title, "Oral history title");
         const description = sanitizeOptionalText(req.body?.description);
         const interviewee = sanitizeRequiredText(req.body?.interviewee, "Interviewee name");
+        const category = sanitizeRequiredText(req.body?.category, "Oral history category");
         const isFullLength = sanitizeBoolean(req.body?.isFullLength);
         const episodeNumber = sanitizeEpisodeNumber(req.body?.episodeNumber, { isRequired: !isFullLength });
         const oralHistoryId = req.generatedOralHistoryId;
@@ -328,6 +332,7 @@ router.post("/", upload.single("video"), async (req, res, next) => {
             title,
             description,
             interviewee,
+            category,
             isFullLength,
             episodeNumber,
             originalFilename: req.file.originalname,
@@ -535,6 +540,7 @@ function createOralHistoryUploadSessionRecord({
     title,
     description,
     interviewee,
+    category,
     isFullLength,
     episodeNumber,
     originalFilename,
@@ -558,6 +564,7 @@ function createOralHistoryUploadSessionRecord({
         title,
         description,
         interviewee,
+        category,
         isFullLength,
         episodeNumber,
         originalFilename,
@@ -610,6 +617,7 @@ function normalizeOralHistoryUploadSession(uploadSession) {
         title: sanitizeRequiredText(uploadSession?.title, "Oral history title"),
         description: sanitizeOptionalText(uploadSession?.description),
         interviewee: sanitizeRequiredText(uploadSession?.interviewee, "Interviewee name"),
+        category: sanitizeRequiredText(uploadSession?.category, "Oral history category"),
         isFullLength: sanitizeBoolean(uploadSession?.isFullLength),
         episodeNumber: sanitizeEpisodeNumber(uploadSession?.episodeNumber, {
             isRequired: !sanitizeBoolean(uploadSession?.isFullLength),

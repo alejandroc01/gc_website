@@ -118,6 +118,7 @@ async function createOralHistory(oralHistoryInput) {
         title: String(oralHistoryInput?.title || "").trim(),
         description: String(oralHistoryInput?.description || "").trim(),
         interviewee: String(oralHistoryInput?.interviewee || "").trim(),
+        category: String(oralHistoryInput?.category || "").trim(),
         isFullLength,
         episodeNumber: normalizedEpisodeNumber,
         originalFilename: String(oralHistoryInput?.originalFilename || "").trim(),
