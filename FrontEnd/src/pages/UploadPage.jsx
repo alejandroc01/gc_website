@@ -44,7 +44,7 @@ const UPLOAD_CARDS = [
     imageSrc: '/images/doug_oral_history_thumbnail.png',
     imageAlt: 'Oral history upload preview',
     title: 'Upload Oral Histories',
-    description: 'Prepare oral history interview videos with archive metadata before backend storage is connected.',
+    description: 'Add alumni interview recordings, organize episodes, and publish them to the oral histories collection.',
     buttonText: 'Open Oral History Upload',
     to: '/upload/oral-histories',
   },
