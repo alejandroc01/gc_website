@@ -115,15 +115,15 @@ export default function OralHistories() {
             <p className="oralHistories__eyebrow">German Club Alumni Archives</p>
             <h1 className="oralHistories__title">Oral Histories</h1>
             <p className="oralHistories__lede oralHistories__lede--wide">
-              [ This collection will feature recorded interviews preserving the memories, voices, and
-              experiences of German Club alumni across generations ]
+              Hear German Club alumni reflect on the friendships, traditions, service, and campus moments
+              that shaped their time at Virginia Tech.
             </p>
             <p className="oralHistories__copy">
               {activeEpisode
-                ? 'Select an uploaded episode from the playlist to stream it in the player below.'
+                ? 'Explore the episodes by selecting a featured interviewee and choosing a recording from the playlist.'
                 : activeInterviewee
                   ? `No uploaded episodes for ${activeInterviewee} yet.`
-                  : 'Upload oral history episodes from the admin page to begin testing playback here.'}
+                  : 'Oral history recordings will appear here as they are added to the archive.'}
             </p>
           </div>
 
