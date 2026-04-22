@@ -6,7 +6,7 @@ import PublicCompositeStage from '../components/Composite/PublicCompositeStage.j
 import MemberProfileModal from '../components/MemberProfile/MemberProfileModal.jsx';
 import { getComposites } from '../api/composites.js';
 import '../styles/composites.css';
-import './CompositesPage.css'; 
+import './CompositesPage.css';
 
 export default function CompositesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
