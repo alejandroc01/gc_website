@@ -83,7 +83,8 @@ router.post("/upload-sessions", async (req, res, next) => {
         const title = sanitizeRequiredText(req.body?.title, "Oral history title");
         const description = sanitizeOptionalText(req.body?.description);
         const interviewee = sanitizeRequiredText(req.body?.interviewee, "Interviewee name");
-        const episodeNumber = sanitizeEpisodeNumber(req.body?.episodeNumber);
+        const isFullLength = sanitizeBoolean(req.body?.isFullLength);
+        const episodeNumber = sanitizeEpisodeNumber(req.body?.episodeNumber, { isRequired: !isFullLength });
         const originalFilename = sanitizeOriginalFilename(req.body?.originalFilename);
         const mimeType = sanitizeOptionalMimeType(req.body?.mimeType);
         const totalSize = sanitizeOralHistoryUploadSize(req.body?.totalSize);
@@ -95,13 +96,14 @@ router.post("/upload-sessions", async (req, res, next) => {
             mimetype: mimeType,
         });
 
-        assertOralHistoryIsUnique(existingOralHistories, key, episodeNumber, interviewee);
+        assertOralHistoryIsUnique(existingOralHistories, key, episodeNumber, interviewee, isFullLength);
 
         const uploadSession = createOralHistoryUploadSessionRecord({
             key,
             title,
             description,
             interviewee,
+            isFullLength,
             episodeNumber,
             originalFilename,
             mimeType,
@@ -192,6 +194,7 @@ router.post("/upload-sessions/:uploadId/complete", async (req, res, next) => {
             uploadSession.key,
             uploadSession.episodeNumber,
             uploadSession.interviewee,
+            uploadSession.isFullLength,
         );
 
         assembledVideoPath = buildOralHistoryUploadAssembledPath(uploadSession.uploadId, uploadSession.extension);
@@ -212,6 +215,7 @@ router.post("/upload-sessions/:uploadId/complete", async (req, res, next) => {
         }
 
         const namedFilename = buildOralHistoryFilename(
+            uploadSession.isFullLength,
             uploadSession.episodeNumber,
             uploadSession.key,
             uploadSession.extension,
@@ -226,6 +230,7 @@ router.post("/upload-sessions/:uploadId/complete", async (req, res, next) => {
             title: uploadSession.title,
             description: uploadSession.description,
             interviewee: uploadSession.interviewee,
+            isFullLength: uploadSession.isFullLength,
             episodeNumber: uploadSession.episodeNumber,
             originalFilename: uploadSession.originalFilename,
             fileSize: uploadSession.totalSize,
@@ -299,7 +304,8 @@ router.post("/", upload.single("video"), async (req, res, next) => {
         const title = sanitizeRequiredText(req.body?.title, "Oral history title");
         const description = sanitizeOptionalText(req.body?.description);
         const interviewee = sanitizeRequiredText(req.body?.interviewee, "Interviewee name");
-        const episodeNumber = sanitizeEpisodeNumber(req.body?.episodeNumber);
+        const isFullLength = sanitizeBoolean(req.body?.isFullLength);
+        const episodeNumber = sanitizeEpisodeNumber(req.body?.episodeNumber, { isRequired: !isFullLength });
         const oralHistoryId = req.generatedOralHistoryId;
 
         if (!oralHistoryId) {
@@ -307,7 +313,7 @@ router.post("/", upload.single("video"), async (req, res, next) => {
         }
 
         const extension = path.extname(req.file.filename);
-        const namedFilename = buildOralHistoryFilename(episodeNumber, key, extension);
+        const namedFilename = buildOralHistoryFilename(isFullLength, episodeNumber, key, extension);
         const finalAbsolutePath = path.join(oralHistoryUploadsDirectory, namedFilename);
 
         if (req.file.path !== finalAbsolutePath) {
@@ -322,6 +328,7 @@ router.post("/", upload.single("video"), async (req, res, next) => {
             title,
             description,
             interviewee,
+            isFullLength,
             episodeNumber,
             originalFilename: req.file.originalname,
             fileSize: req.file.size,
@@ -397,6 +404,15 @@ function sanitizeOptionalText(value) {
     return String(value || "").trim().slice(0, 240);
 }
 
+function sanitizeBoolean(value) {
+    if (typeof value === "boolean") {
+        return value;
+    }
+
+    const normalizedValue = String(value || "").trim().toLowerCase();
+    return ["1", "true", "yes", "on"].includes(normalizedValue);
+}
+
 function sanitizeOriginalFilename(rawFilename) {
     const normalizedFilename = path.basename(String(rawFilename || "").trim());
 
@@ -413,7 +429,14 @@ function sanitizeOptionalMimeType(rawMimeType) {
     return String(rawMimeType || "").trim().toLowerCase();
 }
 
-function sanitizeEpisodeNumber(value) {
+function sanitizeEpisodeNumber(value, options = {}) {
+    const isRequired = options?.isRequired !== false;
+    const normalizedRawValue = String(value ?? "").trim();
+
+    if (!isRequired && !normalizedRawValue) {
+        return null;
+    }
+
     const normalizedValue = Number(value);
 
     if (!Number.isInteger(normalizedValue) || normalizedValue <= 0 || normalizedValue > 999) {
@@ -498,8 +521,12 @@ function sanitizeOralHistoryUploadExtension(rawExtension) {
     throw error;
 }
 
-function buildOralHistoryFilename(episodeNumber, key, extension) {
+function buildOralHistoryFilename(isFullLength, episodeNumber, key, extension) {
     const normalizedExtension = extension || ".mp4";
+    if (isFullLength) {
+        return `full-interview-${key}${normalizedExtension}`;
+    }
+
     return `episode-${String(episodeNumber).padStart(2, "0")}-${key}${normalizedExtension}`;
 }
 
@@ -508,6 +535,7 @@ function createOralHistoryUploadSessionRecord({
     title,
     description,
     interviewee,
+    isFullLength,
     episodeNumber,
     originalFilename,
     mimeType,
@@ -530,6 +558,7 @@ function createOralHistoryUploadSessionRecord({
         title,
         description,
         interviewee,
+        isFullLength,
         episodeNumber,
         originalFilename,
         mimeType,
@@ -581,7 +610,10 @@ function normalizeOralHistoryUploadSession(uploadSession) {
         title: sanitizeRequiredText(uploadSession?.title, "Oral history title"),
         description: sanitizeOptionalText(uploadSession?.description),
         interviewee: sanitizeRequiredText(uploadSession?.interviewee, "Interviewee name"),
-        episodeNumber: sanitizeEpisodeNumber(uploadSession?.episodeNumber),
+        isFullLength: sanitizeBoolean(uploadSession?.isFullLength),
+        episodeNumber: sanitizeEpisodeNumber(uploadSession?.episodeNumber, {
+            isRequired: !sanitizeBoolean(uploadSession?.isFullLength),
+        }),
         originalFilename: sanitizeOriginalFilename(uploadSession?.originalFilename),
         mimeType: sanitizeOptionalMimeType(uploadSession?.mimeType),
         extension: sanitizeOralHistoryUploadExtension(uploadSession?.extension),
@@ -685,7 +717,7 @@ function assertAllowedOralHistoryUploadFile(file) {
     throw error;
 }
 
-function assertOralHistoryIsUnique(existingOralHistories, key, episodeNumber, interviewee) {
+function assertOralHistoryIsUnique(existingOralHistories, key, episodeNumber, interviewee, isFullLength = false) {
     const normalizedKey = String(key || "").trim().toLowerCase();
     const normalizedInterviewee = String(interviewee || "").trim().toLowerCase();
 
@@ -696,8 +728,25 @@ function assertOralHistoryIsUnique(existingOralHistories, key, episodeNumber, in
     }
 
     if (
+        isFullLength
+        && existingOralHistories.some(
+            (entry) =>
+                entry.isFullLength
+                && String(entry.interviewee || "").trim().toLowerCase() === normalizedInterviewee,
+        )
+    ) {
+        const error = new Error(`A full-length interview already exists for ${interviewee}.`);
+        error.statusCode = 409;
+        throw error;
+    }
+
+    if (
+        !isFullLength
+        &&
         existingOralHistories.some(
             (entry) =>
+                !entry.isFullLength
+                &&
                 Number(entry.episodeNumber) === Number(episodeNumber)
                 && String(entry.interviewee || "").trim().toLowerCase() === normalizedInterviewee,
         )

@@ -52,9 +52,12 @@ function buildVideoUrl(storedFilePath) {
 }
 
 function toOralHistoryResponse(oralHistory) {
+    const isFullLength = Boolean(oralHistory.isFullLength);
+
     return {
         ...oralHistory,
-        episodeNumber: Number(oralHistory.episodeNumber),
+        isFullLength,
+        episodeNumber: isFullLength ? null : Number(oralHistory.episodeNumber),
         videoUrl: buildVideoUrl(oralHistory.storedFilePath),
     };
 }
@@ -70,7 +73,8 @@ async function listOralHistories() {
 async function createOralHistory(oralHistoryInput) {
     const store = await readStore();
     const normalizedKey = String(oralHistoryInput?.key || "").trim().toLowerCase();
-    const normalizedEpisodeNumber = Number(oralHistoryInput?.episodeNumber);
+    const isFullLength = Boolean(oralHistoryInput?.isFullLength);
+    const normalizedEpisodeNumber = isFullLength ? null : Number(oralHistoryInput?.episodeNumber);
     const normalizedInterviewee = String(oralHistoryInput?.interviewee || "").trim().toLowerCase();
 
     if (store.oralHistories.some((entry) => String(entry.key || "").trim().toLowerCase() === normalizedKey)) {
@@ -82,11 +86,27 @@ async function createOralHistory(oralHistoryInput) {
     if (
         store.oralHistories.some(
             (entry) =>
+                !isFullLength
+                && !entry.isFullLength
+                &&
                 Number(entry.episodeNumber) === normalizedEpisodeNumber
                 && String(entry.interviewee || "").trim().toLowerCase() === normalizedInterviewee,
         )
     ) {
         const error = new Error(`Episode ${normalizedEpisodeNumber} already exists for ${oralHistoryInput?.interviewee}.`);
+        error.statusCode = 409;
+        throw error;
+    }
+
+    if (
+        isFullLength
+        && store.oralHistories.some(
+            (entry) =>
+                entry.isFullLength
+                && String(entry.interviewee || "").trim().toLowerCase() === normalizedInterviewee,
+        )
+    ) {
+        const error = new Error(`A full-length interview already exists for ${oralHistoryInput?.interviewee}.`);
         error.statusCode = 409;
         throw error;
     }
@@ -98,6 +118,7 @@ async function createOralHistory(oralHistoryInput) {
         title: String(oralHistoryInput?.title || "").trim(),
         description: String(oralHistoryInput?.description || "").trim(),
         interviewee: String(oralHistoryInput?.interviewee || "").trim(),
+        isFullLength,
         episodeNumber: normalizedEpisodeNumber,
         originalFilename: String(oralHistoryInput?.originalFilename || "").trim(),
         fileSize: Number(oralHistoryInput?.fileSize || 0),
@@ -130,6 +151,10 @@ async function deleteOralHistory(oralHistoryId) {
 }
 
 function compareOralHistories(leftEntry, rightEntry) {
+    if (Boolean(leftEntry.isFullLength) !== Boolean(rightEntry.isFullLength)) {
+        return leftEntry.isFullLength ? -1 : 1;
+    }
+
     return Number(leftEntry.episodeNumber || 0) - Number(rightEntry.episodeNumber || 0);
 }
 
