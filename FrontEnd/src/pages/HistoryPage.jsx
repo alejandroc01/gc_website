@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { getHistories } from '../api/composites.js';
 import './HistoryPage.css';
@@ -6,10 +7,16 @@ import './HistoryPage.css';
 const PDF_VIEWER_OPTIONS = '#toolbar=0&navpanes=0&scrollbar=0';
 
 export default function HistoryPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeDocument, setActiveDocument] = useState(null);
   const [historyDocuments, setHistoryDocuments] = useState([]);
   const [isLoadingHistories, setIsLoadingHistories] = useState(true);
   const [loadError, setLoadError] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
+
+  useEffect(() => {
+    setSearchQuery(searchParams.get('q') || '');
+  }, [searchParams]);
 
   useEffect(() => {
     let isActive = true;
@@ -63,6 +70,28 @@ export default function HistoryPage() {
     };
   }, [activeDocument]);
 
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const filteredHistoryDocuments = useMemo(() => {
+    if (!normalizedSearchQuery) {
+      return historyDocuments;
+    }
+
+    return historyDocuments.filter((document) =>
+      document.title.toLowerCase().includes(normalizedSearchQuery));
+  }, [historyDocuments, normalizedSearchQuery]);
+
+  const handleSearchChange = (event) => {
+    const nextQuery = event.target.value;
+    setSearchQuery(nextQuery);
+
+    const trimmedQuery = nextQuery.trim();
+    if (trimmedQuery) {
+      setSearchParams({ q: trimmedQuery }, { replace: true });
+    } else {
+      setSearchParams({}, { replace: true });
+    }
+  };
+
   return (
     <div className="historyPage">
       <section className="historyPage__hero section">
@@ -74,17 +103,8 @@ export default function HistoryPage() {
               Browse primary documents, anniversary writeups, and archival histories in a card-based
               collection.
             </p>
-            <p className="historyPage__copy">
-              Each card opens a PDF viewer in a modal so visitors can read the document without leaving
-              the page.
-            </p>
           </div>
-
           <aside className="historyPage__details" aria-label="History collection details">
-            <div className="historyPage__detailCard">
-              <span className="historyPage__detailLabel">Document source</span>
-              <strong className="historyPage__detailValue">PDF archive</strong>
-            </div>
             <div className="historyPage__detailCard">
               <span className="historyPage__detailLabel">Collection status</span>
               <strong className="historyPage__detailValue">
@@ -103,11 +123,21 @@ export default function HistoryPage() {
         <div className="container">
           <div className="historyPage__sectionHeader">
             <div>
-              <p className="historyPage__sectionLabel">Document Library</p>
               <div>
-                <h2 className="historyPage__sectionTitle">Historical Documents</h2>
+                <h2 className="historyPage__sectionTitle">Historical Document Library</h2>
               </div>
             </div>
+            <label className="historyPage__search" htmlFor="history-document-search">
+              <span className="sr-only">Search written histories</span>
+              <input
+                id="history-document-search"
+                className="historyPage__searchInput"
+                type="search"
+                placeholder="Search by history name"
+                value={searchQuery}
+                onChange={handleSearchChange}
+              />
+            </label>
           </div>
 
           {loadError ? (
@@ -119,9 +149,9 @@ export default function HistoryPage() {
             <div className="historyPage__emptyState">
               <p className="historyPage__emptyTitle">Loading history PDFs...</p>
             </div>
-          ) : historyDocuments.length > 0 ? (
+          ) : filteredHistoryDocuments.length > 0 ? (
             <div className="historyPage__grid" aria-label="History document cards">
-              {historyDocuments.map((document) => (
+              {filteredHistoryDocuments.map((document) => (
                 <article key={document.historyId || document.key} className="historyPage__card">
                   <div className="historyPage__cardBody">
                     <p className="historyPage__cardEyebrow">Historical document</p>
@@ -133,11 +163,16 @@ export default function HistoryPage() {
                       className="button historyPage__cardButton"
                       onClick={() => setActiveDocument(document)}
                     >
-                      Open PDF
+                      Open History
                     </button>
                   </div>
                 </article>
               ))}
+            </div>
+          ) : historyDocuments.length > 0 && normalizedSearchQuery ? (
+            <div className="historyPage__emptyState">
+              <p className="historyPage__emptyTitle">No matching history PDFs.</p>
+              <p className="historyPage__emptyCopy">Try a different history name.</p>
             </div>
           ) : (
             <div className="historyPage__emptyState">

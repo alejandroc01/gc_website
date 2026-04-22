@@ -55,7 +55,7 @@ const UPLOAD_CARDS = [
     title: 'Upload History PDF',
     description: 'Prepare a history document PDF with its key, name, and description for future archive storage.',
     buttonText: 'Open History Upload',
-    to: '/upload/history',
+    to: '/upload/written-history',
   },
 ];
 
