@@ -400,7 +400,7 @@ function getStaticOralHistoryPoster(intervieweeName) {
     return '/images/doug_oral_history_thumbnail.png';
   }
 
-  if (normalizedInterviewee === 'randy minix') {
+  if (normalizedInterviewee === 'randy minix ') {
     return '/images/randy_minix.png';
   }
 
