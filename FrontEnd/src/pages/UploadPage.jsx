@@ -1,63 +1,7 @@
 import ActionCards from '../components/ActionCards/ActionCards.jsx';
 import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
+import { UPLOAD_CARDS } from '../data/uploadCards.js';
 import '../styles/composites.css';
-
-const UPLOAD_CARDS = [
-  {
-    key: 'upload-homepage',
-    imageSrc: '/images/edit-homepage-icon.svg',
-    imageAlt: 'Homepage editor icon',
-    title: 'Edit Homepage',
-    description: 'Update the homepage hero image and description for the public archive landing page.',
-    buttonText: 'Open Homepage Editor',
-    to: '/upload/homepage',
-  },
-  {
-    key: 'upload-profiles',
-    imageSrc: '/images/person-icon.svg',
-    imageAlt: 'Member profile upload icon',
-    title: 'Manage Member Profiles',
-    description: 'Import the DA membership CSV, create and manage member records, and bulk export profiles when needed.',
-    buttonText: 'Open Member Profiles',
-    to: '/upload/profiles',
-  },
-  {
-    key: 'upload-composites',
-    imageSrc: '/images/2025.jpeg',
-    imageAlt: 'Composite upload preview',
-    title: 'Composite Upload',
-    description: 'Upload composite images and annotate them for the composite view and member profile pictures.',
-    buttonText: 'Open Composite Upload',
-    to: '/upload/composites',
-  },
-  {
-    key: 'upload-scrapbooks',
-    imageSrc: '/images/1983ScrapB-P26.jpg',
-    imageAlt: 'Scrapbook upload preview',
-    title: 'Scrapbook Upload',
-    description: 'Upload scrapbook page images and manage existing scrapbook collections.',
-    buttonText: 'Open Scrapbook Upload',
-    to: '/upload/scrapbooks',
-  },
-  {
-    key: 'upload-oral-histories',
-    imageSrc: '/images/doug_oral_history_thumbnail.png',
-    imageAlt: 'Oral history upload preview',
-    title: 'Upload Oral Histories',
-    description: 'Add alumni interview recordings, organize episodes, and publish them to the oral histories collection.',
-    buttonText: 'Open Oral History Upload',
-    to: '/upload/oral-histories',
-  },
-  {
-    key: 'upload-history',
-    imageSrc: '/images/homepageimage.jpg',
-    imageAlt: 'History document upload preview',
-    title: 'Upload History PDF',
-    description: 'Prepare a history document PDF with its key, name, and description for future archive storage.',
-    buttonText: 'Open History Upload',
-    to: '/upload/written-history',
-  },
-];
 
 export default function UploadPage() {
   return (

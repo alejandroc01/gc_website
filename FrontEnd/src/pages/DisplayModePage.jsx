@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import { getComposites, getScrapbooks } from '../api/composites.js';
+import { exitFullscreenIfActive, isFullscreenActive, requestFullscreenForElement } from '../utils/fullscreen.js';
 import './DisplayModePage.css';
 
 const ROTATE_MS = 6500;
@@ -19,7 +20,12 @@ export default function DisplayModePage() {
   const hideControlsTimeoutRef = useRef(null);
   const loadedImageUrlsRef = useRef(new Set());
   const preloadingImagePromisesRef = useRef(new Map());
+  const displayModeRef = useRef(null);
+  const didTriggerSlideshowExitRef = useRef(false);
+  const location = useLocation();
   const navigate = useNavigate();
+  const currentMode = useMemo(() => getDisplayMode(location.search), [location.search]);
+  const isSlideshowMode = currentMode === 'slideshow';
 
   const imageCount = displayImages.length;
   const hasImages = imageCount > 0;
@@ -33,8 +39,30 @@ export default function DisplayModePage() {
     () => `Display slideshow image ${currentIndex + 1} of ${Math.max(imageCount, 1)}`,
     [currentIndex, imageCount],
   );
+  const exitDisplayMode = useCallback(() => {
+    if (didTriggerSlideshowExitRef.current) {
+      return;
+    }
+
+    didTriggerSlideshowExitRef.current = true;
+
+    if (typeof window.history.state?.idx === 'number' && window.history.state.idx > 0) {
+      navigate(-1);
+      return;
+    }
+
+    navigate('/');
+  }, [navigate]);
 
   useEffect(() => {
+    if (!isSlideshowMode) {
+      setDisplayImages([]);
+      setCurrentIndex(0);
+      loadedImageUrlsRef.current = new Set();
+      preloadingImagePromisesRef.current = new Map();
+      return undefined;
+    }
+
     let isActive = true;
 
     const loadDisplayImages = async () => {
@@ -74,28 +102,71 @@ export default function DisplayModePage() {
     return () => {
       isActive = false;
     };
-  }, []);
+  }, [isSlideshowMode]);
 
   useEffect(() => {
-    if (!hasImages) return undefined;
+    didTriggerSlideshowExitRef.current = false;
+  }, [location.key]);
+
+  useEffect(() => {
+    if (!isSlideshowMode) {
+      return undefined;
+    }
+
+    let isMounted = true;
+
+    const ensureFullscreen = async () => {
+      if (isFullscreenActive()) {
+        return;
+      }
+
+      await requestFullscreenForElement(displayModeRef.current || document.documentElement);
+    };
+
+    const handleFullscreenChange = () => {
+      if (!isMounted || isFullscreenActive()) {
+        return;
+      }
+
+      exitDisplayMode();
+    };
+
+    void ensureFullscreen();
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+
+    return () => {
+      isMounted = false;
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      void exitFullscreenIfActive();
+    };
+  }, [exitDisplayMode, isSlideshowMode]);
+
+  useEffect(() => {
+    if (!isSlideshowMode || !hasImages) return undefined;
 
     const timerId = window.setInterval(() => {
       setCurrentIndex((prev) => (prev + 1) % imageCount);
     }, ROTATE_MS);
 
     return () => window.clearInterval(timerId);
-  }, [hasImages, imageCount]);
+  }, [hasImages, imageCount, isSlideshowMode]);
 
   useEffect(() => {
-    if (!hasImages) return;
+    if (!isSlideshowMode || !hasImages) return;
 
     preloadImagesAroundIndex(displayImages, currentIndex, {
       loadedImageUrlsRef,
       preloadingImagePromisesRef,
     });
-  }, [currentIndex, displayImages, hasImages]);
+  }, [currentIndex, displayImages, hasImages, isSlideshowMode]);
 
   useEffect(() => {
+    if (!isSlideshowMode) {
+      return undefined;
+    }
+
     const showControls = () => {
       setControlsVisible(true);
       if (hideControlsTimeoutRef.current) {
@@ -109,7 +180,9 @@ export default function DisplayModePage() {
     const onKeyDown = (event) => {
       showControls();
       if (event.key === 'Escape') {
-        navigate('/');
+        if (!isFullscreenActive()) {
+          exitDisplayMode();
+        }
       }
     };
 
@@ -126,13 +199,27 @@ export default function DisplayModePage() {
         window.clearTimeout(hideControlsTimeoutRef.current);
       }
     };
-  }, [navigate]);
+  }, [exitDisplayMode, isSlideshowMode]);
+
+  if (!isSlideshowMode) {
+    return (
+      <section className="displayModePlaceholder" aria-label="Display mode">
+        <div className="displayModePlaceholder__card">
+          <p className="displayModePlaceholder__eyebrow">Display</p>
+          <h1>Display mode is coming soon.</h1>
+          <p>
+            Slideshow Mode is live now. The separate Display Mode experience will be added here in a later update.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   if (!hasImages) {
     return (
-      <section className="displayMode displayMode--empty">
+      <section ref={displayModeRef} className="displayMode displayMode--empty">
         <div className="displayMode__emptyMessage">
-          <h1>Display Mode</h1>
+          <h1>Slideshow Mode</h1>
           <p>No display images are configured yet.</p>
         </div>
       </section>
@@ -140,7 +227,7 @@ export default function DisplayModePage() {
   }
 
   return (
-    <section className="displayMode" aria-label="Display mode slideshow">
+    <section ref={displayModeRef} className="displayMode" aria-label="Display mode slideshow">
       {renderedImages.map(({ imageSrc, index }) => (
         <img
           key={`${index}-${imageSrc}`}
@@ -169,16 +256,15 @@ export default function DisplayModePage() {
         <div className="displayMode__counter">
           {currentIndex + 1} / {imageCount}
         </div>
-        <button
-          type="button"
-          className="displayMode__exitButton"
-          onClick={() => navigate('/')}
-        >
-          Exit display
-        </button>
+        <p className="displayMode__hint">Press Esc to exit slideshow</p>
       </div>
     </section>
   );
+}
+
+function getDisplayMode(search) {
+  const params = new URLSearchParams(search);
+  return params.get('mode') === 'display' ? 'display' : 'slideshow';
 }
 
 function getRenderedImages(imageUrls, currentIndex) {
