@@ -211,7 +211,7 @@ export default function Navbar() {
   };
 
   const handleMenuItemClick = (menuKey, item) => {
-    if (menuKey === 'display' && item.label === 'Slideshow Mode') {
+    if (menuKey === 'display') {
       void requestFullscreenForElement(document.documentElement);
     }
 

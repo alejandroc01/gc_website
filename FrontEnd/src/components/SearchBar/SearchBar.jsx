@@ -19,7 +19,7 @@ const SEARCH_FILTER_OPTIONS = [
 
 const ALL_FILTER_IDS = SEARCH_FILTER_OPTIONS.map((option) => option.id);
 
-export default function SearchBar() {
+export default function SearchBar({ className = '' }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
@@ -246,7 +246,7 @@ export default function SearchBar() {
   };
 
   return (
-    <section className="search section" aria-label="Search">
+    <section className={['search', 'section', className].filter(Boolean).join(' ')} aria-label="Search">
       <div className="container">
         <div className="search__outer">
           <div className="search__panel">

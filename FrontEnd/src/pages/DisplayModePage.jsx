@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { getComposites, getScrapbooks } from '../api/composites.js';
+import HomepageDisplayMode from '../components/DisplayMode/HomepageDisplayMode.jsx';
 import { exitFullscreenIfActive, isFullscreenActive, requestFullscreenForElement } from '../utils/fullscreen.js';
 import './DisplayModePage.css';
 
@@ -26,6 +27,8 @@ export default function DisplayModePage() {
   const navigate = useNavigate();
   const currentMode = useMemo(() => getDisplayMode(location.search), [location.search]);
   const isSlideshowMode = currentMode === 'slideshow';
+  const isHomepageDisplayMode = currentMode === 'display';
+  const isFullscreenDisplayMode = isSlideshowMode || isHomepageDisplayMode;
 
   const imageCount = displayImages.length;
   const hasImages = imageCount > 0;
@@ -109,7 +112,7 @@ export default function DisplayModePage() {
   }, [location.key]);
 
   useEffect(() => {
-    if (!isSlideshowMode) {
+    if (!isFullscreenDisplayMode) {
       return undefined;
     }
 
@@ -141,7 +144,7 @@ export default function DisplayModePage() {
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
       void exitFullscreenIfActive();
     };
-  }, [exitDisplayMode, isSlideshowMode]);
+  }, [exitDisplayMode, isFullscreenDisplayMode]);
 
   useEffect(() => {
     if (!isSlideshowMode || !hasImages) return undefined;
@@ -201,18 +204,8 @@ export default function DisplayModePage() {
     };
   }, [exitDisplayMode, isSlideshowMode]);
 
-  if (!isSlideshowMode) {
-    return (
-      <section className="displayModePlaceholder" aria-label="Display mode">
-        <div className="displayModePlaceholder__card">
-          <p className="displayModePlaceholder__eyebrow">Display</p>
-          <h1>Display mode is coming soon.</h1>
-          <p>
-            Slideshow Mode is live now. The separate Display Mode experience will be added here in a later update.
-          </p>
-        </div>
-      </section>
-    );
+  if (isHomepageDisplayMode) {
+    return <HomepageDisplayMode />;
   }
 
   if (!hasImages) {
@@ -256,7 +249,6 @@ export default function DisplayModePage() {
         <div className="displayMode__counter">
           {currentIndex + 1} / {imageCount}
         </div>
-        <p className="displayMode__hint">Press Esc to exit slideshow</p>
       </div>
     </section>
   );

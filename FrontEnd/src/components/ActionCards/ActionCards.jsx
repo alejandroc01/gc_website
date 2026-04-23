@@ -36,7 +36,7 @@ const CARDS = [
     title: 'History of the German Club',
     description: 'Open curated club-history documents and archival PDFs by topic.',
     buttonText: 'View History',
-    to: '/history',
+    to: '/written-history',
   },
 ];
 
@@ -51,13 +51,14 @@ export default function ActionCards({
   eyebrow = null,
   heading = null,
   description = null,
+  className = '',
 }) {
   const gridClassName = ['actionCards__grid', cards.length === 1 ? 'actionCards__grid--single' : '']
     .filter(Boolean)
     .join(' ');
 
   return (
-    <section className="actionCards section" aria-label={ariaLabel}>
+    <section className={['actionCards', 'section', className].filter(Boolean).join(' ')} aria-label={ariaLabel}>
       <div className="container">
         {eyebrow || heading || description ? (
           <div className="actionCards__header">
