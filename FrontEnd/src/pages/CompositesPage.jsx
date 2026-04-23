@@ -10,7 +10,7 @@ import './CompositesPage.css';
 
 const PDF_VIEWER_OPTIONS = '#toolbar=0&navpanes=0&scrollbar=0';
 
-export default function CompositesPage() {
+export default function CompositesPage({ displayMode = false, onBack = null }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const [composites, setComposites] = useState([]);
   const [relatedScrapbooks, setRelatedScrapbooks] = useState([]);
@@ -463,14 +463,34 @@ export default function CompositesPage() {
   }, [activeRelatedMedia]);
 
   return (
-    <section className="section compositesPage" style={pageScaleStyle}>
+    <section
+      className={[
+        'section',
+        'compositesPage',
+        displayMode ? 'compositesPage--displayMode' : '',
+      ].filter(Boolean).join(' ')}
+      style={pageScaleStyle}
+    >
       <div className="container">
         <div className="compositesPage__scaleViewport">
           <div ref={scaledContentRef} className="compositesPage__scaleCanvas">
-            <header className="compositePageHeader compositesPage__header">
-              <p className="compositePageHeader__eyebrow">German Club Alumni Archives</p>
-              <h1 className="compositePageHeader__title">Composites</h1>
-            </header>
+            {displayMode ? (
+              <div className="compositesPage__displayModeTopBar">
+                <button
+                  type="button"
+                  className="button compositesPage__displayBackButton"
+                  onClick={() => onBack?.()}
+                >
+                  <BackIcon className="compositesPage__displayBackIcon" />
+                  Back to Display Home
+                </button>
+              </div>
+            ) : (
+              <header className="compositePageHeader compositesPage__header">
+                <p className="compositePageHeader__eyebrow">German Club Alumni Archives</p>
+                <h1 className="compositePageHeader__title">Composites</h1>
+              </header>
+            )}
 
             {pageError ? (
               <article className="compositePanel compositePanel--spacious">

@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import { getComposites, getScrapbooks } from '../api/composites.js';
 import HomepageDisplayMode from '../components/DisplayMode/HomepageDisplayMode.jsx';
+import CompositesPage from './CompositesPage.jsx';
 import { exitFullscreenIfActive, isFullscreenActive, requestFullscreenForElement } from '../utils/fullscreen.js';
 import './DisplayModePage.css';
 
@@ -26,9 +27,11 @@ export default function DisplayModePage() {
   const location = useLocation();
   const navigate = useNavigate();
   const currentMode = useMemo(() => getDisplayMode(location.search), [location.search]);
+  const currentDisplayPage = useMemo(() => getDisplayPage(location.search), [location.search]);
   const isSlideshowMode = currentMode === 'slideshow';
-  const isHomepageDisplayMode = currentMode === 'display';
-  const isFullscreenDisplayMode = isSlideshowMode || isHomepageDisplayMode;
+  const isHomepageDisplayMode = currentMode === 'display' && currentDisplayPage === 'home';
+  const isCompositesDisplayMode = currentMode === 'display' && currentDisplayPage === 'composites';
+  const isFullscreenDisplayMode = isSlideshowMode || isHomepageDisplayMode || isCompositesDisplayMode;
 
   const imageCount = displayImages.length;
   const hasImages = imageCount > 0;
@@ -208,6 +211,23 @@ export default function DisplayModePage() {
     return <HomepageDisplayMode />;
   }
 
+  if (isCompositesDisplayMode) {
+    return (
+      <section
+        ref={displayModeRef}
+        className="displayMode displayMode--composites"
+        aria-label="Composite display mode"
+      >
+        <div className="displayModeComposites">
+          <CompositesPage
+            displayMode
+            onBack={() => navigate('/display-mode?mode=display')}
+          />
+        </div>
+      </section>
+    );
+  }
+
   if (!hasImages) {
     return (
       <section ref={displayModeRef} className="displayMode displayMode--empty">
@@ -257,6 +277,11 @@ export default function DisplayModePage() {
 function getDisplayMode(search) {
   const params = new URLSearchParams(search);
   return params.get('mode') === 'display' ? 'display' : 'slideshow';
+}
+
+function getDisplayPage(search) {
+  const params = new URLSearchParams(search);
+  return params.get('page') === 'composites' ? 'composites' : 'home';
 }
 
 function getRenderedImages(imageUrls, currentIndex) {

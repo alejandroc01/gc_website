@@ -23,6 +23,8 @@ export default function SearchBar({ className = '' }) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
+  const [isSearchDataLoading, setIsSearchDataLoading] = useState(true);
+  const [isMemberScrapbookLoading, setIsMemberScrapbookLoading] = useState(false);
   const [profiles, setProfiles] = useState([]);
   const [composites, setComposites] = useState([]);
   const [scrapbooks, setScrapbooks] = useState([]);
@@ -38,42 +40,50 @@ export default function SearchBar({ className = '' }) {
     let isActive = true;
 
     const loadSearchData = async () => {
-      const [profilesResult, compositesResult, scrapbooksResult, scrapbookMetadataResult] = await Promise.allSettled([
-        getProfiles(),
-        getComposites(),
-        getScrapbooks(),
-        getScrapbookMetadataReview(),
-      ]);
+      setIsSearchDataLoading(true);
 
-      if (!isActive) {
-        return;
-      }
+      try {
+        const [profilesResult, compositesResult, scrapbooksResult, scrapbookMetadataResult] = await Promise.allSettled([
+          getProfiles(),
+          getComposites(),
+          getScrapbooks(),
+          getScrapbookMetadataReview(),
+        ]);
 
-      if (profilesResult.status === 'fulfilled') {
-        setProfiles(Array.isArray(profilesResult.value) ? profilesResult.value : []);
-      }
+        if (!isActive) {
+          return;
+        }
 
-      if (compositesResult.status === 'fulfilled') {
-        setComposites(Array.isArray(compositesResult.value) ? compositesResult.value : []);
-      }
+        if (profilesResult.status === 'fulfilled') {
+          setProfiles(Array.isArray(profilesResult.value) ? profilesResult.value : []);
+        }
 
-      if (scrapbooksResult.status === 'fulfilled') {
-        setScrapbooks(Array.isArray(scrapbooksResult.value) ? scrapbooksResult.value : []);
-      }
+        if (compositesResult.status === 'fulfilled') {
+          setComposites(Array.isArray(compositesResult.value) ? compositesResult.value : []);
+        }
 
-      if (scrapbookMetadataResult.status === 'fulfilled') {
-        setScrapbookMetadataRows(
-          Array.isArray(scrapbookMetadataResult.value?.rows) ? scrapbookMetadataResult.value.rows : [],
-        );
-      }
+        if (scrapbooksResult.status === 'fulfilled') {
+          setScrapbooks(Array.isArray(scrapbooksResult.value) ? scrapbooksResult.value : []);
+        }
 
-      if (
-        profilesResult.status === 'rejected'
-        && compositesResult.status === 'rejected'
-        && scrapbooksResult.status === 'rejected'
-        && scrapbookMetadataResult.status === 'rejected'
-      ) {
-        setLoadError('Search results could not be loaded.');
+        if (scrapbookMetadataResult.status === 'fulfilled') {
+          setScrapbookMetadataRows(
+            Array.isArray(scrapbookMetadataResult.value?.rows) ? scrapbookMetadataResult.value.rows : [],
+          );
+        }
+
+        if (
+          profilesResult.status === 'rejected'
+          && compositesResult.status === 'rejected'
+          && scrapbooksResult.status === 'rejected'
+          && scrapbookMetadataResult.status === 'rejected'
+        ) {
+          setLoadError('Search results could not be loaded.');
+        }
+      } finally {
+        if (isActive) {
+          setIsSearchDataLoading(false);
+        }
       }
     };
 
@@ -90,6 +100,7 @@ export default function SearchBar({ className = '' }) {
 
     if (!value || profiles.length === 0) {
       setMemberScrapbookItems([]);
+      setIsMemberScrapbookLoading(false);
       return () => {
         isActive = false;
       };
@@ -102,12 +113,15 @@ export default function SearchBar({ className = '' }) {
 
     if (matchingProfiles.length === 0) {
       setMemberScrapbookItems([]);
+      setIsMemberScrapbookLoading(false);
       return () => {
         isActive = false;
       };
     }
 
     const loadMemberScrapbookItems = async () => {
+      setIsMemberScrapbookLoading(true);
+
       try {
         const detailedProfiles = await Promise.all(
           matchingProfiles.map((item) => getProfile(item.profileId)),
@@ -121,6 +135,10 @@ export default function SearchBar({ className = '' }) {
       } catch {
         if (isActive) {
           setMemberScrapbookItems([]);
+        }
+      } finally {
+        if (isActive) {
+          setIsMemberScrapbookLoading(false);
         }
       }
     };
@@ -207,6 +225,10 @@ export default function SearchBar({ className = '' }) {
     scrapbookMetadataRows,
     scrapbooks,
   ]);
+  const showLoadingResults = query.trim().length > 0
+    && !loadError
+    && !noFiltersSelected
+    && (isSearchDataLoading || (isMemberScrapbookLoading && results.length === 0));
 
   const handleInputFocus = () => {
     setIsFilterMenuOpen(false);
@@ -357,6 +379,8 @@ export default function SearchBar({ className = '' }) {
                     <p className="search__empty">{loadError}</p>
                   ) : query.trim().length === 0 ? (
                     <p className="search__empty">Start typing to see matches.</p>
+                  ) : showLoadingResults ? (
+                    <p className="search__empty">Loading results...</p>
                   ) : noFiltersSelected ? (
                     <p className="search__empty">Select at least one filter to search the archive.</p>
                   ) : results.length === 0 ? (
