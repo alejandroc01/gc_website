@@ -48,7 +48,6 @@ export default function OralHistories() {
         setEpisodes(normalizedEpisodes);
 
         if (normalizedEpisodes.length > 0) {
-          setActiveInterviewee(getIntervieweeOptions(normalizedEpisodes)[0] || '');
           setActiveOralHistoryId(String(normalizedEpisodes[0].oralHistoryId || ''));
         }
       } catch (error) {
@@ -89,12 +88,13 @@ export default function OralHistories() {
 
     return intervieweeEpisodes.filter(
       (episode) =>
-        normalizeCategoryName(episode.category).toLowerCase() === normalizeCategoryName(activeCategory).toLowerCase(),
+        !episode.isFullLength
+        && normalizeCategoryName(episode.category).toLowerCase() === normalizeCategoryName(activeCategory).toLowerCase(),
     );
   }, [activeCategory, intervieweeEpisodes]);
 
   useEffect(() => {
-    if (!interviewees.length) {
+    if (!interviewees.length || !activeInterviewee) {
       setActiveInterviewee('');
       return;
     }
@@ -135,7 +135,12 @@ export default function OralHistories() {
     || null
   ), [activeOralHistoryId, visibleEpisodes]);
 
-  const playlistEpisodes = useMemo(() => buildPlaylistEpisodes(visibleEpisodes), [visibleEpisodes]);
+  const playlistEpisodes = useMemo(
+    () => buildPlaylistEpisodes(visibleEpisodes, {
+      includePlaceholders: Boolean(activeInterviewee && !activeCategory),
+    }),
+    [activeCategory, activeInterviewee, visibleEpisodes],
+  );
   const activePoster = useOralHistoryPoster(activeEpisode, activeInterviewee || activeEpisode?.interviewee);
 
   return (
@@ -171,7 +176,9 @@ export default function OralHistories() {
               <span className="oralHistories__detailLabel">Category</span>
               <strong className="oralHistories__detailValue">
                 {activeEpisode
-                  ? activeEpisode.category
+                  ? activeEpisode.isFullLength
+                    ? 'Full interview'
+                    : activeEpisode.category
                   : activeInterviewee
                     ? 'No category selected'
                     : 'No episodes loaded'}
@@ -276,7 +283,7 @@ export default function OralHistories() {
                         {formatEpisodeLabel(episode)}
                         <span className="oralHistories__playlistSubtitle">
                           {episode.videoUrl
-                            ? `${formatEpisodeTitle(episode.title)} | ${episode.category}`
+                            ? formatEpisodeTitle(episode.title)
                             : getPlaceholderTitle(episode.episodeNumber)}
                         </span>
                       </span>
@@ -375,8 +382,14 @@ function useOralHistoryPoster(activeEpisode, intervieweeName) {
   return staticPoster || generatedPoster || '/images/homepageimage.jpg';
 }
 
-function buildPlaylistEpisodes(episodes) {
+function buildPlaylistEpisodes(episodes, options = {}) {
+  const { includePlaceholders = false } = options;
   const uploadedEpisodes = [...episodes].sort(compareOralHistories);
+
+  if (!includePlaceholders) {
+    return uploadedEpisodes;
+  }
+
   const numberedEpisodes = uploadedEpisodes.filter((episode) => !episode.isFullLength);
   const fullLengthEpisodes = uploadedEpisodes.filter((episode) => episode.isFullLength);
   const totalEpisodeCount = Math.max(
@@ -407,18 +420,32 @@ function normalizeOralHistory(oralHistory) {
   return {
     ...oralHistory,
     oralHistoryId: String(oralHistory?.oralHistoryId || ''),
-    category: normalizeCategoryName(oralHistory?.category || getCategoryForTitle(oralHistory?.title)),
+    category: isFullLength
+      ? normalizeCategoryName(oralHistory?.category)
+      : normalizeCategoryName(oralHistory?.category || getCategoryForTitle(oralHistory?.title)),
     isFullLength,
     episodeNumber: isFullLength ? null : Number(oralHistory?.episodeNumber || 0),
   };
 }
 
 function compareOralHistories(leftEpisode, rightEpisode) {
+  const intervieweeDifference = compareIntervieweeNames(leftEpisode.interviewee, rightEpisode.interviewee);
+
+  if (intervieweeDifference !== 0) {
+    return intervieweeDifference;
+  }
+
   if (Boolean(leftEpisode.isFullLength) !== Boolean(rightEpisode.isFullLength)) {
     return leftEpisode.isFullLength ? -1 : 1;
   }
 
-  return Number(leftEpisode.episodeNumber || 0) - Number(rightEpisode.episodeNumber || 0);
+  const episodeNumberDifference = Number(leftEpisode.episodeNumber || 0) - Number(rightEpisode.episodeNumber || 0);
+
+  if (episodeNumberDifference !== 0) {
+    return episodeNumberDifference;
+  }
+
+  return formatEpisodeTitle(leftEpisode.title).localeCompare(formatEpisodeTitle(rightEpisode.title));
 }
 
 function getIntervieweeOptions(episodes) {
@@ -478,7 +505,12 @@ function normalizeCategoryName(value) {
 function getCategoryOptions(episodes) {
   const categories = new Map();
 
-  [...defaultOralHistoryCategories, ...episodes.map((episode) => episode.category)]
+  [
+    ...defaultOralHistoryCategories,
+    ...episodes
+      .filter((episode) => !episode.isFullLength)
+      .map((episode) => episode.category),
+  ]
     .map((category) => normalizeCategoryName(category))
     .filter(Boolean)
     .forEach((category) => {
