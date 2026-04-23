@@ -230,6 +230,10 @@ async function buildScrapbookMetadataReview(metadataRows, profiles = [], options
             };
         });
         const uploadedPage = uploadedPagesByIdentifier.get(normalizeIdentifierKey(row.identifier));
+        const parentUploadedPage = row.isPartOf
+            ? uploadedPagesByIdentifier.get(normalizeIdentifierKey(row.isPartOf))
+            : null;
+        const linkedUploadedPage = uploadedPage || parentUploadedPage;
 
         return {
             identifier: row.identifier,
@@ -240,6 +244,7 @@ async function buildScrapbookMetadataReview(metadataRows, profiles = [], options
             category: row.category,
             source: row.source,
             pageNumber: extractPageNumber(row.identifier),
+            pageIndex: Number.isInteger(linkedUploadedPage?.pageIndex) ? linkedUploadedPage.pageIndex : null,
             isUploaded: Boolean(uploadedPage),
             people,
         };

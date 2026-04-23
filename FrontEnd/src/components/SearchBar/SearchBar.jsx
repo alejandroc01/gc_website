@@ -6,6 +6,7 @@ import {
   getProfile,
   getProfiles,
   getScrapbooks,
+  getScrapbookMetadataReview,
 } from '../../api/composites.js';
 import scrapbookBookIcon from '../../assets/icons/scrapbook-book.svg';
 import './SearchBar.css';
@@ -25,6 +26,7 @@ export default function SearchBar() {
   const [profiles, setProfiles] = useState([]);
   const [composites, setComposites] = useState([]);
   const [scrapbooks, setScrapbooks] = useState([]);
+  const [scrapbookMetadataRows, setScrapbookMetadataRows] = useState([]);
   const [memberScrapbookItems, setMemberScrapbookItems] = useState([]);
   const [selectedFilterIds, setSelectedFilterIds] = useState(ALL_FILTER_IDS);
   const [loadError, setLoadError] = useState('');
@@ -36,10 +38,11 @@ export default function SearchBar() {
     let isActive = true;
 
     const loadSearchData = async () => {
-      const [profilesResult, compositesResult, scrapbooksResult] = await Promise.allSettled([
+      const [profilesResult, compositesResult, scrapbooksResult, scrapbookMetadataResult] = await Promise.allSettled([
         getProfiles(),
         getComposites(),
         getScrapbooks(),
+        getScrapbookMetadataReview(),
       ]);
 
       if (!isActive) {
@@ -58,10 +61,17 @@ export default function SearchBar() {
         setScrapbooks(Array.isArray(scrapbooksResult.value) ? scrapbooksResult.value : []);
       }
 
+      if (scrapbookMetadataResult.status === 'fulfilled') {
+        setScrapbookMetadataRows(
+          Array.isArray(scrapbookMetadataResult.value?.rows) ? scrapbookMetadataResult.value.rows : [],
+        );
+      }
+
       if (
         profilesResult.status === 'rejected'
         && compositesResult.status === 'rejected'
         && scrapbooksResult.status === 'rejected'
+        && scrapbookMetadataResult.status === 'rejected'
       ) {
         setLoadError('Search results could not be loaded.');
       }
@@ -168,7 +178,15 @@ export default function SearchBar() {
     const memberScrapbookResults = activeFilterIds.has('scrapbook')
       ? memberScrapbookItems
       : [];
-    const sortedArchiveResults = [...compositeResults, ...scrapbookResults, ...memberScrapbookResults]
+    const taggedScrapbookResults = activeFilterIds.has('scrapbook')
+      ? buildTaggedScrapbookSearchItems(scrapbookMetadataRows, value, memberScrapbookResults)
+      : [];
+    const sortedArchiveResults = [
+      ...compositeResults,
+      ...scrapbookResults,
+      ...memberScrapbookResults,
+      ...taggedScrapbookResults,
+    ]
       .sort(compareSearchItems);
 
     if (activeFilterIds.has('member')) {
@@ -179,7 +197,16 @@ export default function SearchBar() {
     }
 
     return sortedArchiveResults;
-  }, [activeFilterIds, composites, memberScrapbookItems, noFiltersSelected, profiles, query, scrapbooks]);
+  }, [
+    activeFilterIds,
+    composites,
+    memberScrapbookItems,
+    noFiltersSelected,
+    profiles,
+    query,
+    scrapbookMetadataRows,
+    scrapbooks,
+  ]);
 
   const handleInputFocus = () => {
     setIsFilterMenuOpen(false);
@@ -463,6 +490,52 @@ function buildMemberScrapbookSearchItems(profiles, query) {
   return Array.from(itemsByKey.values()).slice(0, 8);
 }
 
+function buildTaggedScrapbookSearchItems(metadataRows, query, memberScrapbookItems = []) {
+  const itemsByKey = new Map();
+  const profileLinkedPageTargets = new Set(
+    (Array.isArray(memberScrapbookItems) ? memberScrapbookItems : [])
+      .map((item) => String(item?.to || ''))
+      .filter(Boolean),
+  );
+
+  (Array.isArray(metadataRows) ? metadataRows : []).forEach((row) => {
+    const people = Array.isArray(row?.people) ? row.people : [];
+
+    people.forEach((person) => {
+      const rawName = String(person?.rawName || '').trim();
+
+      if (!rawName) {
+        return;
+      }
+
+      const score = getSearchScore([rawName], query);
+
+      if (score <= 0) {
+        return;
+      }
+
+      const identifier = row.identifier || row.title || rawName;
+      const key = `tagged-scrapbook-${normalizeSearchKey(rawName)}-${normalizeSearchKey(identifier)}`;
+      const to = buildScrapbookLink(row.year, row.pageIndex, row.pageNumber);
+
+      if (itemsByKey.has(key) || (person?.profileId && profileLinkedPageTargets.has(to))) {
+        return;
+      }
+
+      itemsByKey.set(key, {
+        key,
+        kind: 'scrapbook',
+        label: `${rawName} in ${row.title || 'scrapbook page'}`,
+        meta: buildTaggedScrapbookMeta(row),
+        score: score + 16,
+        to,
+      });
+    });
+  });
+
+  return Array.from(itemsByKey.values()).slice(0, 12);
+}
+
 function buildScrapbookSearchItem(scrapbook, query) {
   const year = String(scrapbook.scrapbookYear || '').trim();
   const label = scrapbook.title || (year ? `${year} Scrapbook` : 'Scrapbook');
@@ -587,12 +660,40 @@ function buildScrapbookMeta(scrapbook) {
   return 'Scrapbook volume';
 }
 
-function buildScrapbookLink(scrapbookYear) {
+function buildScrapbookLink(scrapbookYear, pageIndex, pageNumber) {
   if (!scrapbookYear) {
     return '/scrapbooks';
   }
 
-  return `/scrapbooks?year=${encodeURIComponent(scrapbookYear)}`;
+  const searchParams = new URLSearchParams({ year: String(scrapbookYear) });
+  const normalizedPageIndex = Number(pageIndex);
+  const normalizedPageNumber = Number(pageNumber);
+
+  if (Number.isInteger(normalizedPageIndex) && normalizedPageIndex >= 0) {
+    searchParams.set('page', String(normalizedPageIndex + 1));
+  } else if (Number.isInteger(normalizedPageNumber) && normalizedPageNumber > 0) {
+    searchParams.set('page', String(normalizedPageNumber));
+  }
+
+  return `/scrapbooks?${searchParams.toString()}`;
+}
+
+function buildTaggedScrapbookMeta(row) {
+  const noteParts = [
+    row.year ? `${row.year} Scrapbook` : 'Scrapbook page',
+    row.pageNumber ? `Page ${row.pageNumber}` : '',
+    row.category || '',
+  ].filter(Boolean);
+
+  return noteParts.join(' | ');
+}
+
+function normalizeSearchKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 function SearchItemIcon({ kind }) {
