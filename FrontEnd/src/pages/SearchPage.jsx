@@ -199,9 +199,9 @@ export default function SearchPage() {
   const writtenHistoryItems = useMemo(
     () => filterByTitle(writtenHistories.map((history) => ({
       key: history.historyId,
-      title: history.displayName || history.originalFilename || 'Written history',
+      title: history.title || history.originalFilename || 'Written history',
       meta: 'Written history archive item',
-      href: buildSectionLink('/history', query),
+      href: buildSectionLink('/written-history', query),
     })), normalizedQuery),
     [normalizedQuery, writtenHistories, query],
   );
