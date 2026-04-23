@@ -8,6 +8,7 @@ import { exitFullscreenIfActive, isFullscreenActive, requestFullscreenForElement
 import './DisplayModePage.css';
 
 const ROTATE_MS = 6500;
+const IDLE_TO_SLIDESHOW_MS = 5 * 60 * 1000;
 const CONTROLS_HIDE_MS = 2500;
 const PRELOAD_AHEAD_COUNT = 5;
 const RENDER_TRAILING_COUNT = 1;
@@ -20,15 +21,18 @@ export default function DisplayModePage() {
   const [controlsVisible, setControlsVisible] = useState(true);
   const [displayImages, setDisplayImages] = useState([]);
   const hideControlsTimeoutRef = useRef(null);
+  const idleTimeoutRef = useRef(null);
   const loadedImageUrlsRef = useRef(new Set());
   const preloadingImagePromisesRef = useRef(new Map());
   const displayModeRef = useRef(null);
-  const didTriggerSlideshowExitRef = useRef(false);
+  const didTriggerRouteTransitionRef = useRef(false);
   const location = useLocation();
   const navigate = useNavigate();
   const currentMode = useMemo(() => getDisplayMode(location.search), [location.search]);
   const currentDisplayPage = useMemo(() => getDisplayPage(location.search), [location.search]);
+  const currentDisplaySource = useMemo(() => getDisplaySource(location.search), [location.search]);
   const isSlideshowMode = currentMode === 'slideshow';
+  const isIdleSlideshowMode = isSlideshowMode && currentDisplaySource === 'idle';
   const isHomepageDisplayMode = currentMode === 'display' && currentDisplayPage === 'home';
   const isCompositesDisplayMode = currentMode === 'display' && currentDisplayPage === 'composites';
   const isFullscreenDisplayMode = isSlideshowMode || isHomepageDisplayMode || isCompositesDisplayMode;
@@ -45,20 +49,22 @@ export default function DisplayModePage() {
     () => `Display slideshow image ${currentIndex + 1} of ${Math.max(imageCount, 1)}`,
     [currentIndex, imageCount],
   );
-  const exitDisplayMode = useCallback(() => {
-    if (didTriggerSlideshowExitRef.current) {
+  const navigateFromDisplayMode = useCallback((target, options = undefined) => {
+    if (didTriggerRouteTransitionRef.current) {
       return;
     }
 
-    didTriggerSlideshowExitRef.current = true;
-
-    if (typeof window.history.state?.idx === 'number' && window.history.state.idx > 0) {
-      navigate(-1);
-      return;
-    }
-
-    navigate('/');
+    didTriggerRouteTransitionRef.current = true;
+    navigate(target, options);
   }, [navigate]);
+
+  const exitDisplayMode = useCallback(() => {
+    navigateFromDisplayMode('/', { replace: true });
+  }, [navigateFromDisplayMode]);
+
+  const returnToDisplayHomepage = useCallback(() => {
+    navigateFromDisplayMode('/display-mode?mode=display', { replace: true });
+  }, [navigateFromDisplayMode]);
 
   useEffect(() => {
     if (!isSlideshowMode) {
@@ -111,8 +117,86 @@ export default function DisplayModePage() {
   }, [isSlideshowMode]);
 
   useEffect(() => {
-    didTriggerSlideshowExitRef.current = false;
+    didTriggerRouteTransitionRef.current = false;
   }, [location.key]);
+
+  useEffect(() => {
+    if (currentMode !== 'display') {
+      if (idleTimeoutRef.current) {
+        window.clearTimeout(idleTimeoutRef.current);
+      }
+
+      return undefined;
+    }
+
+    const resetIdleTimer = () => {
+      if (idleTimeoutRef.current) {
+        window.clearTimeout(idleTimeoutRef.current);
+      }
+
+      idleTimeoutRef.current = window.setTimeout(() => {
+        navigateFromDisplayMode('/display-mode?mode=slideshow&source=idle', { replace: true });
+      }, IDLE_TO_SLIDESHOW_MS);
+    };
+
+    resetIdleTimer();
+
+    window.addEventListener('pointermove', resetIdleTimer, { passive: true });
+    window.addEventListener('pointerdown', resetIdleTimer, { passive: true });
+    window.addEventListener('wheel', resetIdleTimer, { passive: true });
+    window.addEventListener('keydown', resetIdleTimer);
+    window.addEventListener('touchstart', resetIdleTimer, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointermove', resetIdleTimer);
+      window.removeEventListener('pointerdown', resetIdleTimer);
+      window.removeEventListener('wheel', resetIdleTimer);
+      window.removeEventListener('keydown', resetIdleTimer);
+      window.removeEventListener('touchstart', resetIdleTimer);
+
+      if (idleTimeoutRef.current) {
+        window.clearTimeout(idleTimeoutRef.current);
+      }
+    };
+  }, [currentMode, navigateFromDisplayMode]);
+
+  useEffect(() => {
+    if (!isIdleSlideshowMode) {
+      return undefined;
+    }
+
+    const handlePointerMove = () => {
+      returnToDisplayHomepage();
+    };
+
+    window.addEventListener('pointermove', handlePointerMove, { passive: true });
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+    };
+  }, [isIdleSlideshowMode, returnToDisplayHomepage]);
+
+  useEffect(() => {
+    if (!isFullscreenDisplayMode) {
+      return undefined;
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      exitDisplayMode();
+    };
+
+    window.addEventListener('keydown', handleKeyDown, true);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, true);
+    };
+  }, [exitDisplayMode, isFullscreenDisplayMode]);
 
   useEffect(() => {
     if (!isFullscreenDisplayMode) {
@@ -185,11 +269,6 @@ export default function DisplayModePage() {
 
     const onKeyDown = (event) => {
       showControls();
-      if (event.key === 'Escape') {
-        if (!isFullscreenActive()) {
-          exitDisplayMode();
-        }
-      }
     };
 
     showControls();
@@ -282,6 +361,11 @@ function getDisplayMode(search) {
 function getDisplayPage(search) {
   const params = new URLSearchParams(search);
   return params.get('page') === 'composites' ? 'composites' : 'home';
+}
+
+function getDisplaySource(search) {
+  const params = new URLSearchParams(search);
+  return params.get('source') === 'idle' ? 'idle' : 'manual';
 }
 
 function getRenderedImages(imageUrls, currentIndex) {
