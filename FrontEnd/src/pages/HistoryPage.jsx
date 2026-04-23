@@ -121,63 +121,67 @@ export default function HistoryPage() {
 
       <section className="historyPage__library section">
         <div className="container">
-          <div className="historyPage__sectionHeader">
-            <div>
+          <div className="historyPage__libraryPanel">
+            <div className="historyPage__sectionHeader">
               <div>
-                <h2 className="historyPage__sectionTitle">Historical Document Library</h2>
+                <div>
+                  <h2 className="historyPage__sectionTitle">Historical Document Library</h2>
+                </div>
               </div>
+              <label className="historyPage__search" htmlFor="history-document-search">
+                <span className="sr-only">Search written histories</span>
+                <input
+                  id="history-document-search"
+                  className="historyPage__searchInput"
+                  type="search"
+                  placeholder="Search by history name"
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                />
+              </label>
             </div>
-            <label className="historyPage__search" htmlFor="history-document-search">
-              <span className="sr-only">Search written histories</span>
-              <input
-                id="history-document-search"
-                className="historyPage__searchInput"
-                type="search"
-                placeholder="Search by history name"
-                value={searchQuery}
-                onChange={handleSearchChange}
-              />
-            </label>
-          </div>
 
-          {loadError ? (
-            <div className="historyPage__emptyState">
-              <p className="historyPage__emptyTitle">Unable to load history PDFs.</p>
-              <p className="historyPage__emptyCopy">{loadError}</p>
+            <div className="historyPage__libraryContent">
+              {loadError ? (
+                <div className="historyPage__emptyState">
+                  <p className="historyPage__emptyTitle">Unable to load history PDFs.</p>
+                  <p className="historyPage__emptyCopy">{loadError}</p>
+                </div>
+              ) : isLoadingHistories ? (
+                <div className="historyPage__emptyState">
+                  <p className="historyPage__emptyTitle">Loading history PDFs...</p>
+                </div>
+              ) : filteredHistoryDocuments.length > 0 ? (
+                <div className="historyPage__grid" aria-label="History document cards">
+                  {filteredHistoryDocuments.map((document) => (
+                    <article key={document.historyId || document.key} className="historyPage__card">
+                      <div className="historyPage__cardBody">
+                        <h3 className="historyPage__cardTitle">{document.title}</h3>
+                        <p className="historyPage__cardDescription">{document.description}</p>
+                        <br />
+                        <button
+                          type="button"
+                          className="button historyPage__cardButton"
+                          onClick={() => setActiveDocument(document)}
+                        >
+                          Open History
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : historyDocuments.length > 0 && normalizedSearchQuery ? (
+                <div className="historyPage__emptyState">
+                  <p className="historyPage__emptyTitle">No matching history PDFs.</p>
+                  <p className="historyPage__emptyCopy">Try a different history name.</p>
+                </div>
+              ) : (
+                <div className="historyPage__emptyState">
+                  <p className="historyPage__emptyTitle">No history PDFs added yet.</p>
+                </div>
+              )}
             </div>
-          ) : isLoadingHistories ? (
-            <div className="historyPage__emptyState">
-              <p className="historyPage__emptyTitle">Loading history PDFs...</p>
-            </div>
-          ) : filteredHistoryDocuments.length > 0 ? (
-            <div className="historyPage__grid" aria-label="History document cards">
-              {filteredHistoryDocuments.map((document) => (
-                <article key={document.historyId || document.key} className="historyPage__card">
-                  <div className="historyPage__cardBody">
-                    <h3 className="historyPage__cardTitle">{document.title}</h3>
-                    <p className="historyPage__cardDescription">{document.description}</p>
-                    <br/>
-                    <button
-                      type="button"
-                      className="button historyPage__cardButton"
-                      onClick={() => setActiveDocument(document)}
-                    >
-                      Open History
-                    </button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : historyDocuments.length > 0 && normalizedSearchQuery ? (
-            <div className="historyPage__emptyState">
-              <p className="historyPage__emptyTitle">No matching history PDFs.</p>
-              <p className="historyPage__emptyCopy">Try a different history name.</p>
-            </div>
-          ) : (
-            <div className="historyPage__emptyState">
-              <p className="historyPage__emptyTitle">No history PDFs added yet.</p>
-            </div>
-          )}
+          </div>
         </div>
       </section>
 
