@@ -63,12 +63,13 @@ export default function PublicCompositeStage({
     }
 
     const isFullscreen = variant === 'fullscreen';
+    const inlineViewportPadding = 24;
     const viewportWidth = isFullscreen
       ? Math.max(1, viewportElement.clientWidth)
-      : Math.max(240, viewportElement.clientWidth - 24);
+      : Math.max(240, viewportElement.clientWidth - inlineViewportPadding);
     const viewportHeight = isFullscreen
       ? Math.max(1, viewportElement.clientHeight)
-      : Math.max(240, Math.min(Math.round(window.innerHeight * 0.68), 860) - 24);
+      : Math.max(240, viewportElement.clientHeight - inlineViewportPadding);
     const fitScale = Math.min(
       viewportWidth / Math.max(currentComposite.imageWidth, 1),
       viewportHeight / Math.max(currentComposite.imageHeight, 1),
@@ -78,7 +79,7 @@ export default function PublicCompositeStage({
       width: Math.max(1, Math.round(currentComposite.imageWidth * fitScale)),
       height: Math.max(1, Math.round(currentComposite.imageHeight * fitScale)),
     });
-  }, [variant, zoomEnabled]);
+  }, [variant]);
 
   useLayoutEffect(() => {
     setIsImageLoaded(false);
