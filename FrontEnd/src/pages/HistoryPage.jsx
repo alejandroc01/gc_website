@@ -18,6 +18,11 @@ export default function HistoryPage() {
     setSearchQuery(searchParams.get('q') || '');
   }, [searchParams]);
 
+  const requestedHistoryKey = useMemo(
+    () => String(searchParams.get('history') || '').trim().toLowerCase(),
+    [searchParams],
+  );
+
   useEffect(() => {
     let isActive = true;
 
@@ -52,23 +57,21 @@ export default function HistoryPage() {
   }, []);
 
   useEffect(() => {
-    if (!activeDocument) return undefined;
+    if (!requestedHistoryKey) {
+      setActiveDocument(null);
+      return;
+    }
 
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        setActiveDocument(null);
-      }
-    };
+    if (isLoadingHistories) {
+      return;
+    }
 
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
+    const requestedDocument = historyDocuments.find(
+      (document) => document.key.toLowerCase() === requestedHistoryKey,
+    );
 
-    return () => {
-      document.body.style.overflow = originalOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [activeDocument]);
+    setActiveDocument(requestedDocument || null);
+  }, [historyDocuments, isLoadingHistories, requestedHistoryKey]);
 
   const normalizedSearchQuery = searchQuery.trim().toLowerCase();
   const filteredHistoryDocuments = useMemo(() => {
@@ -84,13 +87,60 @@ export default function HistoryPage() {
     const nextQuery = event.target.value;
     setSearchQuery(nextQuery);
 
+    const nextSearchParams = new URLSearchParams(searchParams);
     const trimmedQuery = nextQuery.trim();
+
     if (trimmedQuery) {
-      setSearchParams({ q: trimmedQuery }, { replace: true });
+      nextSearchParams.set('q', trimmedQuery);
     } else {
-      setSearchParams({}, { replace: true });
+      nextSearchParams.delete('q');
     }
+
+    setSearchParams(nextSearchParams, { replace: true });
   };
+
+  const handleOpenDocument = (document) => {
+    setActiveDocument(document);
+
+    if (!document?.key) {
+      return;
+    }
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.set('history', document.key);
+    setSearchParams(nextSearchParams, { replace: true });
+  };
+
+  const handleCloseDocument = () => {
+    setActiveDocument(null);
+
+    if (!searchParams.get('history')) {
+      return;
+    }
+
+    const nextSearchParams = new URLSearchParams(searchParams);
+    nextSearchParams.delete('history');
+    setSearchParams(nextSearchParams, { replace: true });
+  };
+
+  useEffect(() => {
+    if (!activeDocument) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        handleCloseDocument();
+      }
+    };
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeDocument, handleCloseDocument]);
 
   return (
     <div className="historyPage">
@@ -162,7 +212,7 @@ export default function HistoryPage() {
                         <button
                           type="button"
                           className="button historyPage__cardButton"
-                          onClick={() => setActiveDocument(document)}
+                          onClick={() => handleOpenDocument(document)}
                         >
                           Open History
                         </button>
@@ -196,7 +246,7 @@ export default function HistoryPage() {
             type="button"
             className="historyPage__modalOverlay"
             aria-label="Close history document viewer"
-            onClick={() => setActiveDocument(null)}
+            onClick={handleCloseDocument}
           />
 
           <div className="historyPage__modalPanel">
@@ -212,7 +262,7 @@ export default function HistoryPage() {
                 type="button"
                 className="historyPage__modalClose"
                 aria-label="Close history document viewer"
-                onClick={() => setActiveDocument(null)}
+                onClick={handleCloseDocument}
               >
                 Close
               </button>

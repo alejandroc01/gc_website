@@ -1,4 +1,4 @@
-import { use, useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
 import { getComposites, getProfiles, getHistories } from '../api/composites.js';
@@ -201,7 +201,7 @@ export default function SearchPage() {
       key: history.historyId,
       title: history.title || history.originalFilename || 'Written history',
       meta: 'Written history archive item',
-      href: buildSectionLink('/written-history', query),
+      href: buildSectionLink('/written-history', query, { history: history.key }),
     })), normalizedQuery),
     [normalizedQuery, writtenHistories, query],
   );
@@ -333,14 +333,24 @@ function filterByTitle(items, normalizedQuery) {
   return items.filter((item) => String(item.title || '').toLowerCase().includes(normalizedQuery));
 }
 
-function buildSectionLink(pathname, query) {
+function buildSectionLink(pathname, query, extraParams = {}) {
+  const searchParams = new URLSearchParams();
   const normalizedQuery = query.trim();
 
-  if (!normalizedQuery) {
-    return pathname;
+  if (normalizedQuery) {
+    searchParams.set('q', normalizedQuery);
   }
 
-  return `${pathname}?q=${encodeURIComponent(normalizedQuery)}`;
+  Object.entries(extraParams).forEach(([key, value]) => {
+    const normalizedValue = String(value || '').trim();
+
+    if (normalizedValue) {
+      searchParams.set(key, normalizedValue);
+    }
+  });
+
+  const serializedParams = searchParams.toString();
+  return serializedParams ? `${pathname}?${serializedParams}` : pathname;
 }
 
 function buildMemberMeta(profile) {
