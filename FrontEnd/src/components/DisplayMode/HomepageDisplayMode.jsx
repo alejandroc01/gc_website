@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 
-import ActionCards from '../ActionCards/ActionCards.jsx';
+import ActionCards, { ACTION_CARDS } from '../ActionCards/ActionCards.jsx';
 import SearchBar from '../SearchBar/SearchBar.jsx';
 
 const HOMEPAGE_DISPLAY_REFERENCE_WIDTH = 3840;
@@ -12,6 +12,17 @@ export default function HomepageDisplayMode() {
   const displaySurface = useMemo(
     () => getHomepageDisplaySurface(displayMetrics),
     [displayMetrics],
+  );
+  const displayCards = useMemo(
+    () => ACTION_CARDS.map((card) => (
+      card.key === 'composites'
+        ? {
+          ...card,
+          to: '/display-mode?mode=display&page=composites',
+        }
+        : card
+    )),
+    [],
   );
 
   useEffect(() => {
@@ -57,6 +68,7 @@ export default function HomepageDisplayMode() {
             <SearchBar className="displayModeHomepage__search" />
 
             <ActionCards
+              cards={displayCards}
               className="displayModeHomepage__cards"
               eyebrow="Explore the Archive"
               heading="Browse by Collection"

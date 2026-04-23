@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import './ActionCards.css';
 
-const CARDS = [
+export const ACTION_CARDS = [
   {
     key: 'composites',
     imageSrc: '/images/2025.jpeg',
@@ -46,7 +46,7 @@ const CARDS = [
  * A responsive card grid used on both the public homepage and upload landing page.
  */
 export default function ActionCards({
-  cards = CARDS,
+  cards = ACTION_CARDS,
   ariaLabel = 'Main actions',
   eyebrow = null,
   heading = null,

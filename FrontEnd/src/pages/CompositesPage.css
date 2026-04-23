@@ -43,6 +43,48 @@
   margin-bottom: 24px;
 }
 
+.compositesPage--displayMode {
+  background: transparent;
+}
+
+.compositesPage--displayMode.section {
+  min-height: 100%;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.compositesPage--displayMode .container {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.compositesPage__displayModeTopBar {
+  display: flex;
+  justify-content: flex-start;
+  margin-bottom: 18px;
+}
+
+.button.compositesPage__displayBackButton {
+  min-height: 52px;
+  border-color: rgba(242, 226, 188, 0.78);
+  background: rgba(255, 246, 222, 0.96);
+  color: #4e3722;
+  font-weight: 600;
+}
+
+.button.compositesPage__displayBackButton:hover,
+.button.compositesPage__displayBackButton:focus-visible {
+  border-color: #fff4d9;
+  background: #fffaf0;
+  color: #3f2c1b;
+}
+
+.compositesPage__displayBackIcon {
+  width: 18px;
+  height: 18px;
+  display: block;
+}
+
 .compositesPage__shell {
   padding: 0;
   overflow: hidden;
@@ -909,6 +951,10 @@
   .publicCompositeStage__viewport {
     min-height: 280px;
     padding: 10px;
+  }
+
+  .compositesPage__displayModeTopBar {
+    margin-bottom: 14px;
   }
 
   .compositesPage__expandButton {

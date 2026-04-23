@@ -359,6 +359,21 @@
   font-size: 28px;
 }
 
+.displayMode--composites {
+  overflow: auto;
+}
+
+.displayModeComposites {
+  position: relative;
+  z-index: 2;
+  min-height: 100%;
+  padding: 56px 72px;
+}
+
+.displayModeComposites .compositesPage__scaleViewport {
+  width: min(100%, calc(var(--composites-page-layout-width, 1407px) * var(--composites-page-scale, 1)));
+}
+
 @media (max-width: 768px) {
   .displayMode__controls {
     padding: 14px;
@@ -378,5 +393,9 @@
 
   .displayMode__counter {
     font-size: 13px;
+  }
+
+  .displayModeComposites {
+    padding: 26px 18px;
   }
 }
