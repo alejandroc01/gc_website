@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { use, useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
-import { getComposites, getProfiles } from '../api/composites.js';
+import { getComposites, getProfiles, getHistories } from '../api/composites.js';
 import './SearchPage.css';
 
 const SECTION_CARD_LIMIT = 8;
@@ -24,24 +24,18 @@ const SCRAPBOOK_ITEMS = [
   { key: 'scrapbook-1977', title: '1977 Scrapbook', meta: 'Scrapbook archive placeholder', href: '/scrapbooks' },
 ];
 
-const WRITTEN_HISTORY_ITEMS = [
-  {
-    key: '1984-class-history',
-    title: 'The History of the Class of 1984',
-    meta: 'Written history PDF',
-    href: '/history',
-  },
-];
-
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState(() => searchParams.get('q') || '');
   const [profiles, setProfiles] = useState([]);
   const [composites, setComposites] = useState([]);
+  const [writtenHistories, setWrittenHistories] = useState([]);
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
   const [isLoadingComposites, setIsLoadingComposites] = useState(true);
+  const [isLoadingWrittenHistories, setIsLoadingWrittenHistories] = useState(true);
   const [profilesError, setProfilesError] = useState('');
   const [compositesError, setCompositesError] = useState('');
+  const [writtenHistoriesError, setWrittenHistoriesError] = useState('');
 
   useEffect(() => {
     const nextQuery = searchParams.get('q') || '';
@@ -130,6 +124,40 @@ export default function SearchPage() {
     };
   }, []);
 
+  useEffect(() => {
+    let isActive = true;
+    
+    const loadWrittenHistories = async () => {
+      setIsLoadingWrittenHistories(true);
+      setWrittenHistoriesError('');
+
+      try {
+        const loadedWrittenHistories = await getHistories();
+        
+        if (!isActive) {
+          return;
+        }
+        setWrittenHistories(Array.isArray(loadedWrittenHistories) ? loadedWrittenHistories : []);
+      }
+      catch (error) {
+        if (isActive) {
+          setWrittenHistoriesError(error.message);
+        }
+      }
+      finally {
+        if (isActive) {
+          setIsLoadingWrittenHistories(false);
+        }
+      }
+    }
+    loadWrittenHistories();
+
+    return () => {
+      isActive = false;
+    }
+  }, []);
+
+
   const normalizedQuery = query.trim().toLowerCase();
 
   const memberItems = useMemo(
@@ -169,8 +197,13 @@ export default function SearchPage() {
   );
 
   const writtenHistoryItems = useMemo(
-    () => filterByTitle(WRITTEN_HISTORY_ITEMS, normalizedQuery),
-    [normalizedQuery],
+    () => filterByTitle(writtenHistories.map((history) => ({
+      key: history.historyId,
+      title: history.displayName || history.originalFilename || 'Written history',
+      meta: 'Written history archive item',
+      href: buildSectionLink('/history', query),
+    })), normalizedQuery),
+    [normalizedQuery, writtenHistories, query],
   );
 
   const sections = [
@@ -206,8 +239,8 @@ export default function SearchPage() {
       key: 'written-history',
       title: 'Written History',
       items: writtenHistoryItems,
-      viewAllHref: buildSectionLink('/history', query),
-      emptyMessage: 'No matching written histories.',
+      viewAllHref: buildSectionLink('/written-history', query),
+      emptyMessage: writtenHistoriesError || (isLoadingWrittenHistories ? 'Loading written history results...' : 'No matching written histories.'),
     },
   ];
 
