@@ -3,6 +3,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 const MIN_ZOOM_LEVEL = 1;
 const MAX_ZOOM_LEVEL = 4;
 const WHEEL_ZOOM_STEP = 0.25;
+const INLINE_REFERENCE_IMAGE_WIDTH = 4200;
+const INLINE_REFERENCE_IMAGE_HEIGHT = 3000;
 
 export default function PublicCompositeStage({
   composite,
@@ -63,17 +65,32 @@ export default function PublicCompositeStage({
     }
 
     const isFullscreen = variant === 'fullscreen';
-    const inlineViewportPadding = 24;
-    const viewportWidth = isFullscreen
-      ? Math.max(1, viewportElement.clientWidth)
-      : Math.max(240, viewportElement.clientWidth - inlineViewportPadding);
-    const viewportHeight = isFullscreen
-      ? Math.max(1, viewportElement.clientHeight)
-      : Math.max(240, viewportElement.clientHeight - inlineViewportPadding);
-    const fitScale = Math.min(
-      viewportWidth / Math.max(currentComposite.imageWidth, 1),
-      viewportHeight / Math.max(currentComposite.imageHeight, 1),
-    );
+    const viewportWidth = Math.max(1, viewportElement.clientWidth);
+    let fitScale;
+
+    if (isFullscreen) {
+      const viewportHeight = Math.max(1, viewportElement.clientHeight);
+
+      fitScale = Math.min(
+        viewportWidth / Math.max(currentComposite.imageWidth, 1),
+        viewportHeight / Math.max(currentComposite.imageHeight, 1),
+      );
+    } else {
+      const viewportStyle = window.getComputedStyle(viewportElement);
+      const horizontalPadding = parseFloat(viewportStyle.paddingLeft || '0')
+        + parseFloat(viewportStyle.paddingRight || '0');
+      const verticalPadding = parseFloat(viewportStyle.paddingTop || '0')
+        + parseFloat(viewportStyle.paddingBottom || '0');
+      const availableImageWidth = Math.max(1, viewportWidth - horizontalPadding);
+      const availableImageHeight = Math.max(1, viewportElement.clientHeight - verticalPadding);
+      const imageWidth = Math.max(Number(currentComposite.imageWidth) || INLINE_REFERENCE_IMAGE_WIDTH, 1);
+      const imageHeight = Math.max(Number(currentComposite.imageHeight) || INLINE_REFERENCE_IMAGE_HEIGHT, 1);
+
+      fitScale = Math.min(
+        availableImageWidth / imageWidth,
+        availableImageHeight / imageHeight,
+      );
+    }
 
     setBaseDisplaySize({
       width: Math.max(1, Math.round(currentComposite.imageWidth * fitScale)),

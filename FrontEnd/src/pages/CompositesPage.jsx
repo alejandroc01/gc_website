@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
@@ -19,8 +19,6 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
   const [isLoadingRelatedMedia, setIsLoadingRelatedMedia] = useState(true);
   const [pageError, setPageError] = useState('');
   const [relatedMediaError, setRelatedMediaError] = useState('');
-  const [displayMetrics, setDisplayMetrics] = useState(getDisplayMetrics);
-  const [scaledContentHeight, setScaledContentHeight] = useState(null);
   const [yearInput, setYearInput] = useState('');
   const [yearError, setYearError] = useState('');
   const [isExpanded, setIsExpanded] = useState(false);
@@ -29,7 +27,6 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
   const [activeScrapbookPageIndex, setActiveScrapbookPageIndex] = useState(0);
   const [isScrapbookPageReady, setIsScrapbookPageReady] = useState(false);
   const [activeProfileId, setActiveProfileId] = useState('');
-  const scaledContentRef = useRef(null);
   const relatedMenuRef = useRef(null);
   const relatedScrapbookImageRef = useRef(null);
 
@@ -146,21 +143,6 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
   );
   const oldestYear = availableYears[0] || '';
   const newestYear = availableYears[availableYears.length - 1] || '';
-  const pageScaleConfig = useMemo(
-    () => getCompositePageScaleConfig(displayMetrics),
-    [displayMetrics],
-  );
-  const pageScaleStyle = useMemo(
-    () => ({
-      '--composites-page-scale': String(pageScaleConfig.scale),
-      '--composites-page-layout-width': `${pageScaleConfig.layoutWidth}px`,
-      '--composites-inline-viewer-height': `${pageScaleConfig.viewerHeight}px`,
-      '--composites-page-scaled-height': scaledContentHeight
-        ? `${Math.round(scaledContentHeight * pageScaleConfig.scale)}px`
-        : 'auto',
-    }),
-    [pageScaleConfig, scaledContentHeight],
-  );
   const matchingScrapbooks = useMemo(
     () => relatedScrapbooks.filter((scrapbook) => scrapbook.year === selectedYear),
     [relatedScrapbooks, selectedYear],
@@ -291,34 +273,6 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
   }, [isRelatedMediaMenuOpen]);
 
   useEffect(() => {
-    const updateDisplayMetrics = () => {
-      setDisplayMetrics((currentMetrics) => {
-        const nextMetrics = getDisplayMetrics();
-
-        if (
-          currentMetrics.viewportWidth === nextMetrics.viewportWidth
-          && currentMetrics.viewportHeight === nextMetrics.viewportHeight
-          && currentMetrics.devicePixelRatio === nextMetrics.devicePixelRatio
-        ) {
-          return currentMetrics;
-        }
-
-        return nextMetrics;
-      });
-    };
-
-    const visualViewport = window.visualViewport;
-
-    window.addEventListener('resize', updateDisplayMetrics);
-    visualViewport?.addEventListener('resize', updateDisplayMetrics);
-
-    return () => {
-      window.removeEventListener('resize', updateDisplayMetrics);
-      visualViewport?.removeEventListener('resize', updateDisplayMetrics);
-    };
-  }, []);
-
-  useEffect(() => {
     if (activeRelatedMedia?.type !== 'scrapbook') {
       setIsScrapbookPageReady(false);
       return undefined;
@@ -358,36 +312,6 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
       isCancelled = true;
     };
   }, [activeRelatedMedia, activeScrapbookPageIndex]);
-
-  useLayoutEffect(() => {
-    const scaledContentElement = scaledContentRef.current;
-
-    if (!scaledContentElement) {
-      return undefined;
-    }
-
-    const updateScaledContentHeight = () => {
-      const nextHeight = scaledContentElement.offsetHeight;
-
-      setScaledContentHeight((currentHeight) => (
-        currentHeight === nextHeight ? currentHeight : nextHeight
-      ));
-    };
-
-    updateScaledContentHeight();
-
-    const resizeObserver = new ResizeObserver(() => {
-      updateScaledContentHeight();
-    });
-
-    resizeObserver.observe(scaledContentElement);
-    window.addEventListener('resize', updateScaledContentHeight);
-
-    return () => {
-      resizeObserver.disconnect();
-      window.removeEventListener('resize', updateScaledContentHeight);
-    };
-  }, [pageScaleConfig.layoutWidth, pageScaleConfig.viewerHeight]);
 
   const handleSelectYear = useCallback((nextYear) => {
     const normalizedYear = String(nextYear || '').trim();
@@ -469,11 +393,10 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
         'compositesPage',
         displayMode ? 'compositesPage--displayMode' : '',
       ].filter(Boolean).join(' ')}
-      style={pageScaleStyle}
     >
       <div className="container">
         <div className="compositesPage__scaleViewport">
-          <div ref={scaledContentRef} className="compositesPage__scaleCanvas">
+          <div className="compositesPage__scaleCanvas">
             {displayMode ? (
               <div className="compositesPage__displayModeTopBar">
                 <button
@@ -839,41 +762,6 @@ function compareCompositesByYear(leftComposite, rightComposite) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
-}
-
-function getDisplayMetrics() {
-  if (typeof window === 'undefined') {
-    return {
-      viewportWidth: 1440,
-      viewportHeight: 900,
-      devicePixelRatio: 1,
-    };
-  }
-
-  const visualViewport = window.visualViewport;
-
-  return {
-    viewportWidth: Math.round(visualViewport?.width || window.innerWidth || 1440),
-    viewportHeight: Math.round(visualViewport?.height || window.innerHeight || 900),
-    devicePixelRatio: Number((window.devicePixelRatio || 1).toFixed(3)),
-  };
-}
-
-function getCompositePageScaleConfig({ viewportWidth, viewportHeight, devicePixelRatio }) {
-  const densityScale = clamp(devicePixelRatio || 1, 1, 2.25);
-  const physicalViewportWidth = Math.round(viewportWidth * densityScale);
-  const physicalViewportHeight = Math.round(viewportHeight * densityScale);
-  const isCompactViewport = physicalViewportWidth <= 640;
-  const isMediumViewport = physicalViewportWidth <= 960;
-  const horizontalPadding = isCompactViewport ? 32 : 48;
-  const verticalChrome = isCompactViewport ? 390 : isMediumViewport ? 340 : 300;
-  const maxLayoutWidth = 1455 - horizontalPadding;
-
-  return {
-    scale: Number((1 / densityScale).toFixed(4)),
-    layoutWidth: Math.round(clamp(physicalViewportWidth - horizontalPadding, 320, maxLayoutWidth)),
-    viewerHeight: Math.round(clamp(physicalViewportHeight - verticalChrome, 240, 860)),
-  };
 }
 
 function normalizeRelatedScrapbooks(scrapbooks) {

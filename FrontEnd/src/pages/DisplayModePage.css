@@ -371,7 +371,7 @@
 }
 
 .displayModeComposites .compositesPage__scaleViewport {
-  width: min(100%, calc(var(--composites-page-layout-width, 1407px) * var(--composites-page-scale, 1)));
+  width: 100%;
 }
 
 @media (max-width: 768px) {

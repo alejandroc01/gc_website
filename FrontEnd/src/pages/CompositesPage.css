@@ -1,46 +1,45 @@
 .compositesPage {
+  --composites-reference-image-width: 50vw;
+  --composites-reference-image-height: calc(var(--composites-reference-image-width) * 0.7142857143);
+  --composites-stage-padding: 12px;
+  --composites-viewer-body-pad-x: 28px;
+  --composites-viewer-body-pad-top: 24px;
+  --composites-viewer-body-pad-bottom: 28px;
+  --composites-shell-width: calc(
+    var(--composites-reference-image-width)
+    + (var(--composites-stage-padding) * 2)
+    + (var(--composites-viewer-body-pad-x) * 2)
+    + 4px
+  );
+
   background:
     radial-gradient(circle at top left, rgba(235, 215, 155, 0.24), transparent 34%),
     linear-gradient(180deg, #fcfbf8 0%, #f6f3ee 100%);
 }
 
 .compositesPage.section {
-  padding-top: calc(48px * var(--composites-page-scale, 1));
-  padding-bottom: calc(48px * var(--composites-page-scale, 1));
+  padding-top: 48px;
+  padding-bottom: 48px;
 }
 
 .compositesPage .container {
-  padding-left: calc(var(--container-pad) * var(--composites-page-scale, 1));
-  padding-right: calc(var(--container-pad) * var(--composites-page-scale, 1));
+  max-width: none;
+  padding-left: 0;
+  padding-right: 0;
 }
 
 .compositesPage__scaleViewport {
-  width: min(100%, calc(var(--composites-page-layout-width, 1407px) * var(--composites-page-scale, 1)));
+  width: 100%;
   margin: 0 auto;
 }
 
 .compositesPage__scaleCanvas {
-  width: var(--composites-page-layout-width, 1407px);
-  zoom: var(--composites-page-scale, 1);
-}
-
-@supports not (zoom: 1) {
-  .compositesPage__scaleViewport {
-    position: relative;
-    height: var(--composites-page-scaled-height, auto);
-  }
-
-  .compositesPage__scaleCanvas {
-    position: absolute;
-    top: 0;
-    left: 50%;
-    transform: translateX(-50%) scale(var(--composites-page-scale, 1));
-    transform-origin: top center;
-  }
+  width: 100%;
 }
 
 .compositesPage__header {
-  margin-bottom: 24px;
+  width: var(--composites-shell-width);
+  margin: 0 auto 24px;
 }
 
 .compositesPage--displayMode {
@@ -61,7 +60,8 @@
 .compositesPage__displayModeTopBar {
   display: flex;
   justify-content: flex-start;
-  margin-bottom: 18px;
+  width: var(--composites-shell-width);
+  margin: 0 auto 18px;
 }
 
 .button.compositesPage__displayBackButton {
@@ -86,6 +86,10 @@
 }
 
 .compositesPage__shell {
+  display: grid;
+  grid-template-rows: auto 1px auto;
+  width: var(--composites-shell-width);
+  margin: 0 auto;
   padding: 0;
   overflow: hidden;
   background: #fff;
@@ -247,7 +251,13 @@
 }
 
 .compositesPage__viewerBody {
-  padding: 24px 28px 28px;
+  padding:
+    var(--composites-viewer-body-pad-top)
+    var(--composites-viewer-body-pad-x)
+    var(--composites-viewer-body-pad-bottom);
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto;
 }
 
 .compositesPage__copyrightNotice {
@@ -256,7 +266,9 @@
 
 .compositesPage__viewerStage {
   position: relative;
+  display: grid;
   width: 100%;
+  min-height: 0;
   margin: 0 auto;
 }
 
@@ -614,6 +626,7 @@
 .publicCompositeStage {
   display: grid;
   gap: 12px;
+  min-height: 0;
 }
 
 .publicCompositeStage__viewport {
@@ -621,7 +634,7 @@
   min-height: 360px;
   max-height: min(74vh, 860px);
   overflow: auto;
-  padding: 12px;
+  padding: var(--composites-stage-padding, 12px);
   overscroll-behavior: contain;
   border: 1px solid rgba(38, 21, 56, 0.08);
   background:
@@ -631,11 +644,16 @@
 
 .publicCompositeStage--inline .publicCompositeStage__viewport {
   width: 100%;
-  height: var(--composites-inline-viewer-height, 860px);
-  min-height: var(--composites-inline-viewer-height, 860px);
-  max-height: var(--composites-inline-viewer-height, 860px);
+  height: calc(var(--composites-reference-image-height) + (var(--composites-stage-padding) * 2) + 2px);
+  min-height: calc(var(--composites-reference-image-height) + (var(--composites-stage-padding) * 2) + 2px);
+  max-height: none;
   overflow: clip;
   overscroll-behavior: auto;
+}
+
+.publicCompositeStage--inline .publicCompositeStage__scaledCanvas {
+  min-height: 100%;
+  align-items: center;
 }
 
 .publicCompositeStage__viewport--panning {
@@ -871,6 +889,12 @@
 }
 
 @media (max-width: 960px) {
+  .compositesPage {
+    --composites-viewer-body-pad-x: 22px;
+    --composites-viewer-body-pad-top: 20px;
+    --composites-viewer-body-pad-bottom: 22px;
+  }
+
   .compositesPage__yearRow {
     grid-template-columns: 1fr;
     justify-items: stretch;
@@ -881,7 +905,10 @@
   }
 
   .compositesPage__viewerBody {
-    padding: 20px 22px 22px;
+    padding:
+      var(--composites-viewer-body-pad-top)
+      var(--composites-viewer-body-pad-x)
+      var(--composites-viewer-body-pad-bottom);
   }
 
   .compositesPage__yearBound,
@@ -911,9 +938,16 @@
 }
 
 @media (max-width: 640px) {
+  .compositesPage {
+    --composites-stage-padding: 10px;
+    --composites-viewer-body-pad-x: 18px;
+    --composites-viewer-body-pad-top: 18px;
+    --composites-viewer-body-pad-bottom: 18px;
+  }
+
   .compositesPage.section {
-    padding-top: calc(34px * var(--composites-page-scale, 1));
-    padding-bottom: calc(34px * var(--composites-page-scale, 1));
+    padding-top: 34px;
+    padding-bottom: 34px;
   }
 
   .compositesModalBackdrop,
@@ -934,7 +968,10 @@
   }
 
   .compositesPage__viewerBody {
-    padding: 18px;
+    padding:
+      var(--composites-viewer-body-pad-top)
+      var(--composites-viewer-body-pad-x)
+      var(--composites-viewer-body-pad-bottom);
   }
 
   .compositesPage__relatedMedia {
@@ -950,7 +987,7 @@
 
   .publicCompositeStage__viewport {
     min-height: 280px;
-    padding: 10px;
+    padding: var(--composites-stage-padding);
   }
 
   .compositesPage__displayModeTopBar {
