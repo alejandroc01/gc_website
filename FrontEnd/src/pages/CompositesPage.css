@@ -37,6 +37,12 @@
   width: 100%;
 }
 
+.compositesPage__scaleCanvas > .compositePanel {
+  width: var(--composites-shell-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .compositesPage__header {
   width: var(--composites-shell-width);
   margin: 0 auto 24px;

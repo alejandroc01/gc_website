@@ -360,18 +360,320 @@
 }
 
 .displayMode--composites {
-  overflow: auto;
+  overflow: hidden;
 }
 
 .displayModeComposites {
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 2;
-  min-height: 100%;
-  padding: 56px 72px;
+  overflow: hidden;
+}
+
+.displayModeComposites__canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+}
+
+.displayModeComposites .compositesPage {
+  --composites-reference-image-width: 1920px;
+  --composites-viewer-body-pad-x: 56px;
+  --composites-viewer-body-pad-top: 42px;
+  --composites-viewer-body-pad-bottom: 46px;
+  width: 100%;
+  height: 100%;
+}
+
+.displayModeComposites .compositesPage .container,
+.displayModeComposites .compositesPage__scaleViewport,
+.displayModeComposites .compositesPage__scaleCanvas {
+  height: 100%;
+}
+
+.displayModeComposites .compositesPage__scaleCanvas {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  padding-top: 120px;
+}
+
+.displayModeComposites .compositesPage__scaleCanvas--hasViewer {
+  justify-content: center;
+  padding-top: 0;
 }
 
 .displayModeComposites .compositesPage__scaleViewport {
   width: 100%;
+}
+
+.displayModeComposites .compositesPage__displayModeTopBar {
+  margin-bottom: 36px;
+}
+
+.displayModeComposites .button.compositesPage__displayBackButton {
+  min-height: 108px;
+  padding: 30px 42px;
+  gap: 22px;
+  font-size: 30px;
+  border-width: 3px;
+}
+
+.displayModeComposites .compositesPage__displayBackIcon {
+  width: 38px;
+  height: 38px;
+}
+
+.displayModeComposites .compositesPage__controlStrip {
+  padding: 52px 56px 42px;
+}
+
+.displayModeComposites .compositesPage__yearRow {
+  grid-template-columns: minmax(220px, 1fr) minmax(420px, auto) minmax(220px, 1fr);
+  gap: 42px;
+}
+
+.displayModeComposites .compositesPage__yearBound {
+  font-size: 34px;
+}
+
+.displayModeComposites .compositesPage__selectedYear {
+  gap: 18px;
+}
+
+.displayModeComposites .compositesPage__selectedYearLabel {
+  font-size: 28px;
+}
+
+.displayModeComposites .compositesPage__selectedYearInput {
+  width: 420px;
+  min-height: 90px;
+  padding: 0 14px 14px;
+  border-bottom-width: 3px;
+  font-size: 78px;
+}
+
+.displayModeComposites .compositesPage__sliderShell {
+  height: 78px;
+  margin-top: 38px;
+}
+
+.displayModeComposites .compositesPage__sliderTrack,
+.displayModeComposites .compositesPage__sliderFill {
+  height: 16px;
+}
+
+.displayModeComposites .compositesPage__sliderThumb {
+  width: 58px;
+  height: 58px;
+  border-width: 5px;
+  box-shadow: 0 14px 32px rgba(38, 21, 56, 0.22);
+}
+
+.displayModeComposites .compositesPage__sliderShell:focus-within .compositesPage__sliderThumb {
+  box-shadow:
+    0 0 0 10px rgba(198, 162, 74, 0.24),
+    0 14px 32px rgba(38, 21, 56, 0.22);
+}
+
+.displayModeComposites .compositesPage__viewerBody {
+  padding: 42px 56px 46px;
+}
+
+.displayModeComposites .button.compositesPage__controlButton {
+  width: 118px;
+  height: 118px;
+  min-width: 118px;
+  border-width: 3px;
+  box-shadow: 0 12px 34px rgba(38, 21, 56, 0.22);
+}
+
+.displayModeComposites .compositesPage__relatedMedia {
+  top: 42px;
+  left: 42px;
+}
+
+.displayModeComposites .compositesPage__expandButton {
+  top: 42px;
+  right: 42px;
+}
+
+.displayModeComposites .compositesPage__relatedIcon,
+.displayModeComposites .compositesPage__expandIcon {
+  width: 54px;
+  height: 54px;
+}
+
+.displayModeComposites .compositesPage__relatedDropdown {
+  top: calc(100% + 24px);
+  width: 620px;
+  padding: 30px;
+  border-width: 3px;
+}
+
+.displayModeComposites .compositesPage__relatedDropdownHeader {
+  gap: 28px;
+  margin-bottom: 24px;
+}
+
+.displayModeComposites .compositesPage__relatedDropdownEyebrow {
+  font-size: 24px;
+}
+
+.displayModeComposites .compositesPage__relatedDropdownYear {
+  font-size: 28px;
+}
+
+.displayModeComposites .compositesPage__relatedDropdownList {
+  gap: 18px;
+}
+
+.displayModeComposites .compositesPage__relatedDropdownItem {
+  min-height: 118px;
+  padding: 24px 28px;
+  gap: 10px;
+  border-width: 2px;
+}
+
+.displayModeComposites .compositesPage__relatedDropdownAction {
+  font-size: 24px;
+}
+
+.displayModeComposites .compositesPage__relatedDropdownDetail,
+.displayModeComposites .compositesPage__relatedDropdownMessage {
+  font-size: 24px;
+}
+
+.displayModeComposites .compositesFullscreenBackdrop,
+.displayModeComposites .compositesPage__relatedModalBackdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.displayModeComposites .compositesFullscreen {
+  width: 100%;
+  height: 100%;
+}
+
+.displayModeComposites .publicCompositeStage--fullscreen {
+  width: 100%;
+  height: 100%;
+}
+
+.displayModeComposites .publicCompositeStage--fullscreen .publicCompositeStage__viewport {
+  width: 100%;
+  height: 100%;
+}
+
+.displayModeComposites .compositesFullscreen__closeButton {
+  position: absolute;
+  top: 56px;
+  right: 56px;
+  width: 132px;
+  height: 132px;
+  min-width: 132px;
+  font-size: 44px;
+  font-weight: 700;
+  border-width: 3px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.28);
+}
+
+.displayModeComposites .compositesPage__relatedModalBackdrop {
+  padding: 112px;
+}
+
+.displayModeComposites .compositesPage__relatedModal {
+  width: min(3200px, 100%);
+  max-height: 100%;
+  gap: 38px;
+  padding: 52px;
+  border-width: 3px;
+  box-shadow: 0 36px 100px rgba(0, 0, 0, 0.42);
+}
+
+.displayModeComposites .compositesPage__relatedModal--history {
+  width: min(3080px, 100%);
+  height: 100%;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.displayModeComposites .compositesPage__relatedModalHeader,
+.displayModeComposites .compositesPage__relatedModalFooter {
+  gap: 34px;
+}
+
+.displayModeComposites .button.compositesPage__relatedBackButton,
+.displayModeComposites .button.compositesPage__relatedModalAction {
+  min-height: 104px;
+  padding: 30px 42px;
+  gap: 22px;
+  border-width: 3px;
+  font-size: 30px;
+}
+
+.displayModeComposites .compositesPage__relatedBackIcon {
+  width: 38px;
+  height: 38px;
+}
+
+.displayModeComposites .compositesPage__relatedModalEyebrow {
+  margin-bottom: 14px;
+  font-size: 28px;
+}
+
+.displayModeComposites .compositesPage__relatedModalTitle {
+  font-size: 72px;
+}
+
+.displayModeComposites .compositesPage__relatedModalStatus {
+  font-size: 30px;
+}
+
+.displayModeComposites .compositesPage__relatedScrapbookFrame {
+  grid-template-columns: minmax(360px, 0.22fr) minmax(0, 1fr);
+  border-width: 3px;
+}
+
+.displayModeComposites .compositesPage__relatedScrapbookMeta {
+  padding: 56px 52px 44px;
+}
+
+.displayModeComposites .compositesPage__relatedScrapbookYear {
+  margin-bottom: 22px;
+  font-size: 28px;
+}
+
+.displayModeComposites .compositesPage__relatedScrapbookLabel {
+  font-size: 74px;
+}
+
+.displayModeComposites .compositesPage__relatedScrapbookImagePanel {
+  padding: 48px;
+}
+
+.displayModeComposites .compositesPage__relatedScrapbookImage {
+  box-shadow: 0 26px 52px rgba(63, 45, 24, 0.24);
+}
+
+.displayModeComposites .compositesPage__relatedScrapbookArrow {
+  width: 152px;
+  min-width: 152px;
+  font-size: 7rem;
+}
+
+.displayModeComposites .compositesPage__relatedHistoryFrame {
+  height: 100%;
+  min-height: 0;
+  border-width: 3px;
+}
+
+.displayModeComposites .compositesPage__relatedHistoryViewer {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
 }
 
 @media (max-width: 768px) {
@@ -396,6 +698,6 @@
   }
 
   .displayModeComposites {
-    padding: 26px 18px;
+    padding: 0;
   }
 }

@@ -8,7 +8,7 @@ import { getComposites, getHistories, getScrapbooks } from '../api/composites.js
 import '../styles/composites.css';
 import './CompositesPage.css';
 
-const PDF_VIEWER_OPTIONS = '#toolbar=0&navpanes=0&scrollbar=0';
+const PDF_VIEWER_OPTIONS = '#toolbar=0&navpanes=0&scrollbar=0&view=FitH&zoom=page-width';
 
 export default function CompositesPage({ displayMode = false, onBack = null }) {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -170,6 +170,7 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
     ],
     [matchingHistories, matchingScrapbooks],
   );
+  const hasCompositeViewer = !isLoading && !pageError && Boolean(selectedComposite);
 
   useEffect(() => {
     if (!selectedYear || requestedYear === selectedYear) {
@@ -396,7 +397,12 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
     >
       <div className="container">
         <div className="compositesPage__scaleViewport">
-          <div className="compositesPage__scaleCanvas">
+          <div
+            className={[
+              'compositesPage__scaleCanvas',
+              hasCompositeViewer ? 'compositesPage__scaleCanvas--hasViewer' : '',
+            ].filter(Boolean).join(' ')}
+          >
             {displayMode ? (
               <div className="compositesPage__displayModeTopBar">
                 <button
@@ -405,7 +411,7 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
                   onClick={() => onBack?.()}
                 >
                   <BackIcon className="compositesPage__displayBackIcon" />
-                  Back to Display Home
+                  Return to Home
                 </button>
               </div>
             ) : (

@@ -13,6 +13,8 @@ const CONTROLS_HIDE_MS = 2500;
 const PRELOAD_AHEAD_COUNT = 5;
 const RENDER_TRAILING_COUNT = 1;
 const RENDER_AHEAD_COUNT = 1;
+const DISPLAY_MODE_REFERENCE_WIDTH = 3840;
+const DISPLAY_MODE_REFERENCE_HEIGHT = 2160;
 const SCRAPBOOK_RIGHTS_URL = 'https://rightsstatements.org/page/InC-RUU/1.0/?language=en';
 const SCRAPBOOK_RIGHTS_NOTICE = 'This Item is protected by copyright and/or related rights. However, for this Item, either (a) no rights-holder(s) have been identified or (b) one or more rights-holder(s) have been identified but none have been located. You are free to use this Item in any way that is permitted by the copyright and related rights legislation that applies to your use.';
 
@@ -20,6 +22,7 @@ export default function DisplayModePage() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [controlsVisible, setControlsVisible] = useState(true);
   const [displayImages, setDisplayImages] = useState([]);
+  const [displayMetrics, setDisplayMetrics] = useState(getDisplayMetrics);
   const hideControlsTimeoutRef = useRef(null);
   const idleTimeoutRef = useRef(null);
   const loadedImageUrlsRef = useRef(new Set());
@@ -36,6 +39,10 @@ export default function DisplayModePage() {
   const isHomepageDisplayMode = currentMode === 'display' && currentDisplayPage === 'home';
   const isCompositesDisplayMode = currentMode === 'display' && currentDisplayPage === 'composites';
   const isFullscreenDisplayMode = isSlideshowMode || isHomepageDisplayMode || isCompositesDisplayMode;
+  const displaySurface = useMemo(
+    () => getDisplaySurface(displayMetrics),
+    [displayMetrics],
+  );
 
   const imageCount = displayImages.length;
   const hasImages = imageCount > 0;
@@ -199,6 +206,39 @@ export default function DisplayModePage() {
   }, [exitDisplayMode, isFullscreenDisplayMode]);
 
   useEffect(() => {
+    if (!isCompositesDisplayMode) {
+      return undefined;
+    }
+
+    const visualViewport = window.visualViewport;
+
+    const updateDisplayMetrics = () => {
+      setDisplayMetrics((currentMetrics) => {
+        const nextMetrics = getDisplayMetrics();
+
+        if (
+          currentMetrics.viewportWidth === nextMetrics.viewportWidth
+          && currentMetrics.viewportHeight === nextMetrics.viewportHeight
+          && currentMetrics.devicePixelRatio === nextMetrics.devicePixelRatio
+        ) {
+          return currentMetrics;
+        }
+
+        return nextMetrics;
+      });
+    };
+
+    updateDisplayMetrics();
+    window.addEventListener('resize', updateDisplayMetrics);
+    visualViewport?.addEventListener('resize', updateDisplayMetrics);
+
+    return () => {
+      window.removeEventListener('resize', updateDisplayMetrics);
+      visualViewport?.removeEventListener('resize', updateDisplayMetrics);
+    };
+  }, [isCompositesDisplayMode]);
+
+  useEffect(() => {
     if (!isFullscreenDisplayMode) {
       return undefined;
     }
@@ -298,10 +338,19 @@ export default function DisplayModePage() {
         aria-label="Composite display mode"
       >
         <div className="displayModeComposites">
-          <CompositesPage
-            displayMode
-            onBack={() => navigate('/display-mode?mode=display')}
-          />
+          <div
+            className="displayModeComposites__canvas"
+            style={{
+              width: `${DISPLAY_MODE_REFERENCE_WIDTH}px`,
+              height: `${DISPLAY_MODE_REFERENCE_HEIGHT}px`,
+              transform: `translate(-50%, -50%) scale(${displaySurface.canvasScale})`,
+            }}
+          >
+            <CompositesPage
+              displayMode
+              onBack={() => navigate('/display-mode?mode=display')}
+            />
+          </div>
         </div>
       </section>
     );
@@ -366,6 +415,39 @@ function getDisplayPage(search) {
 function getDisplaySource(search) {
   const params = new URLSearchParams(search);
   return params.get('source') === 'idle' ? 'idle' : 'manual';
+}
+
+function getDisplayMetrics() {
+  if (typeof window === 'undefined') {
+    return {
+      viewportWidth: 1440,
+      viewportHeight: 900,
+      devicePixelRatio: 1,
+    };
+  }
+
+  const visualViewport = window.visualViewport;
+
+  return {
+    viewportWidth: Math.round(visualViewport?.width || window.innerWidth || 1440),
+    viewportHeight: Math.round(visualViewport?.height || window.innerHeight || 900),
+    devicePixelRatio: Number((window.devicePixelRatio || 1).toFixed(3)),
+  };
+}
+
+function getDisplaySurface({ viewportWidth, viewportHeight, devicePixelRatio }) {
+  const densityScale = Math.max(devicePixelRatio || 1, 1);
+  const physicalViewportWidth = Math.round(viewportWidth * densityScale);
+  const physicalViewportHeight = Math.round(viewportHeight * densityScale);
+  const referenceScale = Math.min(
+    physicalViewportWidth / DISPLAY_MODE_REFERENCE_WIDTH,
+    physicalViewportHeight / DISPLAY_MODE_REFERENCE_HEIGHT,
+    1,
+  );
+
+  return {
+    canvasScale: Number((referenceScale / densityScale).toFixed(5)),
+  };
 }
 
 function getRenderedImages(imageUrls, currentIndex) {
