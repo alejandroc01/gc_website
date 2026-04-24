@@ -15,12 +15,7 @@ export default function HomepageDisplayMode() {
   );
   const displayCards = useMemo(
     () => ACTION_CARDS.map((card) => (
-      card.key === 'composites'
-        ? {
-          ...card,
-          to: '/display-mode?mode=display&page=composites',
-        }
-        : card
+      getDisplayCardOverride(card) || card
     )),
     [],
   );
@@ -79,6 +74,24 @@ export default function HomepageDisplayMode() {
       </div>
     </section>
   );
+}
+
+function getDisplayCardOverride(card) {
+  if (card.key === 'composites') {
+    return {
+      ...card,
+      to: '/display-mode?mode=display&page=composites',
+    };
+  }
+
+  if (card.key === 'oral-histories') {
+    return {
+      ...card,
+      to: '/display-mode?mode=display&page=oral-histories',
+    };
+  }
+
+  return null;
 }
 
 function getDisplayMetrics() {

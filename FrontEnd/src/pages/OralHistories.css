@@ -263,6 +263,673 @@
   color: var(--muted);
 }
 
+.oralHistories--displayMode {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 82px 180px 116px;
+  background: transparent;
+  color: #f5df8f;
+}
+
+.oralHistories--displayMode::before {
+  content: none;
+}
+
+.oralHistories__displayGrid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 2060px) 1300px;
+  gap: 120px;
+  width: 100%;
+  height: 100%;
+  align-items: stretch;
+}
+
+.oralHistories__displayStage {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-top: 138px;
+}
+
+.oralHistories__displayIntro {
+  max-width: 1800px;
+  margin: 0 auto 54px;
+  text-align: center;
+}
+
+.oralHistories__displayEyebrow,
+.oralHistories__displaySummaryLabel,
+.oralHistories__displayPlaylistTitle {
+  font-family: var(--font-smallcaps);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.oralHistories__displayEyebrow {
+  margin: 0 0 22px;
+  font-size: 36px;
+  color: #e8c567;
+}
+
+.oralHistories__displayTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 218px;
+  line-height: 0.88;
+  color: #f7df8b;
+  text-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+}
+
+.oralHistories__displayLede {
+  max-width: 1680px;
+  margin: 52px auto 0;
+  font-family: var(--font-display);
+  font-size: 43px;
+  line-height: 1.35;
+  color: #e5c983;
+}
+
+.oralHistories__displayMediaFrame {
+  position: relative;
+  overflow: hidden;
+  border: 5px solid #d6b654;
+  border-radius: 12px;
+  background: #09050e;
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.36);
+}
+
+.oralHistories--displayVideoFullscreen .oralHistories__displayMediaFrame {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  background: #050308;
+  cursor: none;
+}
+
+.oralHistories--displayVideoFullscreen .oralHistories__displayMediaFrame--controlsVisible {
+  cursor: default;
+}
+
+.oralHistories__displayVideo {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: #09050e;
+}
+
+.oralHistories--displayVideoFullscreen .oralHistories__displayVideo {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  cursor: inherit;
+  object-fit: contain;
+}
+
+.oralHistories__displayVideoControls {
+  position: absolute;
+  left: 48px;
+  right: 48px;
+  bottom: 34px;
+  display: grid;
+  grid-template-columns: 108px auto minmax(0, 1fr) auto 96px 96px;
+  gap: 28px;
+  align-items: center;
+  padding: 24px 30px;
+  border: 3px solid rgba(232, 197, 103, 0.34);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(8, 4, 14, 0.72), rgba(8, 4, 14, 0.88));
+  box-shadow: 0 22px 58px rgba(0, 0, 0, 0.36);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(18px);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.oralHistories__displayMediaFrame--controlsVisible .oralHistories__displayVideoControls {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.oralHistories__displayVideoButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 86px;
+  border: 3px solid rgba(232, 197, 103, 0.64);
+  border-radius: 999px;
+  background: rgba(26, 12, 42, 0.88);
+  color: #fff8e8;
+  cursor: pointer;
+}
+
+.oralHistories__displayVideoButton:hover:not(:disabled),
+.oralHistories__displayVideoButton:focus-visible {
+  background: #d6b654;
+  color: #120d18;
+  outline: 8px solid rgba(232, 197, 103, 0.28);
+  outline-offset: 4px;
+}
+
+.oralHistories__displayVideoButton:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.oralHistories__displayVideoButton--play {
+  width: 96px;
+  min-width: 96px;
+  padding: 0;
+}
+
+.oralHistories__displayVideoButton--icon {
+  width: 96px;
+  min-width: 96px;
+  padding: 0;
+}
+
+.oralHistories__displayVideoButtonGlyph {
+  position: relative;
+  display: block;
+  width: 38px;
+  height: 44px;
+}
+
+.oralHistories__displayVideoButtonGlyph--play {
+  width: 0;
+  height: 0;
+  margin-left: 8px;
+  border-top: 24px solid transparent;
+  border-bottom: 24px solid transparent;
+  border-left: 34px solid currentColor;
+}
+
+.oralHistories__displayVideoButtonGlyph--pause::before,
+.oralHistories__displayVideoButtonGlyph--pause::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 12px;
+  background: currentColor;
+}
+
+.oralHistories__displayVideoButtonGlyph--pause::before {
+  left: 3px;
+}
+
+.oralHistories__displayVideoButtonGlyph--pause::after {
+  right: 3px;
+}
+
+.oralHistories__displayVideoIcon {
+  display: block;
+  width: 50px;
+  height: 50px;
+  filter: invert(99%) sepia(6%) saturate(594%) hue-rotate(321deg) brightness(104%) contrast(102%);
+  pointer-events: none;
+}
+
+.oralHistories__displayVideoButton:hover:not(:disabled) .oralHistories__displayVideoIcon,
+.oralHistories__displayVideoButton:focus-visible .oralHistories__displayVideoIcon {
+  filter: invert(7%) sepia(29%) saturate(1308%) hue-rotate(236deg) brightness(93%) contrast(98%);
+}
+
+.oralHistories__displayVideoTime {
+  min-width: 92px;
+  color: #fff8e8;
+  font: 700 30px/1 var(--font-body);
+  text-align: center;
+}
+
+.oralHistories__displayVideoRange {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 58px;
+  background: transparent;
+  accent-color: #d6b654;
+  cursor: pointer;
+}
+
+.oralHistories__displayVideoRange:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.oralHistories__displayVideoRange::-webkit-slider-runnable-track {
+  height: 18px;
+  border-radius: 999px;
+  background:
+    linear-gradient(
+      90deg,
+      #d6b654 var(--oral-history-display-progress, 0%),
+      rgba(255, 248, 232, 0.36) var(--oral-history-display-progress, 0%)
+    );
+}
+
+.oralHistories__displayVideoRange::-webkit-slider-thumb {
+  width: 52px;
+  height: 52px;
+  margin-top: -17px;
+  border: 5px solid #fff8e8;
+  border-radius: 999px;
+  background: #d6b654;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.34);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.oralHistories__displayVideoRange::-moz-range-track {
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(255, 248, 232, 0.36);
+}
+
+.oralHistories__displayVideoRange::-moz-range-progress {
+  height: 18px;
+  border-radius: 999px;
+  background: #d6b654;
+}
+
+.oralHistories__displayVideoRange::-moz-range-thumb {
+  width: 42px;
+  height: 42px;
+  border: 5px solid #fff8e8;
+  border-radius: 999px;
+  background: #d6b654;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.34);
+}
+
+.oralHistories__displayFooter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 86px;
+}
+
+.oralHistories__displayPrompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 44px;
+  width: min(1620px, 100%);
+  min-width: 0;
+}
+
+.oralHistories__displayPromptLine {
+  display: block;
+  flex: 1 1 auto;
+  height: 2px;
+  max-width: 540px;
+  background: rgba(232, 197, 103, 0.48);
+}
+
+.oralHistories__displayPromptLine:first-child {
+  background: linear-gradient(90deg, transparent, rgba(232, 197, 103, 0.62));
+}
+
+.oralHistories__displayPromptLine:last-child {
+  background: linear-gradient(90deg, rgba(232, 197, 103, 0.62), transparent);
+}
+
+.oralHistories__displayPromptText {
+  flex: 0 0 auto;
+  font-family: var(--font-smallcaps);
+  font-size: 32px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #e8c567;
+}
+
+.oralHistories__displayHomeButton {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 3;
+  min-width: 300px;
+  min-height: 96px;
+  padding: 0 34px;
+  border: 3px solid rgba(232, 197, 103, 0.7);
+  border-radius: 8px;
+  background: rgba(250, 242, 219, 0.94);
+  color: #231433;
+  font: 700 30px/1 var(--font-body);
+  cursor: pointer;
+  box-shadow: 0 20px 42px rgba(0, 0, 0, 0.22);
+}
+
+.oralHistories__displayHomeButton:hover,
+.oralHistories__displayHomeButton:focus-visible {
+  background: #fff8e8;
+  outline: 8px solid rgba(232, 197, 103, 0.28);
+  outline-offset: 4px;
+}
+
+.oralHistories__displayPanel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 5px solid #d6b654;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 251, 238, 0.98), rgba(248, 239, 216, 0.98)),
+    #fff8e8;
+  color: #24162f;
+  box-shadow: 0 34px 90px rgba(0, 0, 0, 0.34);
+}
+
+.oralHistories__displaySummary {
+  border-bottom: 3px solid rgba(181, 138, 41, 0.36);
+}
+
+.oralHistories__displaySummaryRow {
+  padding: 62px 78px 54px;
+}
+
+.oralHistories__displaySummaryRow + .oralHistories__displaySummaryRow {
+  border-top: 3px solid rgba(181, 138, 41, 0.28);
+}
+
+.oralHistories__displaySummaryLabel {
+  display: block;
+  margin-bottom: 18px;
+  font-size: 28px;
+  color: #b18529;
+}
+
+.oralHistories__displaySummaryValue {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: 500;
+  font-size: 58px;
+  line-height: 1.1;
+  color: #24162f;
+}
+
+.oralHistories__displayFilters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 48px;
+  padding: 48px 78px 44px;
+  position: relative;
+  z-index: 4;
+}
+
+.oralHistories__displayDropdown {
+  position: relative;
+  min-width: 0;
+}
+
+.oralHistories__displayDropdownButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  width: 100%;
+  min-height: 126px;
+  padding: 0 34px;
+  border: 0;
+  border-radius: 12px;
+  background: #1a0c2a;
+  color: #fff8e8;
+  font: 700 31px/1.1 var(--font-body);
+  text-align: left;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.oralHistories__displayDropdownButton:hover,
+.oralHistories__displayDropdownButton:focus-visible,
+.oralHistories__displayDropdown--open .oralHistories__displayDropdownButton {
+  outline: 8px solid rgba(198, 162, 74, 0.32);
+  outline-offset: 6px;
+}
+
+.oralHistories__displayDropdownLabel {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oralHistories__displayDropdownArrow {
+  display: block;
+  width: 28px;
+  height: 28px;
+  border-right: 8px solid currentColor;
+  border-bottom: 8px solid currentColor;
+  transform: translateY(-20%) rotate(45deg);
+  transition: transform 160ms ease;
+}
+
+.oralHistories__displayDropdown--open .oralHistories__displayDropdownArrow {
+  transform: translateY(20%) rotate(225deg);
+}
+
+.oralHistories__displayDropdownMenu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  right: 0;
+  z-index: 12;
+  overflow: hidden;
+  border: 3px solid rgba(214, 182, 84, 0.64);
+  border-radius: 4px;
+  background: #1a0c2a;
+  box-shadow: 0 22px 54px rgba(10, 5, 16, 0.32);
+}
+
+.oralHistories__displayDropdownOption {
+  display: block;
+  width: 100%;
+  min-height: 86px;
+  padding: 0 34px;
+  border: 0;
+  background: #1a0c2a;
+  color: #fff8e8;
+  font: 400 38px/1.1 var(--font-body);
+  text-align: left;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.oralHistories__displayDropdownOption:hover,
+.oralHistories__displayDropdownOption:focus-visible {
+  background: #f3e6bd;
+  color: #120d18;
+  outline: none;
+}
+
+.oralHistories__displayDropdownOption--selected {
+  background: #d6b654;
+  color: #120d18;
+}
+
+.oralHistories__displayFilter {
+  position: relative;
+  min-width: 0;
+}
+
+.oralHistories__displayFilter::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  right: 38px;
+  width: 28px;
+  height: 28px;
+  border-right: 8px solid #fff8e8;
+  border-bottom: 8px solid #fff8e8;
+  pointer-events: none;
+  transform: translateY(-72%) rotate(45deg);
+}
+
+.oralHistories__displayFilterLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.oralHistories__displayFilterInput {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  min-height: 126px;
+  padding: 0 96px 0 34px;
+  border: 0;
+  border-radius: 12px;
+  background: #1a0c2a;
+  color: #fff8e8;
+  font: 700 31px/1.1 var(--font-body);
+  text-transform: uppercase;
+  cursor: pointer;
+  accent-color: #d6b654;
+}
+
+.oralHistories__displayFilterInput option {
+  background: #1a0c2a;
+  color: #fff8e8;
+}
+
+.oralHistories__displayFilterInput option:checked {
+  background: #d6b654;
+  color: #120d18;
+}
+
+.oralHistories__displayFilterInput option:hover,
+.oralHistories__displayFilterInput option:focus {
+  background: #e8c567;
+  color: #120d18;
+}
+
+.oralHistories__displayFilterInput:focus-visible {
+  outline: 8px solid rgba(198, 162, 74, 0.32);
+  outline-offset: 6px;
+}
+
+.oralHistories__displayPlaylistHeader {
+  padding: 10px 78px 28px;
+}
+
+.oralHistories__displayPlaylistTitle {
+  margin: 0;
+  font-size: 34px;
+  font-weight: 600;
+  color: #b18529;
+}
+
+.oralHistories__displayMessage {
+  margin: 0 78px 34px;
+  color: #6f5f47;
+  font-size: 32px;
+  line-height: 1.4;
+}
+
+.oralHistories__displayPlaylistList {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 42px 50px;
+  scrollbar-gutter: stable;
+}
+
+.oralHistories__displayPlaylistItem {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 28px;
+  align-items: center;
+  width: 100%;
+  min-height: 168px;
+  padding: 22px 34px 22px 22px;
+  border: 3px solid rgba(181, 138, 41, 0.22);
+  border-radius: 4px;
+  background: rgba(255, 251, 240, 0.78);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.oralHistories__displayPlaylistItem:hover:not(:disabled),
+.oralHistories__displayPlaylistItem:focus-visible {
+  border-color: rgba(181, 138, 41, 0.55);
+  background: #fff8e8;
+  box-shadow: inset 10px 0 0 #d6b654;
+  outline: none;
+}
+
+.oralHistories__displayPlaylistItem--active {
+  border-color: rgba(181, 138, 41, 0.62);
+  background: rgba(235, 215, 155, 0.24);
+  box-shadow: inset 10px 0 0 #d6b654;
+}
+
+.oralHistories__displayPlaylistItem:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.oralHistories__displayPlaylistNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 112px;
+  height: 112px;
+  border: 3px solid #d6b654;
+  border-radius: 4px;
+  background: #1a0c2a;
+  color: #e8c567;
+  font-family: var(--font-smallcaps);
+  font-size: 44px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.oralHistories__displayPlaylistNumber--full {
+  font-size: 28px;
+  letter-spacing: 0.04em;
+}
+
+.oralHistories__displayPlaylistText {
+  min-width: 0;
+  font-family: var(--font-display);
+  font-size: 42px;
+  line-height: 1.12;
+  color: #24162f;
+}
+
+.oralHistories__displayPlaylistSubtitle {
+  display: block;
+  margin-top: 12px;
+  overflow: hidden;
+  color: #5f526b;
+  font-family: var(--font-body);
+  font-size: 25px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (max-width: 960px) {
   .oralHistories__heroGrid {
     grid-template-columns: 1fr;

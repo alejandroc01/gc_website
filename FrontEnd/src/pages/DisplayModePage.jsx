@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { getComposites, getScrapbooks } from '../api/composites.js';
 import HomepageDisplayMode from '../components/DisplayMode/HomepageDisplayMode.jsx';
 import CompositesPage from './CompositesPage.jsx';
+import OralHistories from './OralHistories.jsx';
 import { exitFullscreenIfActive, isFullscreenActive, requestFullscreenForElement } from '../utils/fullscreen.js';
 import './DisplayModePage.css';
 
@@ -38,7 +39,10 @@ export default function DisplayModePage() {
   const isIdleSlideshowMode = isSlideshowMode && currentDisplaySource === 'idle';
   const isHomepageDisplayMode = currentMode === 'display' && currentDisplayPage === 'home';
   const isCompositesDisplayMode = currentMode === 'display' && currentDisplayPage === 'composites';
-  const isFullscreenDisplayMode = isSlideshowMode || isHomepageDisplayMode || isCompositesDisplayMode;
+  const isOralHistoriesDisplayMode = currentMode === 'display' && currentDisplayPage === 'oral-histories';
+  const isScaledContentDisplayMode = isCompositesDisplayMode || isOralHistoriesDisplayMode;
+  const isFullscreenDisplayMode =
+    isSlideshowMode || isHomepageDisplayMode || isScaledContentDisplayMode;
   const displaySurface = useMemo(
     () => getDisplaySurface(displayMetrics),
     [displayMetrics],
@@ -206,7 +210,7 @@ export default function DisplayModePage() {
   }, [exitDisplayMode, isFullscreenDisplayMode]);
 
   useEffect(() => {
-    if (!isCompositesDisplayMode) {
+    if (!isScaledContentDisplayMode) {
       return undefined;
     }
 
@@ -236,7 +240,7 @@ export default function DisplayModePage() {
       window.removeEventListener('resize', updateDisplayMetrics);
       visualViewport?.removeEventListener('resize', updateDisplayMetrics);
     };
-  }, [isCompositesDisplayMode]);
+  }, [isScaledContentDisplayMode]);
 
   useEffect(() => {
     if (!isFullscreenDisplayMode) {
@@ -356,6 +360,32 @@ export default function DisplayModePage() {
     );
   }
 
+  if (isOralHistoriesDisplayMode) {
+    return (
+      <section
+        ref={displayModeRef}
+        className="displayMode displayMode--oralHistories"
+        aria-label="Oral histories display mode"
+      >
+        <div className="displayModeOralHistories">
+          <div
+            className="displayModeOralHistories__canvas"
+            style={{
+              width: `${DISPLAY_MODE_REFERENCE_WIDTH}px`,
+              height: `${DISPLAY_MODE_REFERENCE_HEIGHT}px`,
+              transform: `translate(-50%, -50%) scale(${displaySurface.canvasScale})`,
+            }}
+          >
+            <OralHistories
+              displayMode
+              onBack={() => navigate('/display-mode?mode=display')}
+            />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (!hasImages) {
     return (
       <section ref={displayModeRef} className="displayMode displayMode--empty">
@@ -409,7 +439,13 @@ function getDisplayMode(search) {
 
 function getDisplayPage(search) {
   const params = new URLSearchParams(search);
-  return params.get('page') === 'composites' ? 'composites' : 'home';
+  const page = params.get('page');
+
+  if (page === 'composites' || page === 'oral-histories') {
+    return page;
+  }
+
+  return 'home';
 }
 
 function getDisplaySource(search) {

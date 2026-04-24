@@ -1,6 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { getOralHistories } from '../api/composites.js';
+import fullscreenIconUrl from '../assets/icons/oral-history-fullscreen.svg';
+import muteIconUrl from '../assets/icons/oral-history-mute.svg';
+import volumeIconUrl from '../assets/icons/oral-history-volume.svg';
 import './OralHistories.css';
 
 const preferredIntervieweeOrder = ['doug petty', 'randy minix', 'tom dalzell'];
@@ -12,6 +15,7 @@ const defaultOralHistoryCategories = [
   'Alumni, Giving & GCAF',
   'Military, Career & Personal Stories',
 ];
+const DISPLAY_VIDEO_CONTROLS_HIDE_MS = 2800;
 
 /**
  * OralHistories
@@ -19,13 +23,26 @@ const defaultOralHistoryCategories = [
  * Landing page for oral history interviews.
  * The page now loads uploaded oral history videos from backend storage.
  */
-export default function OralHistories() {
+export default function OralHistories({ displayMode = false, onBack = null }) {
   const [episodes, setEpisodes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [activeInterviewee, setActiveInterviewee] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
   const [activeOralHistoryId, setActiveOralHistoryId] = useState('');
+  const [openDisplayDropdown, setOpenDisplayDropdown] = useState('');
+  const [areDisplayVideoControlsVisible, setAreDisplayVideoControlsVisible] = useState(true);
+  const [isDisplayVideoFullscreen, setIsDisplayVideoFullscreen] = useState(false);
+  const [displayPlaybackState, setDisplayPlaybackState] = useState({
+    currentTime: 0,
+    duration: 0,
+    isMuted: false,
+    isPlaying: false,
+  });
+  const displayFiltersRef = useRef(null);
+  const displayVideoRef = useRef(null);
+  const displayVideoControlsTimeoutRef = useRef(null);
+  const pendingDisplayAutoplayIdRef = useRef('');
 
   useEffect(() => {
     let isActive = true;
@@ -115,6 +132,37 @@ export default function OralHistories() {
   }, [activeCategory, categories]);
 
   useEffect(() => {
+    if (!displayMode || !openDisplayDropdown) {
+      return undefined;
+    }
+
+    const handlePointerDown = (event) => {
+      const target = event.target;
+
+      if (displayFiltersRef.current && target && !displayFiltersRef.current.contains(target)) {
+        setOpenDisplayDropdown('');
+      }
+    };
+
+    const handleKeyDown = (event) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+
+      event.preventDefault();
+      setOpenDisplayDropdown('');
+    };
+
+    document.addEventListener('pointerdown', handlePointerDown);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [displayMode, openDisplayDropdown]);
+
+  useEffect(() => {
     if (visibleEpisodes.length === 0) {
       setActiveOralHistoryId('');
       return;
@@ -142,6 +190,484 @@ export default function OralHistories() {
     [activeCategory, activeInterviewee, visibleEpisodes],
   );
   const activePoster = useOralHistoryPoster(activeEpisode, activeInterviewee || activeEpisode?.interviewee);
+  const activeIntervieweeLabel = activeInterviewee || activeEpisode?.interviewee || 'No interview selected';
+  const activeCategoryLabel = getActiveCategoryLabel(activeEpisode, activeInterviewee);
+  const displayIntervieweeOptions = useMemo(
+    () => [
+      { value: '', label: 'All Interviews' },
+      ...interviewees.map((interviewee) => ({ value: interviewee, label: interviewee })),
+    ],
+    [interviewees],
+  );
+  const displayCategoryOptions = useMemo(
+    () => [
+      { value: '', label: 'All Categories' },
+      ...categories.map((category) => ({ value: category, label: category })),
+    ],
+    [categories],
+  );
+
+  const showDisplayVideoControls = () => {
+    if (!displayMode) {
+      return;
+    }
+
+    setAreDisplayVideoControlsVisible(true);
+
+    if (displayVideoControlsTimeoutRef.current) {
+      window.clearTimeout(displayVideoControlsTimeoutRef.current);
+    }
+
+    displayVideoControlsTimeoutRef.current = window.setTimeout(() => {
+      setAreDisplayVideoControlsVisible(false);
+    }, DISPLAY_VIDEO_CONTROLS_HIDE_MS);
+  };
+
+  const updateDisplayPlaybackState = () => {
+    const videoElement = displayVideoRef.current;
+
+    if (!videoElement) {
+      return;
+    }
+
+    const duration = Number.isFinite(videoElement.duration) ? videoElement.duration : 0;
+
+    setDisplayPlaybackState({
+      currentTime: Number.isFinite(videoElement.currentTime) ? videoElement.currentTime : 0,
+      duration,
+      isMuted: videoElement.muted || videoElement.volume === 0,
+      isPlaying: !videoElement.paused && !videoElement.ended,
+    });
+  };
+
+  useEffect(() => {
+    if (!displayMode) {
+      return undefined;
+    }
+
+    const pendingEpisodeId = pendingDisplayAutoplayIdRef.current;
+    const activeEpisodeId = String(activeEpisode?.oralHistoryId || '');
+
+    if (!pendingEpisodeId || pendingEpisodeId !== activeEpisodeId) {
+      return undefined;
+    }
+
+    const videoElement = displayVideoRef.current;
+
+    if (!videoElement) {
+      return undefined;
+    }
+
+    let isCancelled = false;
+    const playPendingVideo = () => {
+      if (isCancelled || pendingDisplayAutoplayIdRef.current !== activeEpisodeId) {
+        return;
+      }
+
+      pendingDisplayAutoplayIdRef.current = '';
+      void videoElement.play().catch(() => {});
+    };
+
+    if (videoElement.readyState >= 2) {
+      playPendingVideo();
+      return undefined;
+    }
+
+    videoElement.addEventListener('loadeddata', playPendingVideo, { once: true });
+    videoElement.addEventListener('canplay', playPendingVideo, { once: true });
+
+    return () => {
+      isCancelled = true;
+      videoElement.removeEventListener('loadeddata', playPendingVideo);
+      videoElement.removeEventListener('canplay', playPendingVideo);
+    };
+  }, [activeEpisode?.oralHistoryId, displayMode]);
+
+  useEffect(() => {
+    if (!displayMode) {
+      return undefined;
+    }
+
+    showDisplayVideoControls();
+
+    return () => {
+      if (displayVideoControlsTimeoutRef.current) {
+        window.clearTimeout(displayVideoControlsTimeoutRef.current);
+      }
+    };
+  }, [displayMode, activeEpisode?.oralHistoryId]);
+
+  useEffect(() => {
+    if (!displayMode) {
+      return;
+    }
+
+    setDisplayPlaybackState((currentState) => ({
+      ...currentState,
+      currentTime: 0,
+      duration: 0,
+      isPlaying: false,
+    }));
+  }, [activeEpisode?.oralHistoryId, displayMode]);
+
+  const handleDisplayEpisodeSelect = (episode) => {
+    const nextEpisodeId = String(episode?.oralHistoryId || '');
+
+    if (!episode?.videoUrl || !nextEpisodeId) {
+      return;
+    }
+
+    pendingDisplayAutoplayIdRef.current = nextEpisodeId;
+    setActiveOralHistoryId(nextEpisodeId);
+
+    if (nextEpisodeId === String(activeEpisode?.oralHistoryId || '')) {
+      window.requestAnimationFrame(() => {
+        pendingDisplayAutoplayIdRef.current = '';
+        void displayVideoRef.current?.play().catch(() => {});
+      });
+    }
+  };
+
+  const toggleDisplayPlayback = () => {
+    const videoElement = displayVideoRef.current;
+
+    if (!videoElement || !activeEpisode?.videoUrl) {
+      return;
+    }
+
+    if (videoElement.paused || videoElement.ended) {
+      showDisplayVideoControls();
+      void videoElement.play().catch(() => {});
+      return;
+    }
+
+    videoElement.pause();
+    showDisplayVideoControls();
+  };
+
+  const handleDisplaySeek = (event) => {
+    const videoElement = displayVideoRef.current;
+    const nextTime = Number(event.target.value);
+
+    if (!videoElement || !Number.isFinite(nextTime)) {
+      return;
+    }
+
+    videoElement.currentTime = nextTime;
+    updateDisplayPlaybackState();
+    showDisplayVideoControls();
+  };
+
+  const toggleDisplayMute = () => {
+    const videoElement = displayVideoRef.current;
+
+    if (!videoElement) {
+      return;
+    }
+
+    videoElement.muted = !videoElement.muted;
+    updateDisplayPlaybackState();
+    showDisplayVideoControls();
+  };
+
+  const toggleDisplayVideoFullscreen = () => {
+    setIsDisplayVideoFullscreen((currentValue) => !currentValue);
+    showDisplayVideoControls();
+  };
+
+  const renderDisplayDropdown = ({ dropdownId, label, onChange, options, value }) => {
+    const selectedOption = options.find((option) => option.value === value) || options[0];
+    const isOpen = openDisplayDropdown === dropdownId;
+
+    return (
+      <div className={`oralHistories__displayDropdown${isOpen ? ' oralHistories__displayDropdown--open' : ''}`}>
+        <button
+          type="button"
+          className="oralHistories__displayDropdownButton"
+          aria-haspopup="listbox"
+          aria-expanded={isOpen}
+          onClick={() => {
+            setOpenDisplayDropdown((currentDropdown) => (
+              currentDropdown === dropdownId ? '' : dropdownId
+            ));
+          }}
+        >
+          <span className="oralHistories__displayDropdownLabel">
+            {selectedOption?.label || label}
+          </span>
+          <span className="oralHistories__displayDropdownArrow" aria-hidden="true" />
+        </button>
+
+        {isOpen ? (
+          <div className="oralHistories__displayDropdownMenu" role="listbox" aria-label={label}>
+            {options.map((option) => {
+              const isSelected = option.value === value;
+
+              return (
+                <button
+                  key={option.value || `${dropdownId}-all`}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  className={`oralHistories__displayDropdownOption${
+                    isSelected ? ' oralHistories__displayDropdownOption--selected' : ''
+                  }`}
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpenDisplayDropdown('');
+                  }}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        ) : null}
+      </div>
+    );
+  };
+
+  const renderVideoPlayer = (className, options = {}) => (
+    <video
+      ref={options.videoRef}
+      className={className}
+      controls={options.controls !== false}
+      preload="metadata"
+      poster={activePoster}
+      aria-label="Featured oral history video player"
+      key={activeEpisode?.oralHistoryId || 'oral-history-placeholder'}
+      playsInline
+      onClick={options.onClick}
+      onDurationChange={options.onDurationChange}
+      onEnded={options.onEnded}
+      onLoadedMetadata={options.onLoadedMetadata}
+      onPause={options.onPause}
+      onPlay={options.onPlay}
+      onTimeUpdate={options.onTimeUpdate}
+      onVolumeChange={options.onVolumeChange}
+    >
+      {activeEpisode?.videoUrl ? (
+        <source src={activeEpisode.videoUrl} type={activeEpisode.mimeType || 'video/mp4'} />
+      ) : null}
+      Your browser does not support the video tag.
+    </video>
+  );
+
+  if (displayMode) {
+    return (
+      <div
+        className={[
+          'oralHistories oralHistories--displayMode',
+          isDisplayVideoFullscreen ? 'oralHistories--displayVideoFullscreen' : '',
+        ].filter(Boolean).join(' ')}
+      >
+        <div className="oralHistories__displayGrid">
+          <section className="oralHistories__displayStage" aria-label="Featured oral history">
+            <div className="oralHistories__displayIntro">
+              <p className="oralHistories__displayEyebrow">German Club Alumni Archives</p>
+              <h1 className="oralHistories__displayTitle">Oral Histories</h1>
+              <p className="oralHistories__displayLede">
+                Hear German Club alumni reflect on the friendships, traditions, service, and campus life
+                that shaped their time at Virginia Tech.
+              </p>
+            </div>
+
+            <div
+              className={[
+                'oralHistories__displayMediaFrame',
+                areDisplayVideoControlsVisible ? 'oralHistories__displayMediaFrame--controlsVisible' : '',
+              ].filter(Boolean).join(' ')}
+              onFocus={showDisplayVideoControls}
+              onMouseMove={showDisplayVideoControls}
+              onPointerDown={showDisplayVideoControls}
+            >
+              {renderVideoPlayer('oralHistories__displayVideo', {
+                controls: false,
+                onClick: () => {
+                  showDisplayVideoControls();
+                  toggleDisplayPlayback();
+                },
+                onDurationChange: updateDisplayPlaybackState,
+                onEnded: updateDisplayPlaybackState,
+                onLoadedMetadata: updateDisplayPlaybackState,
+                onPause: updateDisplayPlaybackState,
+                onPlay: updateDisplayPlaybackState,
+                onTimeUpdate: updateDisplayPlaybackState,
+                onVolumeChange: updateDisplayPlaybackState,
+                videoRef: displayVideoRef,
+              })}
+              <div className="oralHistories__displayVideoControls">
+                <button
+                  type="button"
+                  className="oralHistories__displayVideoButton oralHistories__displayVideoButton--play"
+                  onClick={toggleDisplayPlayback}
+                  disabled={!activeEpisode?.videoUrl}
+                  aria-label={displayPlaybackState.isPlaying ? 'Pause video' : 'Play video'}
+                >
+                  <span
+                    className={`oralHistories__displayVideoButtonGlyph${
+                      displayPlaybackState.isPlaying
+                        ? ' oralHistories__displayVideoButtonGlyph--pause'
+                        : ' oralHistories__displayVideoButtonGlyph--play'
+                    }`}
+                    aria-hidden="true"
+                  />
+                </button>
+                <span className="oralHistories__displayVideoTime">
+                  {formatPlaybackTime(displayPlaybackState.currentTime)}
+                </span>
+                <input
+                  className="oralHistories__displayVideoRange"
+                  type="range"
+                  min="0"
+                  max={Math.max(displayPlaybackState.duration, 0)}
+                  step="0.1"
+                  value={Math.min(
+                    displayPlaybackState.currentTime,
+                    displayPlaybackState.duration || displayPlaybackState.currentTime,
+                  )}
+                  onChange={handleDisplaySeek}
+                  disabled={!displayPlaybackState.duration}
+                  aria-label="Video playback position"
+                  style={{
+                    '--oral-history-display-progress': `${getPlaybackProgress(displayPlaybackState)}%`,
+                  }}
+                />
+                <span className="oralHistories__displayVideoTime">
+                  {formatPlaybackTime(displayPlaybackState.duration)}
+                </span>
+                <button
+                  type="button"
+                  className="oralHistories__displayVideoButton oralHistories__displayVideoButton--icon"
+                  onClick={toggleDisplayMute}
+                  disabled={!activeEpisode?.videoUrl}
+                  aria-label={displayPlaybackState.isMuted ? 'Unmute video' : 'Mute video'}
+                >
+                  <img
+                    className="oralHistories__displayVideoIcon"
+                    src={displayPlaybackState.isMuted ? muteIconUrl : volumeIconUrl}
+                    alt=""
+                  />
+                </button>
+                <button
+                  type="button"
+                  className="oralHistories__displayVideoButton oralHistories__displayVideoButton--icon"
+                  onClick={toggleDisplayVideoFullscreen}
+                  aria-label={isDisplayVideoFullscreen ? 'Exit fullscreen video' : 'Enter fullscreen video'}
+                >
+                  <img
+                    className="oralHistories__displayVideoIcon"
+                    src={fullscreenIconUrl}
+                    alt=""
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className="oralHistories__displayFooter">
+              <div className="oralHistories__displayPrompt">
+                <span className="oralHistories__displayPromptLine" />
+                <span className="oralHistories__displayPromptText">Tap an Episode to Begin</span>
+                <span className="oralHistories__displayPromptLine" />
+              </div>
+
+              {onBack ? (
+                <button
+                  type="button"
+                  className="oralHistories__displayHomeButton"
+                  onClick={onBack}
+                >
+                  Return to Home
+                </button>
+              ) : null}
+            </div>
+          </section>
+
+          <aside className="oralHistories__displayPanel" aria-label="Oral history controls">
+            <div className="oralHistories__displaySummary">
+              <div className="oralHistories__displaySummaryRow">
+                <span className="oralHistories__displaySummaryLabel">Featured Interview</span>
+                <strong className="oralHistories__displaySummaryValue">{activeIntervieweeLabel}</strong>
+              </div>
+              <div className="oralHistories__displaySummaryRow">
+                <span className="oralHistories__displaySummaryLabel">Category</span>
+                <strong className="oralHistories__displaySummaryValue">{activeCategoryLabel}</strong>
+              </div>
+            </div>
+
+            <div className="oralHistories__displayFilters" ref={displayFiltersRef}>
+              {interviewees.length > 0 ? (
+                renderDisplayDropdown({
+                  dropdownId: 'interviewee',
+                  label: 'Interviewee',
+                  onChange: setActiveInterviewee,
+                  options: displayIntervieweeOptions,
+                  value: activeInterviewee,
+                })
+              ) : null}
+
+              {categories.length > 0 ? (
+                renderDisplayDropdown({
+                  dropdownId: 'category',
+                  label: 'Category',
+                  onChange: setActiveCategory,
+                  options: displayCategoryOptions,
+                  value: activeCategory,
+                })
+              ) : null}
+            </div>
+
+            <div className="oralHistories__displayPlaylistHeader">
+              <h2 className="oralHistories__displayPlaylistTitle">Episode Playlist</h2>
+            </div>
+
+            {isLoading ? <p className="oralHistories__displayMessage">Loading episodes...</p> : null}
+            {loadError ? <p className="oralHistories__displayMessage">{loadError}</p> : null}
+
+            {!isLoading && !loadError && playlistEpisodes.length === 0 ? (
+              <p className="oralHistories__displayMessage">
+                Oral history recordings will appear here as they are added to the archive.
+              </p>
+            ) : null}
+
+            {playlistEpisodes.length > 0 ? (
+              <div className="oralHistories__displayPlaylistList">
+                {playlistEpisodes.map((episode) => (
+                  <button
+                    key={episode.oralHistoryId || `display-placeholder-${episode.episodeNumber}`}
+                    type="button"
+                    className={`oralHistories__displayPlaylistItem${
+                      String(episode.oralHistoryId || '') === String(activeEpisode?.oralHistoryId || '')
+                        ? ' oralHistories__displayPlaylistItem--active'
+                        : ''
+                    }`}
+                    onClick={() => handleDisplayEpisodeSelect(episode)}
+                    disabled={!episode.videoUrl}
+                  >
+                    <span
+                      className={`oralHistories__displayPlaylistNumber${
+                        episode.isFullLength ? ' oralHistories__displayPlaylistNumber--full' : ''
+                      }`}
+                    >
+                      {episode.isFullLength ? 'Full' : String(episode.episodeNumber).padStart(2, '0')}
+                    </span>
+                    <span className="oralHistories__displayPlaylistText">
+                      {formatEpisodeLabel(episode)}
+                      <span className="oralHistories__displayPlaylistSubtitle">
+                        {episode.videoUrl
+                          ? formatEpisodeTitle(episode.title)
+                          : getPlaceholderTitle(episode.episodeNumber)}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </aside>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="oralHistories">
@@ -239,19 +765,7 @@ export default function OralHistories() {
 
             <div className="oralHistories__contentGrid">
               <div className="oralHistories__mediaFrame">
-                <video
-                  className="oralHistories__video"
-                  controls
-                  preload="metadata"
-                  poster={activePoster}
-                  aria-label="Featured oral history video player"
-                  key={activeEpisode?.oralHistoryId || 'oral-history-placeholder'}
-                >
-                  {activeEpisode?.videoUrl ? (
-                    <source src={activeEpisode.videoUrl} type={activeEpisode.mimeType || 'video/mp4'} />
-                  ) : null}
-                  Your browser does not support the video tag.
-                </video>
+                {renderVideoPlayer('oralHistories__video')}
               </div>
 
               <aside className="oralHistories__playlist" aria-label="Episode playlist">
@@ -297,6 +811,36 @@ export default function OralHistories() {
       </section>
     </div>
   );
+}
+
+function getActiveCategoryLabel(activeEpisode, activeInterviewee) {
+  if (activeEpisode) {
+    return activeEpisode.isFullLength ? 'Full Interview' : activeEpisode.category;
+  }
+
+  if (activeInterviewee) {
+    return 'No category selected';
+  }
+
+  return 'No episodes loaded';
+}
+
+function getPlaybackProgress({ currentTime, duration }) {
+  const normalizedDuration = Number(duration || 0);
+
+  if (normalizedDuration <= 0) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, (Number(currentTime || 0) / normalizedDuration) * 100));
+}
+
+function formatPlaybackTime(value) {
+  const totalSeconds = Math.max(0, Math.floor(Number(value || 0)));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 function useOralHistoryPoster(activeEpisode, intervieweeName) {
