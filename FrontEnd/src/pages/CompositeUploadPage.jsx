@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
 import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
@@ -16,6 +16,7 @@ export default function CompositeUploadPage() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [compositeYear, setCompositeYear] = useState('');
   const [composites, setComposites] = useState([]);
+  const [compositeSearchQuery, setCompositeSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [deletingCompositeId, setDeletingCompositeId] = useState(null);
@@ -55,6 +56,23 @@ export default function CompositeUploadPage() {
       isActive = false;
     };
   }, []);
+
+  const sortedComposites = useMemo(
+    () => [...composites].sort(compareCompositesByYearDescending),
+    [composites],
+  );
+
+  const filteredComposites = useMemo(() => {
+    const normalizedQuery = compositeSearchQuery.trim().toLowerCase();
+
+    if (!normalizedQuery) {
+      return sortedComposites;
+    }
+
+    return sortedComposites.filter((composite) =>
+      compositeMatchesSearch(composite, normalizedQuery),
+    );
+  }, [compositeSearchQuery, sortedComposites]);
 
   const handleUploadSubmit = async (event) => {
     event.preventDefault();
@@ -215,6 +233,24 @@ export default function CompositeUploadPage() {
             </div>
           </div>
 
+          {!isLoading && composites.length > 0 ? (
+            <div className="compositeUploadListControls">
+              <label className="compositeField compositeUploadListControls__search">
+                <span className="compositeField__label">Filter composites</span>
+                <input
+                  className="compositeField__input"
+                  type="search"
+                  placeholder="Search by year or filename"
+                  value={compositeSearchQuery}
+                  onChange={(event) => setCompositeSearchQuery(event.target.value)}
+                />
+              </label>
+              <p className="compositeUploadListControls__count">
+                Showing {filteredComposites.length} of {composites.length}
+              </p>
+            </div>
+          ) : null}
+
           {listError ? <p className="compositeMessage compositeMessage--error">{listError}</p> : null}
 
           {isLoading ? <p className="compositeMessage">Loading saved composites...</p> : null}
@@ -228,60 +264,122 @@ export default function CompositeUploadPage() {
             </div>
           ) : null}
 
-          {!isLoading && composites.length > 0 ? (
-            <div className="compositeCardGrid">
-              {composites.map((composite) => (
-                <article key={composite.compositeId} className="compositeCard">
-                  <div className="compositeCard__media">
-                    <img
-                      className="compositeCard__image"
-                      src={composite.imageUrl}
-                      alt={composite.originalFilename}
-                      loading="lazy"
-                    />
-                  </div>
+          {!isLoading && !listError && composites.length > 0 && filteredComposites.length === 0 ? (
+            <div className="compositeEmptyState">
+              <h3 className="compositeEmptyState__title">No composites match your search.</h3>
+              <p className="compositeEmptyState__description">
+                Try searching by a different year, file name, or display name.
+              </p>
+            </div>
+          ) : null}
 
-                  <div className="compositeCard__body">
-                    <div className="compositeCard__metaRow">
-                      {composite.compositeYear ? (
-                        <span className="compositeCard__pill compositeCard__pill--year">
-                          Class year {composite.compositeYear}
+          {!isLoading && filteredComposites.length > 0 ? (
+            <div className="compositeUploadListScrollbox">
+              <div className="compositeCardGrid">
+                {filteredComposites.map((composite) => (
+                  <article key={composite.compositeId} className="compositeCard">
+                    <div className="compositeCard__media">
+                      <img
+                        className="compositeCard__image"
+                        src={composite.imageUrl}
+                        alt={composite.originalFilename}
+                        loading="lazy"
+                      />
+                    </div>
+
+                    <div className="compositeCard__body">
+                      <div className="compositeCard__metaRow">
+                        {composite.compositeYear ? (
+                          <span className="compositeCard__pill compositeCard__pill--year">
+                            Class year {composite.compositeYear}
+                          </span>
+                        ) : null}
+                        <span className="compositeCard__pill">
+                          {composite.annotationCount} annotation{composite.annotationCount === 1 ? '' : 's'}
                         </span>
-                      ) : null}
-                      <span className="compositeCard__pill">
-                        {composite.annotationCount} annotation{composite.annotationCount === 1 ? '' : 's'}
-                      </span>
-                    </div>
+                      </div>
 
-                    <h3 className="compositeCard__title">
-                      {composite.displayName || composite.originalFilename}
-                    </h3>
-                    <p className="compositeCard__sourceName">{composite.originalFilename}</p>
-                    <p className="compositeCard__meta">
-                      Uploaded {formatDate(composite.uploadTimestamp)}
-                    </p>
+                      <h3 className="compositeCard__title">
+                        {composite.displayName || composite.originalFilename}
+                      </h3>
+                      <p className="compositeCard__sourceName">{composite.originalFilename}</p>
+                      <p className="compositeCard__meta">
+                        Uploaded {formatDate(composite.uploadTimestamp)}
+                      </p>
 
-                    <div className="compositeCard__actions">
-                      <Link className="button compositeButton" to={`/upload/composites/${composite.compositeId}`}>
-                        Continue annotating
-                      </Link>
-                      <button
-                        type="button"
-                        className="button compositeButton compositeButton--danger"
-                        onClick={() => handleDeleteComposite(composite)}
-                        disabled={deletingCompositeId === composite.compositeId}
-                      >
-                        {deletingCompositeId === composite.compositeId ? 'Deleting...' : 'Delete'}
-                      </button>
+                      <div className="compositeCard__actions">
+                        <Link className="button compositeButton" to={`/upload/composites/${composite.compositeId}`}>
+                          Continue annotating
+                        </Link>
+                        <button
+                          type="button"
+                          className="button compositeButton compositeButton--danger"
+                          onClick={() => handleDeleteComposite(composite)}
+                          disabled={deletingCompositeId === composite.compositeId}
+                        >
+                          {deletingCompositeId === composite.compositeId ? 'Deleting...' : 'Delete'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                ))}
+              </div>
             </div>
           ) : null}
         </article>
       </div>
     </section>
+  );
+}
+
+function compareCompositesByYearDescending(firstComposite, secondComposite) {
+  const yearDifference =
+    getCompositeSortYear(secondComposite) - getCompositeSortYear(firstComposite);
+
+  if (yearDifference !== 0) {
+    return yearDifference;
+  }
+
+  const timeDifference =
+    getCompositeSortTime(secondComposite) - getCompositeSortTime(firstComposite);
+
+  if (timeDifference !== 0) {
+    return timeDifference;
+  }
+
+  return getCompositeSearchTitle(firstComposite).localeCompare(
+    getCompositeSearchTitle(secondComposite),
+    undefined,
+    { numeric: true, sensitivity: 'base' },
+  );
+}
+
+function getCompositeSortYear(composite) {
+  const year = Number.parseInt(composite?.compositeYear, 10);
+  return Number.isFinite(year) ? year : Number.NEGATIVE_INFINITY;
+}
+
+function getCompositeSortTime(composite) {
+  const timestamp = Date.parse(composite?.uploadTimestamp || '');
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function getCompositeSearchTitle(composite) {
+  return String(composite?.displayName || composite?.originalFilename || '');
+}
+
+function compositeMatchesSearch(composite, normalizedQuery) {
+  const annotationCount = Number(composite?.annotationCount || 0);
+  const searchableValues = [
+    composite?.compositeYear,
+    composite?.displayName,
+    composite?.originalFilename,
+    composite?.uploadTimestamp,
+    `${annotationCount} annotation${annotationCount === 1 ? '' : 's'}`,
+  ];
+
+  return searchableValues.some((value) =>
+    String(value || '').toLowerCase().includes(normalizedQuery),
   );
 }
 
