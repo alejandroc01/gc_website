@@ -12,9 +12,10 @@ import scrapbookBookIcon from '../../assets/icons/scrapbook-book.svg';
 import './SearchBar.css';
 
 const SEARCH_FILTER_OPTIONS = [
-  { id: 'member', label: 'Members' },
   { id: 'composite', label: 'Composites' },
   { id: 'scrapbook', label: 'Scrapbooks' },
+  { id: 'member', label: 'Members' },
+  { id: 'scrapbookPage', label: 'Scrapbook Pages' },
 ];
 
 const ALL_FILTER_IDS = SEARCH_FILTER_OPTIONS.map((option) => option.id);
@@ -193,28 +194,31 @@ export default function SearchBar({ className = '' }) {
         .map((scrapbook) => buildScrapbookSearchItem(scrapbook, value))
         .filter(Boolean)
       : [];
-    const memberScrapbookResults = activeFilterIds.has('scrapbook')
+    const uploadedScrapbookPageResults = activeFilterIds.has('scrapbookPage')
+      ? buildUploadedScrapbookPageSearchItems(scrapbooks, value)
+      : [];
+    const memberScrapbookResults = activeFilterIds.has('scrapbookPage')
       ? memberScrapbookItems
       : [];
-    const taggedScrapbookResults = activeFilterIds.has('scrapbook')
+    const metadataScrapbookPageResults = activeFilterIds.has('scrapbookPage')
+      ? buildMetadataScrapbookPageSearchItems(scrapbookMetadataRows, value)
+      : [];
+    const taggedScrapbookResults = activeFilterIds.has('scrapbookPage')
       ? buildTaggedScrapbookSearchItems(scrapbookMetadataRows, value, memberScrapbookResults)
       : [];
-    const sortedArchiveResults = [
-      ...compositeResults,
-      ...scrapbookResults,
+    const scrapbookPageResults = dedupeSearchItems([
+      ...uploadedScrapbookPageResults,
       ...memberScrapbookResults,
+      ...metadataScrapbookPageResults,
       ...taggedScrapbookResults,
-    ]
-      .sort(compareSearchItems);
+    ]);
 
-    if (activeFilterIds.has('member')) {
-      return [
-        ...memberResults.sort(compareSearchItems),
-        ...sortedArchiveResults,
-      ];
-    }
-
-    return sortedArchiveResults;
+    return [
+      ...compositeResults.sort(compareSearchItems),
+      ...scrapbookResults.sort(compareSearchItems),
+      ...memberResults.sort(compareSearchItems),
+      ...scrapbookPageResults.sort(compareSearchItems),
+    ];
   }, [
     activeFilterIds,
     composites,
@@ -228,7 +232,7 @@ export default function SearchBar({ className = '' }) {
   const showLoadingResults = query.trim().length > 0
     && !loadError
     && !noFiltersSelected
-    && (isSearchDataLoading || (isMemberScrapbookLoading && results.length === 0));
+    && (isSearchDataLoading || (activeFilterIds.has('scrapbookPage') && isMemberScrapbookLoading && results.length === 0));
 
   const handleInputFocus = () => {
     setIsFilterMenuOpen(false);
@@ -502,7 +506,7 @@ function buildMemberScrapbookSearchItems(profiles, query) {
 
       itemsByKey.set(key, {
         key,
-        kind: 'scrapbook',
+        kind: 'scrapbookPage',
         label: `${profileLabel} in ${page.title || 'scrapbook page'}`,
         meta: buildMemberScrapbookMeta(page),
         score: memberScore + 18,
@@ -548,7 +552,7 @@ function buildTaggedScrapbookSearchItems(metadataRows, query, memberScrapbookIte
 
       itemsByKey.set(key, {
         key,
-        kind: 'scrapbook',
+        kind: 'scrapbookPage',
         label: `${rawName} in ${row.title || 'scrapbook page'}`,
         meta: buildTaggedScrapbookMeta(row),
         score: score + 16,
@@ -558,6 +562,111 @@ function buildTaggedScrapbookSearchItems(metadataRows, query, memberScrapbookIte
   });
 
   return Array.from(itemsByKey.values()).slice(0, 12);
+}
+
+function buildMetadataScrapbookPageSearchItems(metadataRows, query) {
+  const itemsByKey = new Map();
+
+  (Array.isArray(metadataRows) ? metadataRows : []).forEach((row) => {
+    const year = String(row?.year || '').trim();
+    const pageNumber = normalizePositiveInteger(row?.pageNumber);
+    const title = String(row?.title || '').trim();
+    const label = buildScrapbookPageLabel({ year, pageNumber, title });
+    const fields = [
+      label,
+      year,
+      title,
+      row?.identifier,
+      row?.category,
+      row?.description,
+      row?.source,
+      pageNumber ? `page ${pageNumber}` : '',
+      pageNumber ? String(pageNumber) : '',
+      'scrapbook page',
+      ...(Array.isArray(row?.people) ? row.people.map((person) => person?.rawName) : []),
+    ];
+    const score = getSearchScore(fields, query, {
+      exactBoost: year === query ? 26 : 0,
+    });
+
+    if (score <= 0) {
+      return;
+    }
+
+    const to = buildScrapbookLink(year, row?.pageIndex, row?.pageNumber);
+    const key = `metadata-scrapbook-page-${normalizeSearchKey(row?.identifier || to || label)}`;
+
+    if (itemsByKey.has(key)) {
+      return;
+    }
+
+    itemsByKey.set(key, {
+      key,
+      kind: 'scrapbookPage',
+      label,
+      meta: buildTaggedScrapbookMeta(row),
+      score,
+      to,
+    });
+  });
+
+  return Array.from(itemsByKey.values()).slice(0, 24);
+}
+
+function buildUploadedScrapbookPageSearchItems(scrapbooks, query) {
+  const items = [];
+
+  (Array.isArray(scrapbooks) ? scrapbooks : []).forEach((scrapbook) => {
+    const year = String(scrapbook?.scrapbookYear || '').trim();
+    const pageEntries = Array.isArray(scrapbook?.pageEntries) ? scrapbook.pageEntries : [];
+    const pageOriginalFilenames = Array.isArray(scrapbook?.pageOriginalFilenames)
+      ? scrapbook.pageOriginalFilenames
+      : [];
+    const pageCount = Math.max(
+      pageEntries.length,
+      pageOriginalFilenames.length,
+      Number(scrapbook?.pageCount || scrapbook?.pageImageUrls?.length || 0),
+    );
+
+    for (let pageIndex = 0; pageIndex < pageCount; pageIndex += 1) {
+      const pageEntry = pageEntries[pageIndex] || {};
+      const pageNumber = pageIndex + 1;
+      const originalFilename = pageEntry.originalFilename || pageOriginalFilenames[pageIndex] || '';
+      const label = buildScrapbookPageLabel({
+        year,
+        pageNumber,
+        title: scrapbook?.title,
+      });
+      const fields = [
+        label,
+        year,
+        scrapbook?.title,
+        originalFilename,
+        pageEntry.pageId,
+        `page ${pageNumber}`,
+        String(pageNumber),
+        'scrapbook page',
+      ];
+      const score = getSearchScore(fields, query, {
+        exactBoost: year === query ? 28 : 0,
+      });
+
+      if (score <= 0) {
+        continue;
+      }
+
+      items.push({
+        key: `uploaded-scrapbook-page-${scrapbook?.scrapbookId || year || 'scrapbook'}-${pageEntry.pageId || pageNumber}`,
+        kind: 'scrapbookPage',
+        label,
+        meta: buildUploadedScrapbookPageMeta({ year, pageNumber, originalFilename }),
+        score,
+        to: buildScrapbookLink(year, pageIndex),
+      });
+    }
+  });
+
+  return items.slice(0, 36);
 }
 
 function buildScrapbookSearchItem(scrapbook, query) {
@@ -600,6 +709,23 @@ function buildMemberScrapbookMeta(page) {
   return noteParts.join(' | ');
 }
 
+function buildScrapbookPageLabel({ year, pageNumber, title }) {
+  const normalizedTitle = String(title || '').trim();
+  const baseTitle = normalizedTitle || (year ? `${year} Scrapbook` : 'Scrapbook');
+
+  return pageNumber ? `${baseTitle} Page ${pageNumber}` : `${baseTitle} Page`;
+}
+
+function buildUploadedScrapbookPageMeta({ year, pageNumber, originalFilename }) {
+  const noteParts = [
+    year ? `${year} Scrapbook` : 'Scrapbook page',
+    pageNumber ? `Page ${pageNumber}` : '',
+    originalFilename || '',
+  ].filter(Boolean);
+
+  return noteParts.join(' | ');
+}
+
 function getSearchScore(fields, query, { exactBoost = 0 } = {}) {
   let bestScore = 0;
 
@@ -626,6 +752,22 @@ function getSearchScore(fields, query, { exactBoost = 0 } = {}) {
   });
 
   return bestScore > 0 ? bestScore + exactBoost : 0;
+}
+
+function dedupeSearchItems(items) {
+  const dedupedItems = new Map();
+
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const key = String(item?.key || '').trim();
+
+    if (!key || dedupedItems.has(key)) {
+      return;
+    }
+
+    dedupedItems.set(key, item);
+  });
+
+  return Array.from(dedupedItems.values());
 }
 
 function compareSearchItems(leftItem, rightItem) {
@@ -720,12 +862,18 @@ function normalizeSearchKey(value) {
     .replace(/^-+|-+$/g, '');
 }
 
+function normalizePositiveInteger(value) {
+  const normalizedValue = Number(value);
+
+  return Number.isInteger(normalizedValue) && normalizedValue > 0 ? normalizedValue : null;
+}
+
 function SearchItemIcon({ kind }) {
   if (kind === 'member') {
     return <MemberIcon />;
   }
 
-  if (kind === 'scrapbook') {
+  if (kind === 'scrapbook' || kind === 'scrapbookPage') {
     return <ScrapbookIcon />;
   }
 
