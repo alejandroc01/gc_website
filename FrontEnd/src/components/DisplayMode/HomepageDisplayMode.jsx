@@ -91,6 +91,13 @@ function getDisplayCardOverride(card) {
     };
   }
 
+  if (card.key === 'history') {
+    return {
+      ...card,
+      to: '/display-mode?mode=display&page=history',
+    };
+  }
+
   return null;
 }
 

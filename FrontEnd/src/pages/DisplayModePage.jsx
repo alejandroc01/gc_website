@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { getComposites, getScrapbooks } from '../api/composites.js';
 import HomepageDisplayMode from '../components/DisplayMode/HomepageDisplayMode.jsx';
 import CompositesPage from './CompositesPage.jsx';
+import HistoryPage from './HistoryPage.jsx';
 import OralHistories from './OralHistories.jsx';
 import { exitFullscreenIfActive, isFullscreenActive, requestFullscreenForElement } from '../utils/fullscreen.js';
 import './DisplayModePage.css';
@@ -39,8 +40,9 @@ export default function DisplayModePage() {
   const isIdleSlideshowMode = isSlideshowMode && currentDisplaySource === 'idle';
   const isHomepageDisplayMode = currentMode === 'display' && currentDisplayPage === 'home';
   const isCompositesDisplayMode = currentMode === 'display' && currentDisplayPage === 'composites';
+  const isHistoryDisplayMode = currentMode === 'display' && currentDisplayPage === 'history';
   const isOralHistoriesDisplayMode = currentMode === 'display' && currentDisplayPage === 'oral-histories';
-  const isScaledContentDisplayMode = isCompositesDisplayMode || isOralHistoriesDisplayMode;
+  const isScaledContentDisplayMode = isCompositesDisplayMode || isHistoryDisplayMode || isOralHistoriesDisplayMode;
   const isFullscreenDisplayMode =
     isSlideshowMode || isHomepageDisplayMode || isScaledContentDisplayMode;
   const displaySurface = useMemo(
@@ -386,6 +388,32 @@ export default function DisplayModePage() {
     );
   }
 
+  if (isHistoryDisplayMode) {
+    return (
+      <section
+        ref={displayModeRef}
+        className="displayMode displayMode--history"
+        aria-label="History display mode"
+      >
+        <div className="displayModeHistory">
+          <div
+            className="displayModeHistory__canvas"
+            style={{
+              width: `${DISPLAY_MODE_REFERENCE_WIDTH}px`,
+              height: `${DISPLAY_MODE_REFERENCE_HEIGHT}px`,
+              transform: `translate(-50%, -50%) scale(${displaySurface.canvasScale})`,
+            }}
+          >
+            <HistoryPage
+              displayMode
+              onBack={() => navigate('/display-mode?mode=display')}
+            />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (!hasImages) {
     return (
       <section ref={displayModeRef} className="displayMode displayMode--empty">
@@ -441,7 +469,7 @@ function getDisplayPage(search) {
   const params = new URLSearchParams(search);
   const page = params.get('page');
 
-  if (page === 'composites' || page === 'oral-histories') {
+  if (page === 'composites' || page === 'history' || page === 'oral-histories') {
     return page;
   }
 

@@ -1014,6 +1014,24 @@
   overflow: hidden;
 }
 
+.displayMode--history {
+  overflow: hidden;
+}
+
+.displayModeHistory {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.displayModeHistory__canvas {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform-origin: center center;
+}
+
 .displayModeOralHistories {
   position: absolute;
   inset: 0;
