@@ -137,7 +137,7 @@ async function getScrapbookMetadataPage(identifier) {
     const rowsByIdentifier = new Map(
         metadataRows.map((row) => [normalizeIdentifierKey(row.identifier), row]),
     );
-    const row = rowsByIdentifier.get(normalizedIdentifier);
+    const row = findMetadataRowByIdentifier(rowsByIdentifier, identifier);
 
     if (!row) {
         return null;
@@ -183,6 +183,23 @@ async function getScrapbookMetadataPage(identifier) {
             ? buildScrapbookLink(uploadedPage.scrapbookYear || year, uploadedPage.pageIndex)
             : buildScrapbookLink(year, null),
     };
+}
+
+function findMetadataRowByIdentifier(rowsByIdentifier, identifier) {
+    const exactMatch = rowsByIdentifier.get(normalizeIdentifierKey(identifier));
+
+    if (exactMatch) {
+        return exactMatch;
+    }
+
+    const requestedCanonicalKey = buildCanonicalScrapbookPageKey("", identifier);
+
+    if (!requestedCanonicalKey) {
+        return null;
+    }
+
+    return Array.from(rowsByIdentifier.values())
+        .find((row) => buildCanonicalScrapbookPageKey(row.date, row.identifier) === requestedCanonicalKey) || null;
 }
 
 async function listScrapbookMetadataYears() {
