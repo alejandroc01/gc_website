@@ -126,6 +126,65 @@ async function getScrapbookMetadataReview(profiles = [], options = {}) {
     return buildScrapbookMetadataReview(reviewRows, profiles, { selectedYear });
 }
 
+async function getScrapbookMetadataPage(identifier) {
+    const normalizedIdentifier = normalizeIdentifierKey(identifier);
+
+    if (!normalizedIdentifier) {
+        return null;
+    }
+
+    const metadataRows = await readScrapbookMetadataRows();
+    const rowsByIdentifier = new Map(
+        metadataRows.map((row) => [normalizeIdentifierKey(row.identifier), row]),
+    );
+    const row = rowsByIdentifier.get(normalizedIdentifier);
+
+    if (!row) {
+        return null;
+    }
+
+    const parentRow = row.isPartOf ? rowsByIdentifier.get(normalizeIdentifierKey(row.isPartOf)) : null;
+    const displayRow = parentRow || row;
+    const matchedItems = metadataRows
+        .filter((metadataRow) => normalizeIdentifierKey(metadataRow.isPartOf) === normalizeIdentifierKey(displayRow.identifier))
+        .map((metadataRow) => ({
+            identifier: metadataRow.identifier,
+            title: metadataRow.title,
+            category: metadataRow.category,
+            description: metadataRow.description,
+            matchedNames: metadataRow.tags,
+            isDetail: true,
+        }));
+    const uploadedPagesByIdentifier = await buildUploadedPagesByIdentifier();
+    const uploadedPage = findUploadedPageForGroup(
+        {
+            identifier: displayRow.identifier,
+            matchedItems,
+        },
+        uploadedPagesByIdentifier,
+    );
+    const year = displayRow.date || uploadedPage?.scrapbookYear || "";
+
+    return {
+        identifier: displayRow.identifier,
+        requestedIdentifier: row.identifier,
+        title: displayRow.title,
+        year,
+        description: displayRow.description,
+        category: displayRow.category,
+        source: displayRow.source,
+        pageNumber: extractPageNumber(displayRow.identifier),
+        members: displayRow.tags,
+        matchedItems: matchedItems.sort(compareMatchedItems),
+        imageUrl: uploadedPage?.imageUrl || "",
+        thumbnailUrl: uploadedPage?.thumbnailUrl || "",
+        originalFilename: uploadedPage?.originalFilename || "",
+        scrapbookLink: uploadedPage
+            ? buildScrapbookLink(uploadedPage.scrapbookYear || year, uploadedPage.pageIndex)
+            : buildScrapbookLink(year, null),
+    };
+}
+
 async function listScrapbookMetadataYears() {
     const rows = await readScrapbookMetadataRows();
     const yearCounts = new Map();
@@ -280,6 +339,7 @@ async function buildUploadedPagesByIdentifier() {
                 scrapbookYear: scrapbook.scrapbookYear,
                 pageIndex: index,
                 imageUrl: pageEntry.imageUrl || "",
+                thumbnailUrl: pageEntry.thumbnailUrl || "",
                 originalFilename: pageEntry.originalFilename || "",
             });
         });
@@ -289,7 +349,7 @@ async function buildUploadedPagesByIdentifier() {
 }
 
 function enrichScrapbookGroup(group, uploadedPagesByIdentifier) {
-    const uploadedPage = uploadedPagesByIdentifier.get(normalizeIdentifierKey(group.identifier));
+    const uploadedPage = findUploadedPageForGroup(group, uploadedPagesByIdentifier);
     const year = group.year || uploadedPage?.scrapbookYear || "";
     const pageNumber = group.pageNumber || (Number.isInteger(uploadedPage?.pageIndex) ? uploadedPage.pageIndex + 1 : null);
 
@@ -299,12 +359,25 @@ function enrichScrapbookGroup(group, uploadedPagesByIdentifier) {
         pageNumber,
         isUploaded: Boolean(uploadedPage),
         imageUrl: uploadedPage?.imageUrl || "",
+        thumbnailUrl: uploadedPage?.thumbnailUrl || "",
         originalFilename: uploadedPage?.originalFilename || "",
         to: uploadedPage
             ? buildScrapbookLink(uploadedPage.scrapbookYear || year, uploadedPage.pageIndex)
             : buildScrapbookLink(year, null),
         matchedItems: group.matchedItems.sort(compareMatchedItems),
     };
+}
+
+function findUploadedPageForGroup(group, uploadedPagesByIdentifier) {
+    const groupUploadedPage = uploadedPagesByIdentifier.get(normalizeIdentifierKey(group.identifier));
+
+    if (groupUploadedPage) {
+        return groupUploadedPage;
+    }
+
+    return (Array.isArray(group.matchedItems) ? group.matchedItems : [])
+        .map((item) => uploadedPagesByIdentifier.get(normalizeIdentifierKey(item?.identifier)))
+        .find(Boolean) || null;
 }
 
 function buildProfileAliases(profile) {
@@ -647,6 +720,7 @@ function compareMatchedItems(leftItem, rightItem) {
 }
 
 module.exports = {
+    getScrapbookMetadataPage,
     getScrapbookMetadataReview,
     importScrapbookMetadataCsv,
     listProfileScrapbookReferences,

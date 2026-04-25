@@ -1,9 +1,12 @@
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { getScrapbookMetadataPage } from '../../api/composites.js';
 import CompositeCopyrightNotice from '../Composite/CompositeCopyrightNotice.jsx';
 import '../../pages/MemberPage.css';
 
 export default function MemberProfileContent({ profile, onArchiveNavigate = null }) {
+  const [activeScrapbookIdentifier, setActiveScrapbookIdentifier] = useState('');
   const factItems = [
     { label: 'Preferred Name', value: profile.preferredName || profile.firstName || 'Not listed' },
     { label: 'Email', value: profile.email || 'Not listed' },
@@ -30,58 +33,68 @@ export default function MemberProfileContent({ profile, onArchiveNavigate = null
   );
 
   return (
-    <div className="member__shell">
-      <div className="member__mediaColumn">
-        <div className="member__photoCard">
-          <ProfilePortrait profile={profile} />
+    <>
+      <div className="member__shell">
+        <div className="member__mediaColumn">
+          <div className="member__photoCard">
+            <ProfilePortrait profile={profile} />
+          </div>
+
+          {showsCompositeCopyrightNotice ? (
+            <CompositeCopyrightNotice className="member__photoCopyrightNotice" />
+          ) : null}
         </div>
 
-        {showsCompositeCopyrightNotice ? (
-          <CompositeCopyrightNotice className="member__photoCopyrightNotice" />
-        ) : null}
-      </div>
+        <div className="member__body">
+          <p className="member__eyebrow">Member Profile</p>
+          <h1 className="member__name">{profile.displayName}</h1>
+          <p className="member__meta">
+            <span>{buildLocation(profile) || 'Location not listed'}</span>
+            {profile.graduationYear ? <span className="member__dot" aria-hidden="true" /> : null}
+            {profile.graduationYear ? <span>{`Class of ${profile.graduationYear}`}</span> : null}
+          </p>
 
-      <div className="member__body">
-        <p className="member__eyebrow">Member Profile</p>
-        <h1 className="member__name">{profile.displayName}</h1>
-        <p className="member__meta">
-          <span>{buildLocation(profile) || 'Location not listed'}</span>
-          {profile.graduationYear ? <span className="member__dot" aria-hidden="true" /> : null}
-          {profile.graduationYear ? <span>{`Class of ${profile.graduationYear}`}</span> : null}
-        </p>
-
-        <div className="member__facts">
-          {factItems.map((fact) => (
-            <Fact key={fact.label} label={fact.label} value={fact.value} />
-          ))}
-        </div>
-
-        {badges.length > 0 ? (
-          <div className="member__badges" aria-label="Profile details">
-            {badges.map((item) => (
-              <span key={item} className="member__badge">
-                {item}
-              </span>
+          <div className="member__facts">
+            {factItems.map((fact) => (
+              <Fact key={fact.label} label={fact.label} value={fact.value} />
             ))}
           </div>
-        ) : null}
 
-        <div className="member__materials" aria-label="Related archives">
-          <h2 className="member__subheading">Included in the Archives</h2>
-          <ArchiveSection
-            label="Composites"
-            items={buildCompositeItems(profile.relatedComposites)}
-            onNavigate={onArchiveNavigate}
-          />
-          <ArchiveSection
-            label="Featured in Scrapbook Pages"
-            items={buildScrapbookItems(profile.relatedScrapbookPages)}
-            onNavigate={onArchiveNavigate}
-            variant="stacked"
-          />
+          {badges.length > 0 ? (
+            <div className="member__badges" aria-label="Profile details">
+              {badges.map((item) => (
+                <span key={item} className="member__badge">
+                  {item}
+                </span>
+              ))}
+            </div>
+          ) : null}
+
+          <div className="member__materials" aria-label="Related archives">
+            <h2 className="member__subheading">Included in the Archives</h2>
+            <ArchiveSection
+              label="Composites"
+              items={buildCompositeItems(profile.relatedComposites)}
+              onNavigate={onArchiveNavigate}
+            />
+            <ArchiveSection
+              label="Featured in Scrapbook Pages"
+              items={buildScrapbookItems(profile.relatedScrapbookPages)}
+              onNavigate={onArchiveNavigate}
+              onOpenScrapbookViewer={setActiveScrapbookIdentifier}
+              variant="stacked"
+            />
+          </div>
         </div>
       </div>
-    </div>
+
+      {activeScrapbookIdentifier ? (
+        <ScrapbookPageModal
+          identifier={activeScrapbookIdentifier}
+          onClose={() => setActiveScrapbookIdentifier('')}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -123,7 +136,7 @@ function Fact({ label, value }) {
   );
 }
 
-function ArchiveSection({ label, items, onNavigate, variant = 'default' }) {
+function ArchiveSection({ label, items, onNavigate, onOpenScrapbookViewer = null, variant = 'default' }) {
   const hasItems = Array.isArray(items) && items.length > 0;
   const isYearOnlySection = hasItems && items.every((item) => item.yearOnly);
   const isScrollableSection = variant === 'stacked' && hasItems && items.length > 6;
@@ -156,6 +169,7 @@ function ArchiveSection({ label, items, onNavigate, variant = 'default' }) {
               key={`${label}-${item.compositeId}-${item.annotationId}`}
               {...item}
               onNavigate={onNavigate}
+              onOpenScrapbookViewer={onOpenScrapbookViewer}
               variant={variant}
             />
           ))}
@@ -167,29 +181,44 @@ function ArchiveSection({ label, items, onNavigate, variant = 'default' }) {
   );
 }
 
-function MaterialCard({ title, year, note, to, onNavigate, yearOnly = false, variant = 'default' }) {
+function MaterialCard({
+  title,
+  year,
+  note,
+  to,
+  onNavigate,
+  yearOnly = false,
+  variant = 'default',
+  thumbnailUrl = '',
+  imageUrl = '',
+  imageAlt = '',
+  scrapbookIdentifier = '',
+  onOpenScrapbookViewer = null,
+}) {
   const cardClassName = [
     'member__materialCard',
     yearOnly ? 'member__materialCard--yearOnly' : '',
     variant === 'stacked' ? 'member__materialCard--stacked' : '',
   ].filter(Boolean).join(' ');
-
-  if (to) {
-    return (
-      <Link className={cardClassName} to={to} onClick={onNavigate || undefined}>
-        <div className="member__materialYear">{year}</div>
-        {!yearOnly && (title || note) ? (
-          <div className="member__materialBody">
-            {title ? <p className="member__materialTitle">{title}</p> : null}
-            {note ? <p className="member__materialNote">{note}</p> : null}
-          </div>
-        ) : null}
-      </Link>
-    );
-  }
-
-  return (
-    <div className={cardClassName}>
+  const isScrapbookCard = variant === 'stacked';
+  const thumbnailSrc = thumbnailUrl || imageUrl;
+  const cardContent = isScrapbookCard ? (
+    <>
+      {thumbnailSrc ? (
+        <div className="member__materialThumbnail">
+          <img
+            className="member__materialThumbnailImage"
+            src={thumbnailSrc}
+            alt={imageAlt || title || 'Scrapbook page'}
+            loading="lazy"
+            decoding="async"
+          />
+        </div>
+      ) : null}
+      {title ? <p className="member__materialTitle">{title}</p> : null}
+    </>
+  ) : (
+    <>
       <div className="member__materialYear">{year}</div>
       {!yearOnly && (title || note) ? (
         <div className="member__materialBody">
@@ -197,6 +226,162 @@ function MaterialCard({ title, year, note, to, onNavigate, yearOnly = false, var
           {note ? <p className="member__materialNote">{note}</p> : null}
         </div>
       ) : null}
+    </>
+  );
+
+  if (isScrapbookCard && scrapbookIdentifier && onOpenScrapbookViewer) {
+    return (
+      <button
+        type="button"
+        className={cardClassName}
+        onClick={() => onOpenScrapbookViewer(scrapbookIdentifier)}
+      >
+        {cardContent}
+      </button>
+    );
+  }
+
+  if (to) {
+    return (
+      <Link className={cardClassName} to={to} onClick={onNavigate || undefined}>
+        {cardContent}
+      </Link>
+    );
+  }
+
+  return (
+    <div className={cardClassName}>
+      {cardContent}
+    </div>
+  );
+}
+
+function ScrapbookPageModal({ identifier, onClose }) {
+  const [page, setPage] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [pageError, setPageError] = useState('');
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadPage = async () => {
+      setIsLoading(true);
+      setPageError('');
+
+      try {
+        const pageRecord = await getScrapbookMetadataPage(identifier);
+
+        if (!isActive) {
+          return;
+        }
+
+        setPage(pageRecord);
+      } catch (error) {
+        if (isActive) {
+          setPageError(error.message);
+          setPage(null);
+        }
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadPage();
+
+    return () => {
+      isActive = false;
+    };
+  }, [identifier]);
+
+  useEffect(() => {
+    const { overflow } = document.body.style;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = overflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [onClose]);
+
+  const handleBackdropClick = (event) => {
+    if (event.target === event.currentTarget) {
+      onClose();
+    }
+  };
+  const imageSrc = page?.imageUrl || page?.thumbnailUrl || '';
+  const pageLabel = page?.pageNumber ? `Scrapbook Page ${page.pageNumber}` : 'Scrapbook Page';
+
+  return (
+    <div
+      className="member__scrapbookModalBackdrop"
+      role="presentation"
+      onMouseDown={handleBackdropClick}
+    >
+      <article
+        className="member__scrapbookModal"
+        role="dialog"
+        aria-modal="true"
+        aria-label={page?.title || 'Scrapbook page viewer'}
+      >
+        <button
+          type="button"
+          className="member__scrapbookModalClose"
+          onClick={onClose}
+          aria-label="Close scrapbook page viewer"
+        >
+          ×
+        </button>
+
+        {isLoading ? (
+          <div className="member__scrapbookModalMessage">Loading scrapbook page...</div>
+        ) : pageError || !page ? (
+          <div className="member__scrapbookModalMessage">
+            {pageError || 'The requested scrapbook page could not be loaded.'}
+          </div>
+        ) : (
+          <>
+            <div className="member__scrapbookModalImageWrap">
+              {imageSrc ? (
+                <img
+                  className="member__scrapbookModalImage"
+                  src={imageSrc}
+                  alt={page.title || pageLabel}
+                />
+              ) : (
+                <div className="member__scrapbookModalMissingImage">Image not uploaded</div>
+              )}
+            </div>
+
+            <div className="member__scrapbookModalDetails">
+              <h2 className="member__scrapbookModalTitle">{page.title || 'Untitled Scrapbook Page'}</h2>
+              {page.year ? <p className="member__scrapbookModalYear">{page.year}</p> : null}
+              <p className="member__scrapbookModalPage">{pageLabel}</p>
+
+              {page.category ? (
+                <p className="member__scrapbookModalMeta">
+                  <span>Event/Category:</span> {page.category}
+                </p>
+              ) : null}
+
+              {Array.isArray(page.members) && page.members.length > 0 ? (
+                <p className="member__scrapbookModalMembers">
+                  <span>Members:</span> {page.members.join(', ')}
+                </p>
+              ) : null}
+            </div>
+          </>
+        )}
+      </article>
     </div>
   );
 }
@@ -229,6 +414,10 @@ function buildScrapbookItems(relatedScrapbookPages) {
       year: scrapbookPage.year || 'N/A',
       note: buildScrapbookNote(scrapbookPage),
       to: scrapbookPage.to || buildScrapbookLink(scrapbookPage.year),
+      scrapbookIdentifier: scrapbookPage.identifier || '',
+      thumbnailUrl: scrapbookPage.thumbnailUrl || '',
+      imageUrl: scrapbookPage.imageUrl || '',
+      imageAlt: scrapbookPage.originalFilename || scrapbookPage.title || 'Scrapbook page',
     }));
 }
 

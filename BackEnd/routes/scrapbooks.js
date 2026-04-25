@@ -16,6 +16,7 @@ const {
 } = require("../utils/scrapbookStore");
 const { listProfiles } = require("../utils/profileStore");
 const {
+    getScrapbookMetadataPage,
     getScrapbookMetadataReview,
     importScrapbookMetadataCsv,
     listScrapbookMetadataYears,
@@ -94,6 +95,20 @@ router.get("/metadata/years", async (_req, res, next) => {
     try {
         const years = await listScrapbookMetadataYears();
         return res.json({ years });
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.get("/metadata/pages/:identifier", async (req, res, next) => {
+    try {
+        const page = await getScrapbookMetadataPage(req.params.identifier);
+
+        if (!page) {
+            return res.status(404).json({ error: "Scrapbook page metadata not found." });
+        }
+
+        return res.json(page);
     } catch (error) {
         return next(error);
     }

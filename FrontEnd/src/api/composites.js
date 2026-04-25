@@ -108,6 +108,10 @@ export function getScrapbooks() {
   return requestJson('/api/scrapbooks');
 }
 
+export function getScrapbookMetadataPage(identifier) {
+  return requestJson(`/api/scrapbooks/metadata/pages/${encodeURIComponent(identifier)}`);
+}
+
 export function getScrapbookMetadataYears() {
   return requestJson('/api/scrapbooks/metadata/years');
 }
