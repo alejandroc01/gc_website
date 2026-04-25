@@ -91,6 +91,13 @@ function getDisplayCardOverride(card) {
     };
   }
 
+  if (card.key === 'scrapbooks') {
+    return {
+      ...card,
+      to: '/display-mode?mode=display&page=scrapbooks',
+    };
+  }
+
   if (card.key === 'history') {
     return {
       ...card,

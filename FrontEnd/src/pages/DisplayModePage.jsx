@@ -6,6 +6,7 @@ import HomepageDisplayMode from '../components/DisplayMode/HomepageDisplayMode.j
 import CompositesPage from './CompositesPage.jsx';
 import HistoryPage from './HistoryPage.jsx';
 import OralHistories from './OralHistories.jsx';
+import ScrapbooksDisplayModePage from './ScrapbooksDisplayModePage.jsx';
 import { exitFullscreenIfActive, isFullscreenActive, requestFullscreenForElement } from '../utils/fullscreen.js';
 import './DisplayModePage.css';
 
@@ -42,7 +43,12 @@ export default function DisplayModePage() {
   const isCompositesDisplayMode = currentMode === 'display' && currentDisplayPage === 'composites';
   const isHistoryDisplayMode = currentMode === 'display' && currentDisplayPage === 'history';
   const isOralHistoriesDisplayMode = currentMode === 'display' && currentDisplayPage === 'oral-histories';
-  const isScaledContentDisplayMode = isCompositesDisplayMode || isHistoryDisplayMode || isOralHistoriesDisplayMode;
+  const isScrapbooksDisplayMode = currentMode === 'display' && currentDisplayPage === 'scrapbooks';
+  const isScaledContentDisplayMode =
+    isCompositesDisplayMode
+    || isHistoryDisplayMode
+    || isOralHistoriesDisplayMode
+    || isScrapbooksDisplayMode;
   const isFullscreenDisplayMode =
     isSlideshowMode || isHomepageDisplayMode || isScaledContentDisplayMode;
   const displaySurface = useMemo(
@@ -414,6 +420,31 @@ export default function DisplayModePage() {
     );
   }
 
+  if (isScrapbooksDisplayMode) {
+    return (
+      <section
+        ref={displayModeRef}
+        className="displayMode displayMode--scrapbooks"
+        aria-label="Scrapbooks display mode"
+      >
+        <div className="displayModeScrapbooks">
+          <div
+            className="displayModeScrapbooks__canvas"
+            style={{
+              width: `${DISPLAY_MODE_REFERENCE_WIDTH}px`,
+              height: `${DISPLAY_MODE_REFERENCE_HEIGHT}px`,
+              transform: `translate(-50%, -50%) scale(${displaySurface.canvasScale})`,
+            }}
+          >
+            <ScrapbooksDisplayModePage
+              onBack={() => navigate('/display-mode?mode=display')}
+            />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (!hasImages) {
     return (
       <section ref={displayModeRef} className="displayMode displayMode--empty">
@@ -469,7 +500,7 @@ function getDisplayPage(search) {
   const params = new URLSearchParams(search);
   const page = params.get('page');
 
-  if (page === 'composites' || page === 'history' || page === 'oral-histories') {
+  if (page === 'composites' || page === 'history' || page === 'oral-histories' || page === 'scrapbooks') {
     return page;
   }
 
