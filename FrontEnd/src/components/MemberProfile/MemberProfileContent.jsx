@@ -260,6 +260,7 @@ function ScrapbookPageModal({ identifier, onClose }) {
   const [page, setPage] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [pageError, setPageError] = useState('');
+  const [isFullImageLoaded, setIsFullImageLoaded] = useState(false);
 
   useEffect(() => {
     let isActive = true;
@@ -313,12 +314,18 @@ function ScrapbookPageModal({ identifier, onClose }) {
     };
   }, [onClose]);
 
+  useEffect(() => {
+    setIsFullImageLoaded(false);
+  }, [page?.imageUrl, page?.thumbnailUrl]);
+
   const handleBackdropClick = (event) => {
     if (event.target === event.currentTarget) {
       onClose();
     }
   };
-  const imageSrc = page?.imageUrl || page?.thumbnailUrl || '';
+  const previewImageSrc = page?.thumbnailUrl || page?.imageUrl || '';
+  const fullImageSrc = page?.imageUrl || page?.thumbnailUrl || '';
+  const hasLayeredPreview = Boolean(page?.thumbnailUrl && page?.imageUrl && page.thumbnailUrl !== page.imageUrl);
   const pageLabel = page?.pageNumber ? `Scrapbook Page ${page.pageNumber}` : 'Scrapbook Page';
 
   return (
@@ -351,12 +358,32 @@ function ScrapbookPageModal({ identifier, onClose }) {
         ) : (
           <>
             <div className="member__scrapbookModalImageWrap">
-              {imageSrc ? (
-                <img
-                  className="member__scrapbookModalImage"
-                  src={imageSrc}
-                  alt={page.title || pageLabel}
-                />
+              {fullImageSrc ? (
+                <div className="member__scrapbookModalImageStage">
+                  {previewImageSrc ? (
+                    <img
+                      className={[
+                        'member__scrapbookModalImage',
+                        'member__scrapbookModalImage--preview',
+                        isFullImageLoaded ? 'member__scrapbookModalImage--hidden' : '',
+                      ].filter(Boolean).join(' ')}
+                      src={previewImageSrc}
+                      alt=""
+                      aria-hidden="true"
+                    />
+                  ) : null}
+                  <img
+                    className={[
+                      'member__scrapbookModalImage',
+                      'member__scrapbookModalImage--full',
+                      !isFullImageLoaded ? 'member__scrapbookModalImage--loading' : '',
+                      hasLayeredPreview && !isFullImageLoaded ? 'member__scrapbookModalImage--pending' : '',
+                    ].filter(Boolean).join(' ')}
+                    src={fullImageSrc}
+                    alt={page.title || pageLabel}
+                    onLoad={() => setIsFullImageLoaded(true)}
+                  />
+                </div>
               ) : (
                 <div className="member__scrapbookModalMissingImage">Image not uploaded</div>
               )}

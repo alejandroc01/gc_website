@@ -390,10 +390,52 @@
   min-height: 260px;
 }
 
+.member__scrapbookModalImageStage {
+  position: relative;
+  width: 100%;
+  min-height: 260px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--surface-muted);
+}
+
 .member__scrapbookModalImage {
+  display: block;
   width: 100%;
   max-height: 58vh;
   object-fit: contain;
+  transition: filter 280ms ease, opacity 280ms ease, transform 280ms ease;
+}
+
+.member__scrapbookModalImage--preview {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  max-height: none;
+  filter: blur(14px);
+  opacity: 0.72;
+  transform: scale(1.03);
+}
+
+.member__scrapbookModalImage--full {
+  position: relative;
+  z-index: 1;
+}
+
+.member__scrapbookModalImage--loading {
+  filter: blur(12px);
+  opacity: 0.76;
+  transform: scale(1.01);
+}
+
+.member__scrapbookModalImage--pending {
+  opacity: 0;
+}
+
+.member__scrapbookModalImage--hidden {
+  opacity: 0;
 }
 
 .member__scrapbookModalMissingImage,

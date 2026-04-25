@@ -288,9 +288,9 @@ async function buildScrapbookMetadataReview(metadataRows, profiles = [], options
                 profile: profileId ? summarizeProfile(profileMap.get(String(profileId))) : null,
             };
         });
-        const uploadedPage = uploadedPagesByIdentifier.get(normalizeIdentifierKey(row.identifier));
+        const uploadedPage = findUploadedPageByIdentifier(uploadedPagesByIdentifier, row.identifier, row.date);
         const parentUploadedPage = row.isPartOf
-            ? uploadedPagesByIdentifier.get(normalizeIdentifierKey(row.isPartOf))
+            ? findUploadedPageByIdentifier(uploadedPagesByIdentifier, row.isPartOf, row.date)
             : null;
         const linkedUploadedPage = uploadedPage || parentUploadedPage;
 
@@ -335,13 +335,24 @@ async function buildUploadedPagesByIdentifier() {
                 return;
             }
 
-            uploadedPagesByIdentifier.set(key, {
+            const uploadedPage = {
                 scrapbookYear: scrapbook.scrapbookYear,
                 pageIndex: index,
                 imageUrl: pageEntry.imageUrl || "",
                 thumbnailUrl: pageEntry.thumbnailUrl || "",
                 originalFilename: pageEntry.originalFilename || "",
-            });
+            };
+
+            uploadedPagesByIdentifier.set(key, uploadedPage);
+
+            const canonicalPageKey = buildCanonicalScrapbookPageKey(
+                scrapbook.scrapbookYear,
+                pageEntry.originalFilename,
+            );
+
+            if (canonicalPageKey && !uploadedPagesByIdentifier.has(canonicalPageKey)) {
+                uploadedPagesByIdentifier.set(canonicalPageKey, uploadedPage);
+            }
         });
     });
 
@@ -369,15 +380,26 @@ function enrichScrapbookGroup(group, uploadedPagesByIdentifier) {
 }
 
 function findUploadedPageForGroup(group, uploadedPagesByIdentifier) {
-    const groupUploadedPage = uploadedPagesByIdentifier.get(normalizeIdentifierKey(group.identifier));
+    const groupUploadedPage = findUploadedPageByIdentifier(uploadedPagesByIdentifier, group.identifier, group.year);
 
     if (groupUploadedPage) {
         return groupUploadedPage;
     }
 
     return (Array.isArray(group.matchedItems) ? group.matchedItems : [])
-        .map((item) => uploadedPagesByIdentifier.get(normalizeIdentifierKey(item?.identifier)))
+        .map((item) => findUploadedPageByIdentifier(uploadedPagesByIdentifier, item?.identifier, group.year))
         .find(Boolean) || null;
+}
+
+function findUploadedPageByIdentifier(uploadedPagesByIdentifier, identifier, year) {
+    const exactMatch = uploadedPagesByIdentifier.get(normalizeIdentifierKey(identifier));
+
+    if (exactMatch) {
+        return exactMatch;
+    }
+
+    const canonicalPageKey = buildCanonicalScrapbookPageKey(year, identifier);
+    return canonicalPageKey ? uploadedPagesByIdentifier.get(canonicalPageKey) || null : null;
 }
 
 function buildProfileAliases(profile) {
@@ -666,6 +688,19 @@ function normalizeIdentifierKey(identifier) {
         .trim()
         .toLowerCase()
         .replace(/\.[a-z0-9]+$/i, "");
+}
+
+function buildCanonicalScrapbookPageKey(year, identifier) {
+    const normalizedIdentifier = normalizeIdentifierKey(identifier);
+    const explicitYearMatch = normalizedIdentifier.match(/((?:19|20)\d{2})\s*scrapb/i);
+    const normalizedYear = String(explicitYearMatch?.[1] || year || "").trim();
+    const pageNumber = extractPageNumber(identifier);
+
+    if (!normalizedYear || !pageNumber) {
+        return "";
+    }
+
+    return `${normalizedYear.toLowerCase()}-p${pageNumber}`;
 }
 
 function extractPageNumber(identifier) {
