@@ -16,8 +16,6 @@ const {
 } = require("../utils/scrapbookStore");
 const { listProfiles } = require("../utils/profileStore");
 const {
-    deleteScrapbookMetadataYear,
-    getScrapbookMetadataPage,
     getScrapbookMetadataReview,
     importScrapbookMetadataCsv,
     listScrapbookMetadataYears,
@@ -101,20 +99,6 @@ router.get("/metadata/years", async (_req, res, next) => {
     }
 });
 
-router.get("/metadata/pages/:identifier", async (req, res, next) => {
-    try {
-        const page = await getScrapbookMetadataPage(req.params.identifier);
-
-        if (!page) {
-            return res.status(404).json({ error: "Scrapbook page metadata not found." });
-        }
-
-        return res.json(page);
-    } catch (error) {
-        return next(error);
-    }
-});
-
 router.post("/metadata/import", metadataUpload.single("metadataCsv"), async (req, res, next) => {
     try {
         if (!req.file?.buffer) {
@@ -122,9 +106,7 @@ router.post("/metadata/import", metadataUpload.single("metadataCsv"), async (req
         }
 
         const profiles = await listProfiles();
-        const metadataReview = await importScrapbookMetadataCsv(req.file.buffer.toString("utf8"), profiles, {
-            scrapbookYear: req.body?.scrapbookYear,
-        });
+        const metadataReview = await importScrapbookMetadataCsv(req.file.buffer.toString("utf8"), profiles);
         return res.status(201).json(metadataReview);
     } catch (error) {
         return next(error);
@@ -141,15 +123,6 @@ router.put("/metadata/profile-links", async (req, res, next) => {
             ...saveSummary,
             review: metadataReview,
         });
-    } catch (error) {
-        return next(error);
-    }
-});
-
-router.delete("/metadata/years/:year", async (req, res, next) => {
-    try {
-        const deleteSummary = await deleteScrapbookMetadataYear(req.params.year);
-        return res.json(deleteSummary);
     } catch (error) {
         return next(error);
     }

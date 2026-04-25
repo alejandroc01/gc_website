@@ -1,12 +1,9 @@
-import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import CompositeCopyrightNotice from '../Composite/CompositeCopyrightNotice.jsx';
-import ScrapbookPageModal from '../Scrapbook/ScrapbookPageModal.jsx';
 import '../../pages/MemberPage.css';
 
 export default function MemberProfileContent({ profile, onArchiveNavigate = null }) {
-  const [activeScrapbookIdentifier, setActiveScrapbookIdentifier] = useState('');
   const factItems = [
     { label: 'Preferred Name', value: profile.preferredName || profile.firstName || 'Not listed' },
     { label: 'Email', value: profile.email || 'Not listed' },
@@ -33,68 +30,58 @@ export default function MemberProfileContent({ profile, onArchiveNavigate = null
   );
 
   return (
-    <>
-      <div className="member__shell">
-        <div className="member__mediaColumn">
-          <div className="member__photoCard">
-            <ProfilePortrait profile={profile} />
-          </div>
-
-          {showsCompositeCopyrightNotice ? (
-            <CompositeCopyrightNotice className="member__photoCopyrightNotice" />
-          ) : null}
+    <div className="member__shell">
+      <div className="member__mediaColumn">
+        <div className="member__photoCard">
+          <ProfilePortrait profile={profile} />
         </div>
 
-        <div className="member__body">
-          <p className="member__eyebrow">Member Profile</p>
-          <h1 className="member__name">{profile.displayName}</h1>
-          <p className="member__meta">
-            <span>{buildLocation(profile) || 'Location not listed'}</span>
-            {profile.graduationYear ? <span className="member__dot" aria-hidden="true" /> : null}
-            {profile.graduationYear ? <span>{`Class of ${profile.graduationYear}`}</span> : null}
-          </p>
-
-          <div className="member__facts">
-            {factItems.map((fact) => (
-              <Fact key={fact.label} label={fact.label} value={fact.value} />
-            ))}
-          </div>
-
-          {badges.length > 0 ? (
-            <div className="member__badges" aria-label="Profile details">
-              {badges.map((item) => (
-                <span key={item} className="member__badge">
-                  {item}
-                </span>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="member__materials" aria-label="Related archives">
-            <h2 className="member__subheading">Included in the Archives</h2>
-            <ArchiveSection
-              label="Composites"
-              items={buildCompositeItems(profile.relatedComposites)}
-              onNavigate={onArchiveNavigate}
-            />
-            <ArchiveSection
-              label="Featured in Scrapbook Pages"
-              items={buildScrapbookItems(profile.relatedScrapbookPages)}
-              onNavigate={onArchiveNavigate}
-              onOpenScrapbookViewer={setActiveScrapbookIdentifier}
-              variant="stacked"
-            />
-          </div>
-        </div>
+        {showsCompositeCopyrightNotice ? (
+          <CompositeCopyrightNotice className="member__photoCopyrightNotice" />
+        ) : null}
       </div>
 
-      {activeScrapbookIdentifier ? (
-        <ScrapbookPageModal
-          identifier={activeScrapbookIdentifier}
-          onClose={() => setActiveScrapbookIdentifier('')}
-        />
-      ) : null}
-    </>
+      <div className="member__body">
+        <p className="member__eyebrow">Member Profile</p>
+        <h1 className="member__name">{profile.displayName}</h1>
+        <p className="member__meta">
+          <span>{buildLocation(profile) || 'Location not listed'}</span>
+          {profile.graduationYear ? <span className="member__dot" aria-hidden="true" /> : null}
+          {profile.graduationYear ? <span>{`Class of ${profile.graduationYear}`}</span> : null}
+        </p>
+
+        <div className="member__facts">
+          {factItems.map((fact) => (
+            <Fact key={fact.label} label={fact.label} value={fact.value} />
+          ))}
+        </div>
+
+        {badges.length > 0 ? (
+          <div className="member__badges" aria-label="Profile details">
+            {badges.map((item) => (
+              <span key={item} className="member__badge">
+                {item}
+              </span>
+            ))}
+          </div>
+        ) : null}
+
+        <div className="member__materials" aria-label="Related archives">
+          <h2 className="member__subheading">Included in the Archives</h2>
+          <ArchiveSection
+            label="Composites"
+            items={buildCompositeItems(profile.relatedComposites)}
+            onNavigate={onArchiveNavigate}
+          />
+          <ArchiveSection
+            label="Featured in Scrapbook Pages"
+            items={buildScrapbookItems(profile.relatedScrapbookPages)}
+            onNavigate={onArchiveNavigate}
+            variant="stacked"
+          />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -136,7 +123,7 @@ function Fact({ label, value }) {
   );
 }
 
-function ArchiveSection({ label, items, onNavigate, onOpenScrapbookViewer = null, variant = 'default' }) {
+function ArchiveSection({ label, items, onNavigate, variant = 'default' }) {
   const hasItems = Array.isArray(items) && items.length > 0;
   const isYearOnlySection = hasItems && items.every((item) => item.yearOnly);
   const isScrollableSection = variant === 'stacked' && hasItems && items.length > 6;
@@ -169,7 +156,6 @@ function ArchiveSection({ label, items, onNavigate, onOpenScrapbookViewer = null
               key={`${label}-${item.compositeId}-${item.annotationId}`}
               {...item}
               onNavigate={onNavigate}
-              onOpenScrapbookViewer={onOpenScrapbookViewer}
               variant={variant}
             />
           ))}
@@ -181,44 +167,29 @@ function ArchiveSection({ label, items, onNavigate, onOpenScrapbookViewer = null
   );
 }
 
-function MaterialCard({
-  title,
-  year,
-  note,
-  to,
-  onNavigate,
-  yearOnly = false,
-  variant = 'default',
-  thumbnailUrl = '',
-  imageUrl = '',
-  imageAlt = '',
-  scrapbookIdentifier = '',
-  onOpenScrapbookViewer = null,
-}) {
+function MaterialCard({ title, year, note, to, onNavigate, yearOnly = false, variant = 'default' }) {
   const cardClassName = [
     'member__materialCard',
     yearOnly ? 'member__materialCard--yearOnly' : '',
     variant === 'stacked' ? 'member__materialCard--stacked' : '',
   ].filter(Boolean).join(' ');
-  const isScrapbookCard = variant === 'stacked';
-  const thumbnailSrc = thumbnailUrl || imageUrl;
-  const cardContent = isScrapbookCard ? (
-    <>
-      {thumbnailSrc ? (
-        <div className="member__materialThumbnail">
-          <img
-            className="member__materialThumbnailImage"
-            src={thumbnailSrc}
-            alt={imageAlt || title || 'Scrapbook page'}
-            loading="lazy"
-            decoding="async"
-          />
-        </div>
-      ) : null}
-      {title ? <p className="member__materialTitle">{title}</p> : null}
-    </>
-  ) : (
-    <>
+
+  if (to) {
+    return (
+      <Link className={cardClassName} to={to} onClick={onNavigate || undefined}>
+        <div className="member__materialYear">{year}</div>
+        {!yearOnly && (title || note) ? (
+          <div className="member__materialBody">
+            {title ? <p className="member__materialTitle">{title}</p> : null}
+            {note ? <p className="member__materialNote">{note}</p> : null}
+          </div>
+        ) : null}
+      </Link>
+    );
+  }
+
+  return (
+    <div className={cardClassName}>
       <div className="member__materialYear">{year}</div>
       {!yearOnly && (title || note) ? (
         <div className="member__materialBody">
@@ -226,32 +197,6 @@ function MaterialCard({
           {note ? <p className="member__materialNote">{note}</p> : null}
         </div>
       ) : null}
-    </>
-  );
-
-  if (isScrapbookCard && scrapbookIdentifier && onOpenScrapbookViewer) {
-    return (
-      <button
-        type="button"
-        className={cardClassName}
-        onClick={() => onOpenScrapbookViewer(scrapbookIdentifier)}
-      >
-        {cardContent}
-      </button>
-    );
-  }
-
-  if (to) {
-    return (
-      <Link className={cardClassName} to={to} onClick={onNavigate || undefined}>
-        {cardContent}
-      </Link>
-    );
-  }
-
-  return (
-    <div className={cardClassName}>
-      {cardContent}
     </div>
   );
 }
@@ -284,10 +229,6 @@ function buildScrapbookItems(relatedScrapbookPages) {
       year: scrapbookPage.year || 'N/A',
       note: buildScrapbookNote(scrapbookPage),
       to: scrapbookPage.to || buildScrapbookLink(scrapbookPage.year),
-      scrapbookIdentifier: scrapbookPage.identifier || '',
-      thumbnailUrl: scrapbookPage.thumbnailUrl || '',
-      imageUrl: scrapbookPage.imageUrl || '',
-      imageAlt: scrapbookPage.originalFilename || scrapbookPage.title || 'Scrapbook page',
     }));
 }
 
