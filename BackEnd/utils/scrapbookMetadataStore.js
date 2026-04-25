@@ -105,17 +105,18 @@ async function readScrapbookMetadataRows() {
     return parseScrapbookMetadataRows(csvText);
 }
 
-async function importScrapbookMetadataCsv(csvText, profiles = []) {
+async function importScrapbookMetadataCsv(csvText, profiles = [], options = {}) {
     const { headers } = parseCsvRecords(csvText);
     validateMetadataHeaders(headers);
     const rows = parseScrapbookMetadataRows(csvText);
+    const selectedYear = validateImportedMetadataYear(rows, options.scrapbookYear);
     const existingCsvText = await readScrapbookMetadataCsvText();
     const mergedCsvText = mergeScrapbookMetadataCsv(existingCsvText, csvText);
 
     await ensureScrapbookMetadataDirectory();
     await fs.writeFile(scrapbookMetadataPath, mergedCsvText);
 
-    return buildScrapbookMetadataReview(rows, profiles);
+    return buildScrapbookMetadataReview(rows, profiles, { selectedYear });
 }
 
 async function getScrapbookMetadataReview(profiles = [], options = {}) {
@@ -219,6 +220,59 @@ async function listScrapbookMetadataYears() {
     return Array.from(yearCounts.entries())
         .map(([year, rowCount]) => ({ year, rowCount }))
         .sort((leftYear, rightYear) => Number(leftYear.year) - Number(rightYear.year));
+}
+
+async function deleteScrapbookMetadataYear(year) {
+    const selectedYear = normalizeMetadataYear(year);
+
+    if (!selectedYear) {
+        const error = new Error("Choose a metadata year before deleting stored metadata.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const existingCsvText = await readScrapbookMetadataCsvText();
+    const existingRecords = parseCsvRecords(existingCsvText);
+    const rowsToKeep = [];
+    const deletedIdentifiers = new Set();
+
+    existingRecords.rows.forEach((row) => {
+        if (extractMetadataYear(row.Date) === selectedYear) {
+            const identifierKey = normalizeIdentifierKey(row.Identifier);
+
+            if (identifierKey) {
+                deletedIdentifiers.add(identifierKey);
+            }
+
+            return;
+        }
+
+        rowsToKeep.push(row);
+    });
+
+    if (deletedIdentifiers.size === 0) {
+        return {
+            deletedYear: selectedYear,
+            deletedRowCount: 0,
+            removedProfileLinkCount: 0,
+        };
+    }
+
+    await ensureScrapbookMetadataDirectory();
+    await fs.writeFile(scrapbookMetadataPath, serializeCsvRecords(existingRecords.headers, rowsToKeep));
+
+    const linksStore = await readMetadataLinksStore();
+    const originalLinkCount = linksStore.profileLinks.length;
+    linksStore.profileLinks = linksStore.profileLinks.filter(
+        (link) => !deletedIdentifiers.has(normalizeIdentifierKey(link.identifier)),
+    );
+    await writeMetadataLinksStore(linksStore);
+
+    return {
+        deletedYear: selectedYear,
+        deletedRowCount: deletedIdentifiers.size,
+        removedProfileLinkCount: originalLinkCount - linksStore.profileLinks.length,
+    };
 }
 
 async function saveScrapbookMetadataProfileLinks(linksInput) {
@@ -510,6 +564,32 @@ function validateMetadataHeaders(headers) {
     }
 }
 
+function validateImportedMetadataYear(rows, scrapbookYear) {
+    const selectedYear = normalizeMetadataYear(scrapbookYear);
+
+    if (!selectedYear) {
+        const error = new Error("Enter a four-digit scrapbook year before importing metadata.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const mismatchedRows = (Array.isArray(rows) ? rows : []).filter((row) => extractMetadataYear(row.date) !== selectedYear);
+
+    if (mismatchedRows.length > 0) {
+        const previewIdentifiers = mismatchedRows
+            .slice(0, 5)
+            .map((row) => row.identifier || "Unnamed row")
+            .join(", ");
+        const error = new Error(
+            `Metadata CSV Date values must match ${selectedYear}. ${mismatchedRows.length} row${mismatchedRows.length === 1 ? "" : "s"} did not match${previewIdentifiers ? `: ${previewIdentifiers}` : ""}.`,
+        );
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return selectedYear;
+}
+
 async function readScrapbookMetadataCsvText() {
     try {
         return await fs.readFile(await resolveScrapbookMetadataPath(), "utf8");
@@ -772,6 +852,7 @@ function compareMatchedItems(leftItem, rightItem) {
 }
 
 module.exports = {
+    deleteScrapbookMetadataYear,
     getScrapbookMetadataPage,
     getScrapbookMetadataReview,
     importScrapbookMetadataCsv,

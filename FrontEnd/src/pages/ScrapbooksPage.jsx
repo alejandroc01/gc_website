@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { getScrapbooks } from '../api/composites.js';
+import { getScrapbookMetadataReview, getScrapbooks } from '../api/composites.js';
 import ScrapbookCopyrightNotice from '../components/Scrapbook/ScrapbookCopyrightNotice.jsx';
 import ScrapbookPageModal from '../components/Scrapbook/ScrapbookPageModal.jsx';
 import './ScrapbooksPage.css';
@@ -25,12 +25,16 @@ export default function ScrapbooksPage() {
 
     const loadScrapbooks = async () => {
       try {
-        const scrapbookRecords = await getScrapbooks();
+        const [scrapbookRecords, metadataReview] = await Promise.all([
+          getScrapbooks(),
+          getScrapbookMetadataReview(),
+        ]);
 
         if (!isActive) {
           return;
         }
 
+        const metadataIdentifiers = buildMetadataIdentifierSet(metadataReview?.rows);
         const sortedScrapbooks = scrapbookRecords
           .filter((scrapbook) => Array.isArray(scrapbook.pageImageUrls) && scrapbook.pageImageUrls.length > 0)
           .map((scrapbook) => {
@@ -47,13 +51,19 @@ export default function ScrapbooksPage() {
               id: scrapbook.scrapbookId,
               year: String(scrapbook.scrapbookYear || ''),
               title: scrapbook.title || `${scrapbook.scrapbookYear} Scrapbook`,
-              pages: pageEntries.map((pageEntry, index) => ({
-                id: pageEntry.pageId || `${scrapbook.scrapbookId}-page-${index + 1}`,
-                identifier: pageEntry.originalFilename || buildScrapbookPageIdentifier(scrapbook.scrapbookYear, index),
-                imageUrl: pageEntry.imageUrl || scrapbook.pageImageUrls[index] || '',
-                thumbnailUrl: pageEntry.thumbnailUrl || '',
-                originalFilename: pageEntry.originalFilename || '',
-              })),
+              pages: pageEntries.map((pageEntry, index) => {
+                const candidateIdentifier = pageEntry.originalFilename || buildScrapbookPageIdentifier(scrapbook.scrapbookYear, index);
+
+                return {
+                  id: pageEntry.pageId || `${scrapbook.scrapbookId}-page-${index + 1}`,
+                  identifier: hasScrapbookMetadata(metadataIdentifiers, candidateIdentifier, scrapbook.scrapbookYear)
+                    ? candidateIdentifier
+                    : '',
+                  imageUrl: pageEntry.imageUrl || scrapbook.pageImageUrls[index] || '',
+                  thumbnailUrl: pageEntry.thumbnailUrl || '',
+                  originalFilename: pageEntry.originalFilename || '',
+                };
+              }),
               pageCount: scrapbook.pageCount || scrapbook.pageImageUrls.length,
               pdfUrl: scrapbook.pdfUrl || '',
               uploadTimestamp: scrapbook.uploadTimestamp || '',
@@ -446,6 +456,36 @@ function getBoundedPageIndex(pageIndex, pageCount) {
   return Math.min(normalizedPageIndex, normalizedPageCount - 1);
 }
 
+function buildMetadataIdentifierSet(metadataRows) {
+  const identifierSet = new Set();
+
+  (Array.isArray(metadataRows) ? metadataRows : []).forEach((row) => {
+    const identifier = String(row?.identifier || '').trim();
+    const canonicalIdentifier = buildCanonicalScrapbookPageKey(row?.year, identifier);
+
+    if (identifier) {
+      identifierSet.add(normalizeIdentifierKey(identifier));
+    }
+
+    if (canonicalIdentifier) {
+      identifierSet.add(canonicalIdentifier);
+    }
+  });
+
+  return identifierSet;
+}
+
+function hasScrapbookMetadata(metadataIdentifiers, identifier, scrapbookYear) {
+  if (!identifier) {
+    return false;
+  }
+
+  return (
+    metadataIdentifiers.has(normalizeIdentifierKey(identifier))
+    || metadataIdentifiers.has(buildCanonicalScrapbookPageKey(scrapbookYear, identifier))
+  );
+}
+
 function buildScrapbookPageIdentifier(scrapbookYear, pageIndex) {
   const normalizedYear = String(scrapbookYear || '').trim();
 
@@ -454,4 +494,25 @@ function buildScrapbookPageIdentifier(scrapbookYear, pageIndex) {
   }
 
   return `${normalizedYear}ScrapB-P${pageIndex + 1}.jpg`;
+}
+
+function normalizeIdentifierKey(identifier) {
+  return String(identifier || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\.[a-z0-9]+$/i, '');
+}
+
+function buildCanonicalScrapbookPageKey(year, identifier) {
+  const normalizedIdentifier = normalizeIdentifierKey(identifier);
+  const explicitYearMatch = normalizedIdentifier.match(/((?:19|20)\d{2})\s*scrapb/i);
+  const normalizedYear = String(explicitYearMatch?.[1] || year || '').trim();
+  const pageMatch = String(identifier || '').match(/-p(\d+)/i);
+  const pageNumber = pageMatch ? Number(pageMatch[1]) : null;
+
+  if (!normalizedYear || !pageNumber) {
+    return '';
+  }
+
+  return `${normalizedYear.toLowerCase()}-p${pageNumber}`;
 }
