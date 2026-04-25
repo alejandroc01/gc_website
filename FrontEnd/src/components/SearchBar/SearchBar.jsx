@@ -9,6 +9,7 @@ import {
   getScrapbookMetadataReview,
 } from '../../api/composites.js';
 import scrapbookBookIcon from '../../assets/icons/scrapbook-book.svg';
+import ScrapbookPageModal from '../Scrapbook/ScrapbookPageModal.jsx';
 import './SearchBar.css';
 
 const SEARCH_FILTER_OPTIONS = [
@@ -33,6 +34,7 @@ export default function SearchBar({ className = '' }) {
   const [memberScrapbookItems, setMemberScrapbookItems] = useState([]);
   const [selectedFilterIds, setSelectedFilterIds] = useState(ALL_FILTER_IDS);
   const [loadError, setLoadError] = useState('');
+  const [activeScrapbookIdentifier, setActiveScrapbookIdentifier] = useState('');
   const searchRef = useRef(null);
   const inputRef = useRef(null);
   const navigate = useNavigate();
@@ -258,9 +260,15 @@ export default function SearchBar({ className = '' }) {
   };
 
   const handleSelect = (result) => {
-    setQuery(result.label);
     setOpen(false);
     setIsFilterMenuOpen(false);
+
+    if (result.modalIdentifier) {
+      setActiveScrapbookIdentifier(result.modalIdentifier);
+      return;
+    }
+
+    setQuery(result.label);
     setTimeout(() => navigate(result.to), 100);
   };
 
@@ -417,6 +425,13 @@ export default function SearchBar({ className = '' }) {
           </div>
         </div>
       </div>
+
+      {activeScrapbookIdentifier ? (
+        <ScrapbookPageModal
+          identifier={activeScrapbookIdentifier}
+          onClose={() => setActiveScrapbookIdentifier('')}
+        />
+      ) : null}
     </section>
   );
 }
@@ -511,6 +526,7 @@ function buildMemberScrapbookSearchItems(profiles, query) {
         meta: buildMemberScrapbookMeta(page),
         score: memberScore + 18,
         to: page.to || buildScrapbookLink(page.year),
+        modalIdentifier: page.identifier,
       });
     });
   });
@@ -557,6 +573,7 @@ function buildTaggedScrapbookSearchItems(metadataRows, query, memberScrapbookIte
         meta: buildTaggedScrapbookMeta(row),
         score: score + 16,
         to,
+        modalIdentifier: row.identifier,
       });
     });
   });

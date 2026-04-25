@@ -11,6 +11,7 @@ export default function ScrapbooksPage() {
   const [activeBook, setActiveBook] = useState(null);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [isPageImageReady, setIsPageImageReady] = useState(false);
+  const [isShelfLoading, setIsShelfLoading] = useState(true);
   const [uploadedScrapbooks, setUploadedScrapbooks] = useState([]);
   const [activeScrapbookIdentifier, setActiveScrapbookIdentifier] = useState('');
   const [searchYear, setSearchYear] = useState(() => String(searchParams.get('year') || '').trim());
@@ -79,6 +80,10 @@ export default function ScrapbooksPage() {
       } catch {
         if (isActive) {
           setUploadedScrapbooks([]);
+        }
+      } finally {
+        if (isActive) {
+          setIsShelfLoading(false);
         }
       }
     };
@@ -270,7 +275,13 @@ export default function ScrapbooksPage() {
           </div>
 
           <div className="scrapbooksPage__shelf" aria-label="Scrapbook shelf">
-            {scrapbookCollections.map((book) => (
+            {isShelfLoading ? (
+              <p className="scrapbooksPage__shelfLoading" role="status" aria-live="polite">
+                Scrapbooks loading...
+              </p>
+            ) : null}
+
+            {!isShelfLoading && scrapbookCollections.map((book) => (
               <button
                 key={book.id}
                 type="button"

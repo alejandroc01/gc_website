@@ -109,6 +109,21 @@
   filter: blur(10px);
 }
 
+.scrapbooksPage__shelfLoading {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  min-height: 180px;
+  margin: 0;
+  padding: 16px 4px;
+  font-family: var(--font-display);
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  font-weight: 600;
+  color: #fff8e8;
+  text-shadow: 0 2px 8px rgba(36, 19, 8, 0.42);
+}
+
 .scrapbooksPage__search {
   display: block;
   margin-top: 22px;
