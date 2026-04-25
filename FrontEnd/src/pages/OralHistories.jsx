@@ -464,7 +464,7 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
         <div className="oralHistories__displayGrid">
           <section className="oralHistories__displayStage" aria-label="Featured oral history">
             <div className="oralHistories__displayIntro">
-              <p className="oralHistories__displayEyebrow">German Club Alumni Archives</p>
+              <p className="oralHistories__displayEyebrow">German Club Digital Archives</p>
               <h1 className="oralHistories__displayTitle">Oral Histories</h1>
               <p className="oralHistories__displayLede">
                 Hear German Club alumni reflect on the friendships, traditions, service, and campus life
@@ -674,7 +674,7 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
       <section className="oralHistories__hero section">
         <div className="container oralHistories__heroGrid">
           <div className="oralHistories__intro">
-            <p className="oralHistories__eyebrow">German Club Alumni Archives</p>
+            <p className="oralHistories__eyebrow">German Club Digital Archives</p>
             <h1 className="oralHistories__title">Oral Histories</h1>
             <p className="oralHistories__lede oralHistories__lede--wide">
               Hear German Club alumni reflect on the friendships, traditions, service, and campus moments

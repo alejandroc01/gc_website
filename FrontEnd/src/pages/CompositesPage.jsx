@@ -387,6 +387,189 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
     });
   }, [activeRelatedMedia]);
 
+  const compositeContent = (
+    <>
+      {pageError ? (
+        <article className="compositePanel compositePanel--spacious">
+          <p className="compositeMessage compositeMessage--error">{pageError}</p>
+        </article>
+      ) : null}
+
+      {isLoading ? (
+        <article className="compositePanel compositePanel--spacious">
+          <p className="compositeMessage">Loading uploaded composites...</p>
+        </article>
+      ) : null}
+
+      {!isLoading && !pageError && sortedComposites.length === 0 ? (
+        <article className="compositePanel compositePanel--spacious">
+          <div className="compositeEmptyState">
+            <h2 className="compositeEmptyState__title">No composites are available yet.</h2>
+            <p className="compositeEmptyState__description">
+              Upload and save an annotated composite first, then it will appear here for public browsing.
+            </p>
+          </div>
+        </article>
+      ) : null}
+
+      {!isLoading && !pageError && selectedComposite ? (
+        <article className="compositePanel compositePanel--spacious compositesPage__shell">
+          <div className="compositesPage__controlStrip">
+            <div className="compositesPage__yearRow">
+              <span className="compositesPage__yearBound compositesPage__yearBound--start">{oldestYear}</span>
+
+              <label className="compositesPage__selectedYear">
+                <span className="compositesPage__selectedYearLabel">Selected year</span>
+                <input
+                  className={[
+                    'compositesPage__selectedYearInput',
+                    yearError ? 'compositesPage__selectedYearInput--invalid' : '',
+                  ].filter(Boolean).join(' ')}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={4}
+                  value={yearInput}
+                  onChange={(event) => {
+                    setYearInput(event.target.value.replace(/[^\d]/g, '').slice(0, 4));
+                    setYearError('');
+                  }}
+                  onBlur={handleCommitYearInput}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      event.preventDefault();
+                      handleCommitYearInput();
+                    }
+
+                    if (event.key === 'Escape') {
+                      event.preventDefault();
+                      setYearInput(selectedYear);
+                      setYearError('');
+                    }
+                  }}
+                  aria-invalid={yearError ? 'true' : 'false'}
+                  aria-describedby={yearError ? 'composites-year-error' : undefined}
+                />
+              </label>
+
+              <span className="compositesPage__yearBound compositesPage__yearBound--end">{newestYear}</span>
+            </div>
+
+            <div
+              className="compositesPage__sliderShell"
+              style={{
+                '--slider-progress': `${sliderProgress * 100}%`,
+                '--slider-duration': `${sliderAnimationMs}ms`,
+              }}
+            >
+              <div className="compositesPage__sliderVisual" aria-hidden="true">
+                <span className="compositesPage__sliderTrack" />
+                <span className="compositesPage__sliderFill" />
+                <span className="compositesPage__sliderThumb" />
+              </div>
+
+              <input
+                className="compositesPage__sliderInput"
+                type="range"
+                min="0"
+                max={Math.max(availableYears.length - 1, 0)}
+                step="1"
+                value={Math.max(selectedYearIndex, 0)}
+                disabled={availableYears.length <= 1}
+                onChange={(event) => handleSelectYear(availableYears[Number(event.target.value)] || selectedYear)}
+                aria-label="Select uploaded composite year"
+              />
+            </div>
+
+            {yearError ? (
+              <p id="composites-year-error" className="compositeMessage compositeMessage--error">
+                {yearError}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="compositesPage__viewerDivider" aria-hidden="true" />
+
+          <div className="compositesPage__viewerBody">
+            <div className="compositesPage__viewerStage">
+              <div
+                ref={relatedMenuRef}
+                className={[
+                  'compositesPage__relatedMedia',
+                  isRelatedMediaMenuOpen ? 'compositesPage__relatedMedia--open' : '',
+                ].join(' ')}
+              >
+                <button
+                  type="button"
+                  className="button compositesPage__controlButton compositesPage__relatedButton"
+                  onClick={handleToggleRelatedMediaMenu}
+                  aria-haspopup="menu"
+                  aria-expanded={isRelatedMediaMenuOpen ? 'true' : 'false'}
+                  aria-label={`Show related media for ${selectedYear}`}
+                >
+                  <DocumentIcon className="compositesPage__relatedIcon" />
+                </button>
+
+                <div
+                  className={[
+                    'compositesPage__relatedDropdown',
+                    isRelatedMediaMenuOpen ? 'compositesPage__relatedDropdown--open' : '',
+                  ].join(' ')}
+                  role="menu"
+                  aria-label={`Related media for ${selectedYear}`}
+                >
+                  <div className="compositesPage__relatedDropdownHeader">
+                    <p className="compositesPage__relatedDropdownEyebrow">Related Media</p>
+                    <p className="compositesPage__relatedDropdownYear">{selectedYear}</p>
+                  </div>
+
+                  {isLoadingRelatedMedia ? (
+                    <p className="compositesPage__relatedDropdownMessage">Checking related media...</p>
+                  ) : relatedMediaOptions.length > 0 ? (
+                    <div className="compositesPage__relatedDropdownList">
+                      {relatedMediaOptions.map((option) => (
+                        <button
+                          key={option.optionId}
+                          type="button"
+                          className="compositesPage__relatedDropdownItem"
+                          onClick={() => handleOpenRelatedMedia(option)}
+                          role="menuitem"
+                        >
+                          <span className="compositesPage__relatedDropdownAction">{option.actionLabel}</span>
+                          <span className="compositesPage__relatedDropdownDetail">{option.detail}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="compositesPage__relatedDropdownMessage">
+                      {relatedMediaError || `No related media for ${selectedYear}.`}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="button compositesPage__controlButton compositesPage__expandButton"
+                onClick={() => setIsExpanded(true)}
+                aria-label={`Open ${selectedYear} composite in the enlarged viewer`}
+              >
+                <ExpandIcon className="compositesPage__expandIcon" />
+              </button>
+
+              <PublicCompositeStage
+                composite={selectedComposite}
+                annotations={confirmedAnnotations}
+                onAnnotationSelect={handleOpenProfile}
+              />
+            </div>
+
+            <CompositeCopyrightNotice className="compositesPage__copyrightNotice" />
+          </div>
+        </article>
+      ) : null}
+    </>
+  );
+
   return (
     <section
       className={[
@@ -404,23 +587,75 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
             ].filter(Boolean).join(' ')}
           >
             {displayMode ? (
-              <div className="compositesPage__displayModeTopBar">
-                <button
-                  type="button"
-                  className="button compositesPage__displayBackButton"
-                  onClick={() => onBack?.()}
-                >
-                  <BackIcon className="compositesPage__displayBackIcon" />
-                  Return to Home
-                </button>
+              <div className="compositesPage__displayLayout">
+                <aside className="compositesPage__displaySidebar" aria-label="Composite display overview">
+                  <button
+                    type="button"
+                    className="button compositesPage__displayBackButton"
+                    onClick={() => onBack?.()}
+                  >
+                    <BackIcon className="compositesPage__displayBackIcon" />
+                    Return to Home
+                  </button>
+
+                  <div className="compositesPage__displayIntro">
+                    <p className="compositesPage__displayEyebrow">German Club Digital Archives</p>
+                    <h1 className="compositesPage__displayTitle">Composites</h1>
+                    <p className="compositesPage__displayLede">
+                      These composites capture the members of the German Club for each academic year.
+                      Use the timeline to explore different years.
+                    </p>
+                  </div>
+
+                  <div className="compositesPage__displayTips">
+                    <h2 className="compositesPage__displayTipsTitle">Viewing Tips</h2>
+                    <div className="compositesPage__displayTip">
+                      <span className="compositesPage__displayTipIcon"><CalendarIcon /></span>
+                      <div>
+                        <strong>Explore years</strong>
+                        <span>Move the timeline or type a year under Selected Year.</span>
+                      </div>
+                    </div>
+                    <div className="compositesPage__displayTip">
+                      <span className="compositesPage__displayTipIcon"><MemberTipIcon /></span>
+                      <div>
+                        <strong>Open profiles</strong>
+                        <span>Left click a portrait to view that member's archive profile.</span>
+                      </div>
+                    </div>
+                    <div className="compositesPage__displayTip">
+                      <span className="compositesPage__displayTipIcon"><ExpandIcon /></span>
+                      <div>
+                        <strong>Fullscreen, zoom and pan</strong>
+                        <span>Open fullscreen, hold right click to pan, and use the scroll wheel to zoom.</span>
+                      </div>
+                    </div>
+                    <div className="compositesPage__displayTip">
+                      <span className="compositesPage__displayTipIcon"><DocumentIcon /></span>
+                      <div>
+                        <strong>Related media</strong>
+                        <span>Use the document button to open scrapbooks and history for the selected year.</span>
+                      </div>
+                    </div>
+                  </div>
+                </aside>
+
+                <div className="compositesPage__displayMain">
+                  {compositeContent}
+                </div>
               </div>
             ) : (
-              <header className="compositePageHeader compositesPage__header">
-                <p className="compositePageHeader__eyebrow">German Club Alumni Archives</p>
-                <h1 className="compositePageHeader__title">Composites</h1>
-              </header>
+              <>
+                <header className="compositePageHeader compositesPage__header">
+                  <p className="compositePageHeader__eyebrow">German Club Digital Archives</p>
+                  <h1 className="compositePageHeader__title">Composites</h1>
+                </header>
+                {compositeContent}
+              </>
             )}
 
+            {false && (
+              <>
             {pageError ? (
               <article className="compositePanel compositePanel--spacious">
                 <p className="compositeMessage compositeMessage--error">{pageError}</p>
@@ -599,6 +834,8 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
                 </div>
               </article>
             ) : null}
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -879,6 +1116,43 @@ function ExpandIcon({ className = '' }) {
       <path d="M15 4H20V9" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M20 15V20H15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M9 20H4V15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CalendarIcon({ className = '' }) {
+  return (
+    <svg
+      className={className}
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path d="M7 3.5V6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M17 3.5V6.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path
+        d="M5.5 5.5H18.5C19.6046 5.5 20.5 6.39543 20.5 7.5V18.5C20.5 19.6046 19.6046 20.5 18.5 20.5H5.5C4.39543 20.5 3.5 19.6046 3.5 18.5V7.5C3.5 6.39543 4.39543 5.5 5.5 5.5Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+      <path d="M4 9.5H20" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M8 13H9.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M12 13H13.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M16 13H17.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M8 17H9.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M12 17H13.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function MemberTipIcon({ className = '' }) {
+  return (
+    <svg className={className} width="24" height="24" viewBox="0 0 80.13 80.13" fill="currentColor" aria-hidden="true">
+      <path d="M40.656,41.984c6.491,0,11.752-5.262,11.752-11.752s-5.262-11.751-11.752-11.751c-6.49,0-11.754,5.262-11.754,11.752S34.166,41.984,40.656,41.984z" />
+      <path d="M45.641,42.785h-9.972c-8.297,0-15.047,6.751-15.047,15.048v12.195l0.031,0.191l0.84,0.263c7.918,2.474,14.797,3.299,20.459,3.299c11.059,0,17.469-3.153,17.864-3.354l0.785-0.397h0.084V57.833C60.688,49.536,53.938,42.785,45.641,42.785z" />
     </svg>
   );
 }
