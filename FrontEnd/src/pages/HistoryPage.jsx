@@ -6,8 +6,8 @@ import './HistoryPage.css';
 
 const PDF_VIEWER_OPTIONS = '#toolbar=0&navpanes=0&scrollbar=0';
 const PDF_DISPLAY_ZOOM = 'page-width';
-const PDF_FULLSCREEN_DEFAULT_ZOOM = 125;
-const PDF_FULLSCREEN_MIN_ZOOM = 75;
+const PDF_FULLSCREEN_DEFAULT_ZOOM = 100;
+const PDF_FULLSCREEN_MIN_ZOOM = 50;
 const PDF_FULLSCREEN_MAX_ZOOM = 250;
 const PDF_FULLSCREEN_ZOOM_STEP = 25;
 
@@ -30,8 +30,10 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
   const [activeRelatedMedia, setActiveRelatedMedia] = useState(null);
   const [activeScrapbookPageIndex, setActiveScrapbookPageIndex] = useState(0);
   const [isScrapbookPageReady, setIsScrapbookPageReady] = useState(false);
+  const [sliderDragState, setSliderDragState] = useState(null);
   const relatedMenuRef = useRef(null);
   const relatedScrapbookImageRef = useRef(null);
+  const fullscreenViewerWrapRef = useRef(null);
   const previousSelectedYearIndexRef = useRef(-1);
 
   useEffect(() => {
@@ -173,14 +175,30 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
   const sliderProgress = availableYears.length > 1
     ? Math.max(selectedYearIndex, 0) / (availableYears.length - 1)
     : 0;
+  const activeSliderProgress = sliderDragState ? sliderDragState.progress : sliderProgress;
+  const activeSliderIndex = sliderDragState ? sliderDragState.index : selectedYearIndex;
   const sliderTravelDistance = previousSelectedYearIndexRef.current >= 0 && selectedYearIndex >= 0
     ? Math.abs(selectedYearIndex - previousSelectedYearIndexRef.current)
     : 0;
-  const sliderAnimationMs = clamp(38 + (sliderTravelDistance * 16), 38, 260);
+  const sliderAnimationMs = sliderDragState
+    ? sliderDragState.durationMs ?? (sliderDragState.isSettling ? 120 : 0)
+    : clamp(38 + (sliderTravelDistance * 16), 38, 260);
 
   useEffect(() => {
     previousSelectedYearIndexRef.current = selectedYearIndex;
   }, [selectedYearIndex]);
+
+  useEffect(() => {
+    if (!sliderDragState?.isSettling || sliderDragState.index !== selectedYearIndex) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSliderDragState(null);
+    }, (sliderDragState.durationMs ?? 120) + 40);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [selectedYearIndex, sliderDragState]);
 
   const matchingComposites = useMemo(
     () => relatedComposites.filter((composite) => composite.year === selectedYear),
@@ -219,6 +237,26 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
     nextSearchParams.set('year', selectedYear);
     setSearchParams(nextSearchParams, { replace: true });
   }, [displayMode, requestedDisplayYear, searchParams, selectedYear, setSearchParams]);
+
+  useEffect(() => {
+    if (!isFullscreenViewerOpen) {
+      return undefined;
+    }
+
+    const fullscreenViewerWrap = fullscreenViewerWrapRef.current;
+    if (!fullscreenViewerWrap) {
+      return undefined;
+    }
+
+    const animationFrameId = window.requestAnimationFrame(() => {
+      fullscreenViewerWrap.scrollLeft = Math.max(
+        0,
+        (fullscreenViewerWrap.scrollWidth - fullscreenViewerWrap.clientWidth) / 2,
+      );
+    });
+
+    return () => window.cancelAnimationFrame(animationFrameId);
+  }, [fullscreenZoomPercent, isFullscreenViewerOpen, selectedDisplayDocument?.historyId]);
 
   useEffect(() => {
     setYearInput(selectedYear);
@@ -419,6 +457,77 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
     setYearError('');
   }, [searchParams, setSearchParams]);
 
+  const getSliderStateForPointer = useCallback((event, sliderElement) => {
+    const maxIndex = availableYears.length - 1;
+    const rect = sliderElement.getBoundingClientRect();
+    const progress = rect.width > 0
+      ? clamp((event.clientX - rect.left) / rect.width, 0, 1)
+      : 0;
+    const index = clamp(Math.round(progress * maxIndex), 0, maxIndex);
+
+    return {
+      progress,
+      index,
+      isSettling: false,
+    };
+  }, [availableYears.length]);
+
+  const handleSliderPointerDown = useCallback((event) => {
+    if (availableYears.length <= 1) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const sliderElement = event.currentTarget;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const dragThreshold = 4;
+    let hasDragged = false;
+
+    setYearError('');
+
+    const handlePointerMove = (pointerEvent) => {
+      const distanceX = Math.abs(pointerEvent.clientX - startX);
+      const distanceY = Math.abs(pointerEvent.clientY - startY);
+
+      if (!hasDragged && Math.max(distanceX, distanceY) < dragThreshold) {
+        return;
+      }
+
+      hasDragged = true;
+      setSliderDragState({
+        ...getSliderStateForPointer(pointerEvent, sliderElement),
+        durationMs: 0,
+      });
+    };
+
+    const handlePointerUp = (pointerEvent) => {
+      const nextSliderState = getSliderStateForPointer(pointerEvent, sliderElement);
+      const snappedProgress = availableYears.length > 1
+        ? nextSliderState.index / (availableYears.length - 1)
+        : 0;
+      const nextYear = availableYears[nextSliderState.index] || selectedYear;
+      const durationMs = hasDragged ? 120 : 220;
+
+      setSliderDragState({
+        progress: snappedProgress,
+        index: nextSliderState.index,
+        isSettling: true,
+        durationMs,
+      });
+      handleSelectYear(nextYear);
+
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+  }, [availableYears, getSliderStateForPointer, handleSelectYear, selectedYear]);
+
   const handleCommitYearInput = useCallback(() => {
     const normalizedYear = yearInput.trim();
 
@@ -564,7 +673,7 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
                         type="text"
                         inputMode="numeric"
                         maxLength={4}
-                        value={yearInput}
+                        value={sliderDragState ? availableYears[sliderDragState.index] || yearInput : yearInput}
                         onChange={(event) => {
                           setYearInput(event.target.value.replace(/[^\d]/g, '').slice(0, 4));
                           setYearError('');
@@ -594,8 +703,9 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
 
                   <div
                     className="historyPage__displaySliderShell"
+                    onPointerDown={handleSliderPointerDown}
                     style={{
-                      '--slider-progress': `${sliderProgress * 100}%`,
+                      '--slider-progress': `${activeSliderProgress * 100}%`,
                       '--slider-duration': `${sliderAnimationMs}ms`,
                     }}
                   >
@@ -611,7 +721,7 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
                       min="0"
                       max={Math.max(availableYears.length - 1, 0)}
                       step="1"
-                      value={Math.max(selectedYearIndex, 0)}
+                      value={Math.max(activeSliderIndex, 0)}
                       disabled={availableYears.length <= 1}
                       onChange={(event) => handleSelectYear(availableYears[Number(event.target.value)] || selectedYear)}
                       aria-label="Select history document year"
@@ -629,11 +739,7 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
 
                 <div className="historyPage__displayViewerBody">
                   <div className="historyPage__displayDocumentHeader">
-                    <p className="historyPage__displayDocumentLabel">History Document</p>
                     <h2 className="historyPage__displayDocumentTitle">{selectedDisplayDocument.title}</h2>
-                    {selectedDisplayDocument.description ? (
-                      <p className="historyPage__displayDocumentDescription">{selectedDisplayDocument.description}</p>
-                    ) : null}
                   </div>
 
                   <div className="historyPage__displayViewerStage">
@@ -774,12 +880,19 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
                 </button>
               </div>
 
-              <iframe
-                className="historyPage__displayFullscreenViewer"
-                src={buildPdfViewerUrl(selectedDisplayDocument.pdfUrl, fullscreenZoomPercent)}
-                title={`${selectedDisplayDocument.title} fullscreen`}
-                tabIndex={-1}
-              />
+              <div className="historyPage__displayFullscreenViewerWrap" ref={fullscreenViewerWrapRef}>
+                <div
+                  className="historyPage__displayFullscreenViewerCanvas"
+                  style={{ '--history-fullscreen-document-width': `${fullscreenZoomPercent}%` }}
+                >
+                  <iframe
+                    className="historyPage__displayFullscreenViewer"
+                    src={buildPdfViewerUrl(selectedDisplayDocument.pdfUrl, PDF_DISPLAY_ZOOM)}
+                    title={`${selectedDisplayDocument.title} fullscreen`}
+                    tabIndex={-1}
+                  />
+                </div>
+              </div>
             </section>
           </div>
         ) : null}

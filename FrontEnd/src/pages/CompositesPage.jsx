@@ -27,8 +27,10 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
   const [activeScrapbookPageIndex, setActiveScrapbookPageIndex] = useState(0);
   const [isScrapbookPageReady, setIsScrapbookPageReady] = useState(false);
   const [activeProfileId, setActiveProfileId] = useState('');
+  const [sliderDragState, setSliderDragState] = useState(null);
   const relatedMenuRef = useRef(null);
   const relatedScrapbookImageRef = useRef(null);
+  const previousSelectedYearIndexRef = useRef(-1);
 
   useEffect(() => {
     let isActive = true;
@@ -135,7 +137,14 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
   const sliderProgress = availableYears.length > 1
     ? Math.max(selectedYearIndex, 0) / (availableYears.length - 1)
     : 0;
-  const sliderAnimationMs = clamp(420 - (sortedComposites.length * 4), 110, 260);
+  const activeSliderProgress = sliderDragState ? sliderDragState.progress : sliderProgress;
+  const activeSliderIndex = sliderDragState ? sliderDragState.index : selectedYearIndex;
+  const sliderTravelDistance = previousSelectedYearIndexRef.current >= 0 && selectedYearIndex >= 0
+    ? Math.abs(selectedYearIndex - previousSelectedYearIndexRef.current)
+    : 0;
+  const sliderAnimationMs = sliderDragState
+    ? sliderDragState.durationMs ?? (sliderDragState.isSettling ? 120 : 0)
+    : clamp(38 + (sliderTravelDistance * 16), 38, 260);
   const confirmedAnnotations = useMemo(
     () => (Array.isArray(selectedComposite?.annotations) ? selectedComposite.annotations : [])
       .filter((annotation) => Boolean(annotation.profileId)),
@@ -171,6 +180,22 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
     [matchingHistories, matchingScrapbooks],
   );
   const hasCompositeViewer = !isLoading && !pageError && Boolean(selectedComposite);
+
+  useEffect(() => {
+    previousSelectedYearIndexRef.current = selectedYearIndex;
+  }, [selectedYearIndex]);
+
+  useEffect(() => {
+    if (!sliderDragState?.isSettling || sliderDragState.index !== selectedYearIndex) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setSliderDragState(null);
+    }, (sliderDragState.durationMs ?? 120) + 40);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [selectedYearIndex, sliderDragState]);
 
   useEffect(() => {
     if (!selectedYear || requestedYear === selectedYear) {
@@ -328,6 +353,77 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
     setYearError('');
   }, [searchParams, setSearchParams]);
 
+  const getSliderStateForPointer = useCallback((event, sliderElement) => {
+    const maxIndex = availableYears.length - 1;
+    const rect = sliderElement.getBoundingClientRect();
+    const progress = rect.width > 0
+      ? clamp((event.clientX - rect.left) / rect.width, 0, 1)
+      : 0;
+    const index = clamp(Math.round(progress * maxIndex), 0, maxIndex);
+
+    return {
+      progress,
+      index,
+      isSettling: false,
+    };
+  }, [availableYears.length]);
+
+  const handleSliderPointerDown = useCallback((event) => {
+    if (availableYears.length <= 1) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const sliderElement = event.currentTarget;
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const dragThreshold = 4;
+    let hasDragged = false;
+
+    setYearError('');
+
+    const handlePointerMove = (pointerEvent) => {
+      const distanceX = Math.abs(pointerEvent.clientX - startX);
+      const distanceY = Math.abs(pointerEvent.clientY - startY);
+
+      if (!hasDragged && Math.max(distanceX, distanceY) < dragThreshold) {
+        return;
+      }
+
+      hasDragged = true;
+      setSliderDragState({
+        ...getSliderStateForPointer(pointerEvent, sliderElement),
+        durationMs: 0,
+      });
+    };
+
+    const handlePointerUp = (pointerEvent) => {
+      const nextSliderState = getSliderStateForPointer(pointerEvent, sliderElement);
+      const snappedProgress = availableYears.length > 1
+        ? nextSliderState.index / (availableYears.length - 1)
+        : 0;
+      const nextYear = availableYears[nextSliderState.index] || selectedYear;
+      const durationMs = hasDragged ? 120 : 220;
+
+      setSliderDragState({
+        progress: snappedProgress,
+        index: nextSliderState.index,
+        isSettling: true,
+        durationMs,
+      });
+      handleSelectYear(nextYear);
+
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      window.removeEventListener('pointercancel', handlePointerUp);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+    window.addEventListener('pointercancel', handlePointerUp);
+  }, [availableYears, getSliderStateForPointer, handleSelectYear, selectedYear]);
+
   const handleCommitYearInput = useCallback(() => {
     const normalizedYear = yearInput.trim();
 
@@ -428,7 +524,7 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
                   type="text"
                   inputMode="numeric"
                   maxLength={4}
-                  value={yearInput}
+                  value={sliderDragState ? availableYears[sliderDragState.index] || yearInput : yearInput}
                   onChange={(event) => {
                     setYearInput(event.target.value.replace(/[^\d]/g, '').slice(0, 4));
                     setYearError('');
@@ -456,8 +552,9 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
 
             <div
               className="compositesPage__sliderShell"
+              onPointerDown={handleSliderPointerDown}
               style={{
-                '--slider-progress': `${sliderProgress * 100}%`,
+                '--slider-progress': `${activeSliderProgress * 100}%`,
                 '--slider-duration': `${sliderAnimationMs}ms`,
               }}
             >
@@ -473,7 +570,7 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
                 min="0"
                 max={Math.max(availableYears.length - 1, 0)}
                 step="1"
-                value={Math.max(selectedYearIndex, 0)}
+                value={Math.max(activeSliderIndex, 0)}
                 disabled={availableYears.length <= 1}
                 onChange={(event) => handleSelectYear(availableYears[Number(event.target.value)] || selectedYear)}
                 aria-label="Select uploaded composite year"
