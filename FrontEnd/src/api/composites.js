@@ -108,8 +108,18 @@ export function getScrapbooks() {
   return requestJson('/api/scrapbooks');
 }
 
+export function getScrapbookMetadataPage(identifier) {
+  return requestJson(`/api/scrapbooks/metadata/pages/${encodeURIComponent(identifier)}`);
+}
+
 export function getScrapbookMetadataYears() {
   return requestJson('/api/scrapbooks/metadata/years');
+}
+
+export function deleteScrapbookMetadataYear(year) {
+  return requestJson(`/api/scrapbooks/metadata/years/${encodeURIComponent(year)}`, {
+    method: 'DELETE',
+  });
 }
 
 export function getScrapbookMetadataReview(year = '') {
@@ -117,9 +127,10 @@ export function getScrapbookMetadataReview(year = '') {
   return requestJson(`/api/scrapbooks/metadata/review${query}`);
 }
 
-export function importScrapbookMetadataCsv(file) {
+export function importScrapbookMetadataCsv(file, scrapbookYear = '') {
   const payload = new FormData();
   payload.append('metadataCsv', file);
+  payload.append('scrapbookYear', scrapbookYear);
 
   return requestJson('/api/scrapbooks/metadata/import', {
     method: 'POST',
