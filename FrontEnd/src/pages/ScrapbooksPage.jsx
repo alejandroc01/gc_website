@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
-import { getScrapbooks } from '../api/composites.js';
+import { getScrapbookMetadataReview, getScrapbooks } from '../api/composites.js';
 import ScrapbookCopyrightNotice from '../components/Scrapbook/ScrapbookCopyrightNotice.jsx';
+import ScrapbookPageModal from '../components/Scrapbook/ScrapbookPageModal.jsx';
 import './ScrapbooksPage.css';
 
 export default function ScrapbooksPage() {
@@ -11,6 +12,7 @@ export default function ScrapbooksPage() {
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [isPageImageReady, setIsPageImageReady] = useState(false);
   const [uploadedScrapbooks, setUploadedScrapbooks] = useState([]);
+  const [activeScrapbookIdentifier, setActiveScrapbookIdentifier] = useState('');
   const [searchYear, setSearchYear] = useState(() => String(searchParams.get('year') || '').trim());
   const [searchMessage, setSearchMessage] = useState('');
   const [hasHandledLinkedYear, setHasHandledLinkedYear] = useState(false);
@@ -23,23 +25,50 @@ export default function ScrapbooksPage() {
 
     const loadScrapbooks = async () => {
       try {
-        const scrapbookRecords = await getScrapbooks();
+        const [scrapbookRecords, metadataReview] = await Promise.all([
+          getScrapbooks(),
+          getScrapbookMetadataReview(),
+        ]);
 
         if (!isActive) {
           return;
         }
 
+        const metadataIdentifiers = buildMetadataIdentifierSet(metadataReview?.rows);
         const sortedScrapbooks = scrapbookRecords
           .filter((scrapbook) => Array.isArray(scrapbook.pageImageUrls) && scrapbook.pageImageUrls.length > 0)
-          .map((scrapbook) => ({
-            id: scrapbook.scrapbookId,
-            year: String(scrapbook.scrapbookYear || ''),
-            title: scrapbook.title || `${scrapbook.scrapbookYear} Scrapbook`,
-            pages: scrapbook.pageImageUrls,
-            pageCount: scrapbook.pageCount || scrapbook.pageImageUrls.length,
-            pdfUrl: scrapbook.pdfUrl || '',
-            uploadTimestamp: scrapbook.uploadTimestamp || '',
-          }))
+          .map((scrapbook) => {
+            const pageEntries = Array.isArray(scrapbook.pageEntries) && scrapbook.pageEntries.length > 0
+              ? scrapbook.pageEntries
+              : scrapbook.pageImageUrls.map((imageUrl, index) => ({
+                pageId: `page-${index + 1}`,
+                originalFilename: '',
+                imageUrl,
+                thumbnailUrl: '',
+              }));
+
+            return {
+              id: scrapbook.scrapbookId,
+              year: String(scrapbook.scrapbookYear || ''),
+              title: scrapbook.title || `${scrapbook.scrapbookYear} Scrapbook`,
+              pages: pageEntries.map((pageEntry, index) => {
+                const candidateIdentifier = pageEntry.originalFilename || buildScrapbookPageIdentifier(scrapbook.scrapbookYear, index);
+
+                return {
+                  id: pageEntry.pageId || `${scrapbook.scrapbookId}-page-${index + 1}`,
+                  identifier: hasScrapbookMetadata(metadataIdentifiers, candidateIdentifier, scrapbook.scrapbookYear)
+                    ? candidateIdentifier
+                    : '',
+                  imageUrl: pageEntry.imageUrl || scrapbook.pageImageUrls[index] || '',
+                  thumbnailUrl: pageEntry.thumbnailUrl || '',
+                  originalFilename: pageEntry.originalFilename || '',
+                };
+              }),
+              pageCount: scrapbook.pageCount || scrapbook.pageImageUrls.length,
+              pdfUrl: scrapbook.pdfUrl || '',
+              uploadTimestamp: scrapbook.uploadTimestamp || '',
+            };
+          })
           .sort(compareScrapbooks)
           .map((scrapbook, index) => ({
             ...scrapbook,
@@ -99,6 +128,10 @@ export default function ScrapbooksPage() {
     if (!activeBook) return undefined;
 
     const handleKeyDown = (event) => {
+      if (activeScrapbookIdentifier) {
+        return;
+      }
+
       if (event.key === 'Escape') {
         setActiveBook(null);
         return;
@@ -115,7 +148,7 @@ export default function ScrapbooksPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeBook]);
+  }, [activeBook, activeScrapbookIdentifier]);
 
   useEffect(() => {
     if (!activeBook) {
@@ -223,6 +256,7 @@ export default function ScrapbooksPage() {
   const handlePageImageError = () => {
     setIsPageImageReady(true);
   };
+  const activePage = activeBook?.pages?.[activePageIndex] || null;
 
   return (
     <div className="scrapbooksPage">
@@ -325,17 +359,29 @@ export default function ScrapbooksPage() {
                 </button>
 
                 <div className="scrapbooksPage__slidePanel">
-                  <img
-                    ref={pageImageRef}
-                    className={[
-                      'scrapbooksPage__pageImage',
-                      isPageImageReady ? 'scrapbooksPage__pageImage--ready' : 'scrapbooksPage__pageImage--loading',
-                    ].join(' ')}
-                    src={activeBook.pages[activePageIndex]}
-                    alt={`${activeBook.title} page ${activePageIndex + 1}`}
-                    onLoad={handlePageImageLoad}
-                    onError={handlePageImageError}
-                  />
+                  <button
+                    type="button"
+                    className="scrapbooksPage__pageImageButton"
+                    onClick={() => {
+                      if (activePage?.identifier) {
+                        setActiveScrapbookIdentifier(activePage.identifier);
+                      }
+                    }}
+                    disabled={!activePage?.identifier}
+                    aria-label={`Open details for ${activeBook.title} page ${activePageIndex + 1}`}
+                  >
+                    <img
+                      ref={pageImageRef}
+                      className={[
+                        'scrapbooksPage__pageImage',
+                        isPageImageReady ? 'scrapbooksPage__pageImage--ready' : 'scrapbooksPage__pageImage--loading',
+                      ].join(' ')}
+                      src={activePage?.imageUrl || ''}
+                      alt={`${activeBook.title} page ${activePageIndex + 1}`}
+                      onLoad={handlePageImageLoad}
+                      onError={handlePageImageError}
+                    />
+                  </button>
                 </div>
 
                 <button
@@ -363,6 +409,13 @@ export default function ScrapbooksPage() {
           </section>
         </div>
       )}
+
+      {activeScrapbookIdentifier ? (
+        <ScrapbookPageModal
+          identifier={activeScrapbookIdentifier}
+          onClose={() => setActiveScrapbookIdentifier('')}
+        />
+      ) : null}
     </div>
   );
 }
@@ -401,4 +454,65 @@ function getBoundedPageIndex(pageIndex, pageCount) {
   }
 
   return Math.min(normalizedPageIndex, normalizedPageCount - 1);
+}
+
+function buildMetadataIdentifierSet(metadataRows) {
+  const identifierSet = new Set();
+
+  (Array.isArray(metadataRows) ? metadataRows : []).forEach((row) => {
+    const identifier = String(row?.identifier || '').trim();
+    const canonicalIdentifier = buildCanonicalScrapbookPageKey(row?.year, identifier);
+
+    if (identifier) {
+      identifierSet.add(normalizeIdentifierKey(identifier));
+    }
+
+    if (canonicalIdentifier) {
+      identifierSet.add(canonicalIdentifier);
+    }
+  });
+
+  return identifierSet;
+}
+
+function hasScrapbookMetadata(metadataIdentifiers, identifier, scrapbookYear) {
+  if (!identifier) {
+    return false;
+  }
+
+  return (
+    metadataIdentifiers.has(normalizeIdentifierKey(identifier))
+    || metadataIdentifiers.has(buildCanonicalScrapbookPageKey(scrapbookYear, identifier))
+  );
+}
+
+function buildScrapbookPageIdentifier(scrapbookYear, pageIndex) {
+  const normalizedYear = String(scrapbookYear || '').trim();
+
+  if (!/^\d{4}$/.test(normalizedYear)) {
+    return '';
+  }
+
+  return `${normalizedYear}ScrapB-P${pageIndex + 1}.jpg`;
+}
+
+function normalizeIdentifierKey(identifier) {
+  return String(identifier || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\.[a-z0-9]+$/i, '');
+}
+
+function buildCanonicalScrapbookPageKey(year, identifier) {
+  const normalizedIdentifier = normalizeIdentifierKey(identifier);
+  const explicitYearMatch = normalizedIdentifier.match(/((?:19|20)\d{2})\s*scrapb/i);
+  const normalizedYear = String(explicitYearMatch?.[1] || year || '').trim();
+  const pageMatch = String(identifier || '').match(/-p(\d+)/i);
+  const pageNumber = pageMatch ? Number(pageMatch[1]) : null;
+
+  if (!normalizedYear || !pageNumber) {
+    return '';
+  }
+
+  return `${normalizedYear.toLowerCase()}-p${pageNumber}`;
 }
