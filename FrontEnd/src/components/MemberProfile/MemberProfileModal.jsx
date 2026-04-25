@@ -7,6 +7,7 @@ export default function MemberProfileModal({
   profileId,
   onClose,
   onArchiveNavigate = null,
+  archiveLinkBuilder = null,
 }) {
   const [profile, setProfile] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -118,6 +119,7 @@ export default function MemberProfileModal({
             <MemberProfileContent
               profile={profile}
               onArchiveNavigate={onArchiveNavigate || onClose}
+              archiveLinkBuilder={archiveLinkBuilder}
             />
           ) : null}
         </div>

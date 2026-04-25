@@ -5,7 +5,11 @@ import CompositeCopyrightNotice from '../Composite/CompositeCopyrightNotice.jsx'
 import ScrapbookPageModal from '../Scrapbook/ScrapbookPageModal.jsx';
 import '../../pages/MemberPage.css';
 
-export default function MemberProfileContent({ profile, onArchiveNavigate = null }) {
+export default function MemberProfileContent({
+  profile,
+  onArchiveNavigate = null,
+  archiveLinkBuilder = null,
+}) {
   const [activeScrapbookIdentifier, setActiveScrapbookIdentifier] = useState('');
   const factItems = [
     { label: 'Preferred Name', value: profile.preferredName || profile.firstName || 'Not listed' },
@@ -74,14 +78,15 @@ export default function MemberProfileContent({ profile, onArchiveNavigate = null
             <h2 className="member__subheading">Included in the Archives</h2>
             <ArchiveSection
               label="Composites"
-              items={buildCompositeItems(profile.relatedComposites)}
+              items={buildCompositeItems(profile.relatedComposites, archiveLinkBuilder)}
               onNavigate={onArchiveNavigate}
             />
             <ArchiveSection
               label="Featured in Scrapbook Pages"
-              items={buildScrapbookItems(profile.relatedScrapbookPages)}
+              items={buildScrapbookItems(profile.relatedScrapbookPages, archiveLinkBuilder)}
               onNavigate={onArchiveNavigate}
               onOpenScrapbookViewer={setActiveScrapbookIdentifier}
+              preferLinkNavigation={Boolean(archiveLinkBuilder)}
               variant="stacked"
             />
           </div>
@@ -136,7 +141,14 @@ function Fact({ label, value }) {
   );
 }
 
-function ArchiveSection({ label, items, onNavigate, onOpenScrapbookViewer = null, variant = 'default' }) {
+function ArchiveSection({
+  label,
+  items,
+  onNavigate,
+  onOpenScrapbookViewer = null,
+  preferLinkNavigation = false,
+  variant = 'default',
+}) {
   const hasItems = Array.isArray(items) && items.length > 0;
   const isYearOnlySection = hasItems && items.every((item) => item.yearOnly);
   const isScrollableSection = variant === 'stacked' && hasItems && items.length > 6;
@@ -170,6 +182,7 @@ function ArchiveSection({ label, items, onNavigate, onOpenScrapbookViewer = null
               {...item}
               onNavigate={onNavigate}
               onOpenScrapbookViewer={onOpenScrapbookViewer}
+              preferLinkNavigation={preferLinkNavigation}
               variant={variant}
             />
           ))}
@@ -194,6 +207,7 @@ function MaterialCard({
   imageAlt = '',
   scrapbookIdentifier = '',
   onOpenScrapbookViewer = null,
+  preferLinkNavigation = false,
 }) {
   const cardClassName = [
     'member__materialCard',
@@ -229,7 +243,7 @@ function MaterialCard({
     </>
   );
 
-  if (isScrapbookCard && scrapbookIdentifier && onOpenScrapbookViewer) {
+  if (isScrapbookCard && scrapbookIdentifier && onOpenScrapbookViewer && !preferLinkNavigation) {
     return (
       <button
         type="button"
@@ -260,7 +274,7 @@ function buildLocation(profile) {
   return [profile.city, profile.stateProvince].filter(Boolean).join(', ');
 }
 
-function buildCompositeItems(relatedComposites) {
+function buildCompositeItems(relatedComposites, archiveLinkBuilder = null) {
   return [...(Array.isArray(relatedComposites) ? relatedComposites : [])]
     .sort(compareCompositeArchiveItems)
     .map((composite) => ({
@@ -270,11 +284,11 @@ function buildCompositeItems(relatedComposites) {
       year: composite.compositeYear || 'N/A',
       note: '',
       yearOnly: true,
-      to: buildCompositeLink(composite.compositeYear),
+      to: buildCompositeLink(composite.compositeYear, archiveLinkBuilder),
     }));
 }
 
-function buildScrapbookItems(relatedScrapbookPages) {
+function buildScrapbookItems(relatedScrapbookPages, archiveLinkBuilder = null) {
   return [...(Array.isArray(relatedScrapbookPages) ? relatedScrapbookPages : [])]
     .sort(compareScrapbookArchiveItems)
     .map((scrapbookPage) => ({
@@ -283,7 +297,7 @@ function buildScrapbookItems(relatedScrapbookPages) {
       title: scrapbookPage.title || 'Untitled scrapbook page',
       year: scrapbookPage.year || 'N/A',
       note: buildScrapbookNote(scrapbookPage),
-      to: scrapbookPage.to || buildScrapbookLink(scrapbookPage.year),
+      to: buildScrapbookLink(scrapbookPage.year, scrapbookPage.pageNumber, archiveLinkBuilder, scrapbookPage.to),
       scrapbookIdentifier: scrapbookPage.identifier || '',
       thumbnailUrl: scrapbookPage.thumbnailUrl || '',
       imageUrl: scrapbookPage.imageUrl || '',
@@ -291,20 +305,42 @@ function buildScrapbookItems(relatedScrapbookPages) {
     }));
 }
 
-function buildCompositeLink(compositeYear) {
-  if (!compositeYear) {
-    return '/composites';
-  }
+function buildCompositeLink(compositeYear, archiveLinkBuilder = null) {
+  const normalizedYear = String(compositeYear || '').trim();
+  const to = normalizedYear ? `/composites?year=${encodeURIComponent(normalizedYear)}` : '/composites';
 
-  return `/composites?year=${encodeURIComponent(compositeYear)}`;
+  return archiveLinkBuilder
+    ? archiveLinkBuilder({ kind: 'composite', year: normalizedYear, to })
+    : to;
 }
 
-function buildScrapbookLink(scrapbookYear) {
-  if (!scrapbookYear) {
-    return '/scrapbooks';
+function buildScrapbookLink(scrapbookYear, pageNumber, archiveLinkBuilder = null, fallbackTo = '') {
+  const normalizedYear = String(scrapbookYear || '').trim();
+  const normalizedPageNumber = Number(pageNumber || 0);
+  let to = fallbackTo;
+
+  if (!to && normalizedYear) {
+    const searchParams = new URLSearchParams({ year: normalizedYear });
+
+    if (Number.isInteger(normalizedPageNumber) && normalizedPageNumber > 0) {
+      searchParams.set('page', String(normalizedPageNumber));
+    }
+
+    to = `/scrapbooks?${searchParams.toString()}`;
   }
 
-  return `/scrapbooks?year=${encodeURIComponent(scrapbookYear)}`;
+  if (!to) {
+    to = '/scrapbooks';
+  }
+
+  return archiveLinkBuilder
+    ? archiveLinkBuilder({
+      kind: 'scrapbookPage',
+      year: normalizedYear,
+      pageNumber: Number.isInteger(normalizedPageNumber) && normalizedPageNumber > 0 ? normalizedPageNumber : '',
+      to,
+    })
+    : to;
 }
 
 function buildScrapbookNote(scrapbookPage) {

@@ -45,6 +45,10 @@ export default function ScrapbooksDisplayModePage({ onBack = null }) {
     () => String(searchParams.get('year') || '').trim(),
     [searchParams],
   );
+  const requestedPageNumber = useMemo(
+    () => normalizePositiveInteger(searchParams.get('scrapbookPage')),
+    [searchParams],
+  );
 
   useEffect(() => {
     let isActive = true;
@@ -196,11 +200,11 @@ export default function ScrapbooksDisplayModePage({ onBack = null }) {
   useEffect(() => {
     setYearInput(selectedYear);
     setYearError('');
-    setActivePageIndex(0);
+    setActivePageIndex(getRequestedPageIndex(requestedPageNumber, selectedPages.length));
     setIsRelatedMediaMenuOpen(false);
     setActiveRelatedMedia(null);
     setIsFullscreenOpen(false);
-  }, [selectedBook?.id, selectedYear]);
+  }, [requestedPageNumber, selectedBook?.id, selectedPages.length, selectedYear]);
 
   useEffect(() => {
     setFullscreenZoomLevel(FULLSCREEN_MIN_ZOOM);
@@ -1279,6 +1283,22 @@ function extractAssociatedYears(values) {
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
+}
+
+function normalizePositiveInteger(value) {
+  const normalizedValue = Number(value);
+
+  return Number.isInteger(normalizedValue) && normalizedValue > 0 ? normalizedValue : null;
+}
+
+function getRequestedPageIndex(pageNumber, pageCount) {
+  const normalizedPageCount = Number(pageCount || 0);
+
+  if (!pageNumber || normalizedPageCount <= 0) {
+    return 0;
+  }
+
+  return clamp(pageNumber - 1, 0, normalizedPageCount - 1);
 }
 
 function clampZoom(value) {

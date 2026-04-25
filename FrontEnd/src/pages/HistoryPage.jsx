@@ -167,9 +167,19 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
       return null;
     }
 
+    if (requestedHistoryKey) {
+      const matchingDocument = displayDocuments.find(
+        (document) => document.key.toLowerCase() === requestedHistoryKey,
+      );
+
+      if (matchingDocument) {
+        return matchingDocument;
+      }
+    }
+
     return displayDocuments.find((document) => document.primaryYear === requestedDisplayYear)
       || displayDocuments[displayDocuments.length - 1];
-  }, [displayDocuments, requestedDisplayYear]);
+  }, [displayDocuments, requestedDisplayYear, requestedHistoryKey]);
   const selectedYear = selectedDisplayDocument?.primaryYear || '';
   const selectedYearIndex = availableYears.indexOf(selectedYear);
   const sliderProgress = availableYears.length > 1

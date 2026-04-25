@@ -1090,6 +1090,7 @@ export default function CompositesPage({ displayMode = false, onBack = null }) {
           profileId={activeProfileId}
           onClose={() => setActiveProfileId('')}
           onArchiveNavigate={() => setActiveProfileId('')}
+          archiveLinkBuilder={displayMode ? buildDisplayArchiveLink : null}
         />
       ) : null}
     </section>
@@ -1144,6 +1145,38 @@ function normalizeRelatedHistories(histories) {
       const rightTimestamp = new Date(rightHistory.uploadTimestamp || 0).getTime();
       return rightTimestamp - leftTimestamp;
     });
+}
+
+function buildDisplayArchiveLink({ kind, year, pageNumber, to }) {
+  if (kind === 'composite') {
+    return buildDisplayModeLink('composites', { year });
+  }
+
+  if (kind === 'scrapbookPage' || kind === 'scrapbook') {
+    return buildDisplayModeLink('scrapbooks', {
+      year,
+      scrapbookPage: pageNumber,
+    });
+  }
+
+  return to || '/display-mode?mode=display&page=composites';
+}
+
+function buildDisplayModeLink(page, params = {}) {
+  const searchParams = new URLSearchParams({
+    mode: 'display',
+    page,
+  });
+
+  Object.entries(params).forEach(([key, value]) => {
+    const normalizedValue = String(value ?? '').trim();
+
+    if (normalizedValue) {
+      searchParams.set(key, normalizedValue);
+    }
+  });
+
+  return `/display-mode?${searchParams.toString()}`;
 }
 
 function extractAssociatedYears(values) {

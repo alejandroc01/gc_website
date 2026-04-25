@@ -16,18 +16,22 @@ import videoCameraIcon from '../../assets/icons/video-camera.svg';
 import './SearchBar.css';
 
 const SEARCH_FILTER_OPTIONS = [
+  { id: 'member', label: 'Members' },
   { id: 'composite', label: 'Composites' },
   { id: 'scrapbook', label: 'Scrapbooks' },
-  { id: 'clubHistory', label: 'Club History' },
-  { id: 'oralHistory', label: 'Oral History' },
-  { id: 'member', label: 'Members' },
-  { id: 'oralHistoryEpisode', label: 'Oral History Episodes' },
   { id: 'scrapbookPage', label: 'Scrapbook Pages' },
+  { id: 'oralHistory', label: 'Oral History' },
+  { id: 'oralHistoryEpisode', label: 'Oral History Episodes' },
+  { id: 'clubHistory', label: 'Club History' },
 ];
 
 const ALL_FILTER_IDS = SEARCH_FILTER_OPTIONS.map((option) => option.id);
 
-export default function SearchBar({ className = '' }) {
+export default function SearchBar({
+  className = '',
+  displayMode = false,
+  onDisplayMemberSelect = null,
+}) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
@@ -258,11 +262,11 @@ export default function SearchBar({ className = '' }) {
     return [
       ...compositeResults.sort(compareSearchItems),
       ...scrapbookResults.sort(compareSearchItems),
-      ...clubHistoryResults.sort(compareSearchItems),
       ...oralHistoryResults.sort(compareSearchItems),
+      ...clubHistoryResults.sort(compareSearchItems),
       ...memberResults.sort(compareSearchItems),
-      ...oralHistoryEpisodeResults.sort(compareSearchItems),
       ...scrapbookPageResults.sort(compareSearchItems),
+      ...oralHistoryEpisodeResults.sort(compareSearchItems),
     ];
   }, [
     activeFilterIds,
@@ -307,14 +311,20 @@ export default function SearchBar({ className = '' }) {
   const handleSelect = (result) => {
     setOpen(false);
     setIsFilterMenuOpen(false);
+    setQuery(result.label);
 
-    if (result.modalIdentifier) {
+    if (displayMode && result.kind === 'member' && result.profileId && onDisplayMemberSelect) {
+      onDisplayMemberSelect(result.profileId);
+      return;
+    }
+
+    if (!displayMode && result.modalIdentifier) {
       setActiveScrapbookIdentifier(result.modalIdentifier);
       return;
     }
 
-    setQuery(result.label);
-    setTimeout(() => navigate(result.to), 100);
+    const target = displayMode ? buildDisplayModeSearchTarget(result) : result.to;
+    setTimeout(() => navigate(target), 100);
   };
 
   const handleClearQuery = () => {
@@ -536,6 +546,7 @@ function buildCompositeSearchItem(composite, query) {
     label,
     meta: 'Composite Image',
     score,
+    year,
     to: buildCompositeLink(year),
   };
 }
@@ -574,6 +585,8 @@ function buildClubHistorySearchItem(history, query) {
     label,
     meta: buildClubHistoryMeta(years),
     score,
+    historyKey: key,
+    year: years[years.length - 1] || '',
     to: buildClubHistoryLink(key),
   };
 }
@@ -628,6 +641,7 @@ function buildOralHistorySearchItems(episodes, query) {
         label: `${group.interviewee} Oral History`,
         meta: buildOralHistoryMeta(group.episodes),
         score,
+        interviewee: group.interviewee,
         to: buildOralHistoryLink(group.interviewee),
       };
     })
@@ -671,6 +685,8 @@ function buildOralHistoryEpisodeSearchItem(episode, query) {
       ? 'Full Interview | Oral History'
       : `${normalizedEpisode.category || 'Episode'} | Oral History Episode`,
     score,
+    interviewee: normalizedEpisode.interviewee,
+    episodeId: normalizedEpisode.oralHistoryId || normalizedEpisode.key,
     to: buildOralHistoryLink(
       normalizedEpisode.interviewee,
       normalizedEpisode.oralHistoryId || normalizedEpisode.key,
@@ -708,6 +724,8 @@ function buildMemberScrapbookSearchItems(profiles, query) {
         label: `${profileLabel} in ${page.title || 'scrapbook page'}`,
         meta: buildMemberScrapbookMeta(page),
         score: memberScore + 18,
+        year: String(page.year || '').trim(),
+        pageNumber: normalizePositiveInteger(page.pageNumber),
         to: page.to || buildScrapbookLink(page.year),
         modalIdentifier: page.identifier,
       });
@@ -755,6 +773,9 @@ function buildTaggedScrapbookSearchItems(metadataRows, query, memberScrapbookIte
         label: `${rawName} in ${row.title || 'scrapbook page'}`,
         meta: buildTaggedScrapbookMeta(row),
         score: score + 16,
+        year: String(row?.year || '').trim(),
+        pageIndex: normalizeZeroBasedInteger(row?.pageIndex),
+        pageNumber: normalizePositiveInteger(row?.pageNumber),
         to,
         modalIdentifier: row.identifier,
       });
@@ -806,6 +827,9 @@ function buildMetadataScrapbookPageSearchItems(metadataRows, query) {
       label,
       meta: buildTaggedScrapbookMeta(row),
       score,
+      year,
+      pageIndex: normalizeZeroBasedInteger(row?.pageIndex),
+      pageNumber,
       to,
     });
   });
@@ -861,6 +885,9 @@ function buildUploadedScrapbookPageSearchItems(scrapbooks, query) {
         label,
         meta: buildUploadedScrapbookPageMeta({ year, pageNumber, originalFilename }),
         score,
+        year,
+        pageIndex,
+        pageNumber,
         to: buildScrapbookLink(year, pageIndex),
       });
     }
@@ -895,6 +922,7 @@ function buildScrapbookSearchItem(scrapbook, query) {
     label,
     meta: buildScrapbookMeta(scrapbook),
     score,
+    year,
     to: buildScrapbookLink(year),
   };
 }
@@ -1044,6 +1072,86 @@ function buildScrapbookLink(scrapbookYear, pageIndex, pageNumber) {
   return `/scrapbooks?${searchParams.toString()}`;
 }
 
+function buildDisplayModeSearchTarget(result) {
+  if (!result) {
+    return '/display-mode?mode=display';
+  }
+
+  if (result.kind === 'composite') {
+    return buildDisplayModeLink('composites', {
+      year: result.year,
+    });
+  }
+
+  if (result.kind === 'scrapbook') {
+    return buildDisplayModeLink('scrapbooks', {
+      year: result.year,
+    });
+  }
+
+  if (result.kind === 'scrapbookPage') {
+    return buildDisplayModeLink('scrapbooks', {
+      year: result.year,
+      scrapbookPage: getScrapbookDisplayPageNumber(result),
+    });
+  }
+
+  if (result.kind === 'clubHistory') {
+    return buildDisplayModeLink('history', {
+      year: result.year,
+      history: result.historyKey,
+    });
+  }
+
+  if (result.kind === 'oralHistory') {
+    return buildDisplayModeLink('oral-histories', {
+      interviewee: result.interviewee,
+    });
+  }
+
+  if (result.kind === 'oralHistoryEpisode') {
+    return buildDisplayModeLink('oral-histories', {
+      interviewee: result.interviewee,
+      episode: result.episodeId,
+    });
+  }
+
+  return result.to || '/display-mode?mode=display';
+}
+
+function buildDisplayModeLink(displayPage, params = {}) {
+  const searchParams = new URLSearchParams({
+    mode: 'display',
+    page: displayPage,
+  });
+
+  Object.entries(params).forEach(([key, value]) => {
+    const normalizedValue = String(value ?? '').trim();
+
+    if (normalizedValue) {
+      searchParams.set(key, normalizedValue);
+    }
+  });
+
+  return `/display-mode?${searchParams.toString()}`;
+}
+
+function getScrapbookDisplayPageNumber(result) {
+  const pageNumber = normalizePositiveInteger(result.pageNumber);
+
+  if (pageNumber) {
+    return pageNumber;
+  }
+
+  const pageIndex = normalizeZeroBasedInteger(result.pageIndex);
+
+  if (pageIndex !== null) {
+    return pageIndex + 1;
+  }
+
+  return '';
+}
+
 function buildClubHistoryLink(historyKey) {
   if (!historyKey) {
     return '/written-history';
@@ -1156,6 +1264,16 @@ function normalizePositiveInteger(value) {
   const normalizedValue = Number(value);
 
   return Number.isInteger(normalizedValue) && normalizedValue > 0 ? normalizedValue : null;
+}
+
+function normalizeZeroBasedInteger(value) {
+  if (value === null || value === undefined || value === '') {
+    return null;
+  }
+
+  const normalizedValue = Number(value);
+
+  return Number.isInteger(normalizedValue) && normalizedValue >= 0 ? normalizedValue : null;
 }
 
 function SearchItemIcon({ kind }) {

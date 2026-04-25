@@ -1010,12 +1010,14 @@
   box-shadow: inset 10px 0 0 #d6b654;
 }
 
-.displayModeComposites .compositesModalBackdrop--stacked {
+.displayModeComposites .compositesModalBackdrop--stacked,
+.displayMode--homepage .compositesModalBackdrop--stacked {
   z-index: 3300;
   padding: 0;
 }
 
-.displayModeComposites .compositesModal--profile {
+.displayModeComposites .compositesModal--profile,
+.displayMode--homepage .compositesModal--profile {
   width: min(1180px, 100%);
   max-height: calc((100% - 260px) / 2);
   transform: scale(2);

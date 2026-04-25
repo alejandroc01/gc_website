@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import ActionCards, { ACTION_CARDS } from '../ActionCards/ActionCards.jsx';
+import MemberProfileModal from '../MemberProfile/MemberProfileModal.jsx';
 import SearchBar from '../SearchBar/SearchBar.jsx';
 
 const HOMEPAGE_DISPLAY_REFERENCE_WIDTH = 3840;
@@ -8,6 +9,7 @@ const HOMEPAGE_DISPLAY_REFERENCE_HEIGHT = 2160;
 
 export default function HomepageDisplayMode() {
   const [displayMetrics, setDisplayMetrics] = useState(getDisplayMetrics);
+  const [activeProfileId, setActiveProfileId] = useState('');
 
   const displaySurface = useMemo(
     () => getHomepageDisplaySurface(displayMetrics),
@@ -60,7 +62,11 @@ export default function HomepageDisplayMode() {
           }}
         >
           <div className="displayModeHomepage__content">
-            <SearchBar className="displayModeHomepage__search" />
+            <SearchBar
+              className="displayModeHomepage__search"
+              displayMode
+              onDisplayMemberSelect={setActiveProfileId}
+            />
 
             <ActionCards
               cards={displayCards}
@@ -70,6 +76,15 @@ export default function HomepageDisplayMode() {
               description="Choose a collection below to start exploring composites, scrapbooks, oral histories, and club history."
             />
           </div>
+
+          {activeProfileId ? (
+            <MemberProfileModal
+              profileId={activeProfileId}
+              onClose={() => setActiveProfileId('')}
+              onArchiveNavigate={() => setActiveProfileId('')}
+              archiveLinkBuilder={buildDisplayArchiveLink}
+            />
+          ) : null}
         </div>
       </div>
     </section>
@@ -106,6 +121,38 @@ function getDisplayCardOverride(card) {
   }
 
   return null;
+}
+
+function buildDisplayArchiveLink({ kind, year, pageNumber, to }) {
+  if (kind === 'composite') {
+    return buildDisplayModeLink('composites', { year });
+  }
+
+  if (kind === 'scrapbookPage' || kind === 'scrapbook') {
+    return buildDisplayModeLink('scrapbooks', {
+      year,
+      scrapbookPage: pageNumber,
+    });
+  }
+
+  return to || '/display-mode?mode=display';
+}
+
+function buildDisplayModeLink(page, params = {}) {
+  const searchParams = new URLSearchParams({
+    mode: 'display',
+    page,
+  });
+
+  Object.entries(params).forEach(([key, value]) => {
+    const normalizedValue = String(value ?? '').trim();
+
+    if (normalizedValue) {
+      searchParams.set(key, normalizedValue);
+    }
+  });
+
+  return `/display-mode?${searchParams.toString()}`;
 }
 
 function getDisplayMetrics() {
