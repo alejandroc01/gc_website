@@ -27,7 +27,7 @@ const NAV_ITEMS = [
   },
   {
     type: 'link',
-    label: 'Search',
+    label: 'Advanced Search',
     to: '/search',
     end: true,
   },
