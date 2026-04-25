@@ -1,17 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 
-import { getComposites, getProfiles, getHistories } from '../api/composites.js';
+import { getComposites, getProfiles, getHistories, getOralHistories } from '../api/composites.js';
 import './SearchPage.css';
 
 const SECTION_CARD_LIMIT = 8;
-
-const ORAL_HISTORY_ITEMS = Array.from({ length: 16 }, (_, index) => ({
-  key: `oral-history-${index + 1}`,
-  title: index === 0 ? 'Why Did You Come to Tech?' : `Episode ${index + 1}`,
-  meta: index === 0 ? 'Featured oral history' : 'Oral history placeholder',
-  href: '/oral-histories',
-}));
 
 const SCRAPBOOK_ITEMS = [
   { key: 'scrapbook-1984', title: '1984 Scrapbook', meta: 'Scrapbook archive preview', href: '/scrapbooks' },
@@ -30,12 +23,15 @@ export default function SearchPage() {
   const [profiles, setProfiles] = useState([]);
   const [composites, setComposites] = useState([]);
   const [writtenHistories, setWrittenHistories] = useState([]);
+  const [oralHistories, setOralHistories] = useState([]);
   const [isLoadingProfiles, setIsLoadingProfiles] = useState(true);
   const [isLoadingComposites, setIsLoadingComposites] = useState(true);
   const [isLoadingWrittenHistories, setIsLoadingWrittenHistories] = useState(true);
+  const [isLoadingOralHistories, setIsLoadingOralHistories] = useState(true);
   const [profilesError, setProfilesError] = useState('');
   const [compositesError, setCompositesError] = useState('');
   const [writtenHistoriesError, setWrittenHistoriesError] = useState('');
+  const [oralHistoriesError, setOralHistoriesError] = useState('');
 
   useEffect(() => {
     const nextQuery = searchParams.get('q') || '';
@@ -60,7 +56,7 @@ export default function SearchPage() {
 
   useEffect(() => {
     let isActive = true;
-
+    
     const loadProfiles = async () => {
       setIsLoadingProfiles(true);
       setProfilesError('');
@@ -85,6 +81,39 @@ export default function SearchPage() {
     };
 
     loadProfiles();
+
+    return () => {
+      isActive = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadOralHistories = async () => {
+      setIsLoadingOralHistories(true);
+      setOralHistoriesError('');
+
+      try {
+        const loadedOralHistories = await getOralHistories();
+
+        if (!isActive) {
+          return;
+        }
+
+        setOralHistories(Array.isArray(loadedOralHistories) ? loadedOralHistories : []);
+      } catch (error) {
+        if (isActive) {
+          setOralHistoriesError(error.message);
+        }
+      } finally {
+        if (isActive) {
+          setIsLoadingOralHistories(false);
+        }
+      }
+    };
+
+    loadOralHistories();
 
     return () => {
       isActive = false;
@@ -187,8 +216,13 @@ export default function SearchPage() {
   );
 
   const oralHistoryItems = useMemo(
-    () => filterByTitle(ORAL_HISTORY_ITEMS, normalizedQuery),
-    [normalizedQuery],
+    () => filterByTitle(buildOralHistoryItems(oralHistories), normalizedQuery),
+    [normalizedQuery, oralHistories],
+  );
+
+  const oralHistoryEpisodeItems = useMemo(
+    () => filterByTitle(buildOralHistoryEpisodeItems(oralHistories), normalizedQuery),
+    [normalizedQuery, oralHistories],
   );
 
   const scrapbookItems = useMemo(
@@ -199,8 +233,8 @@ export default function SearchPage() {
   const writtenHistoryItems = useMemo(
     () => filterByTitle(writtenHistories.map((history) => ({
       key: history.historyId,
-      title: history.title || history.originalFilename || 'Written history',
-      meta: 'Written history archive item',
+      title: history.title || history.originalFilename || 'Club History',
+      meta: buildClubHistoryMeta(history),
       href: buildSectionLink('/written-history', query, { history: history.key }),
     })), normalizedQuery),
     [normalizedQuery, writtenHistories, query],
@@ -219,7 +253,14 @@ export default function SearchPage() {
       title: 'Oral Histories',
       items: oralHistoryItems,
       viewAllHref: buildSectionLink('/oral-histories', query),
-      emptyMessage: 'No matching oral histories.',
+      emptyMessage: oralHistoriesError || (isLoadingOralHistories ? 'Loading oral history results...' : 'No matching oral histories.'),
+    },
+    {
+      key: 'oral-history-episodes',
+      title: 'Oral History Episodes',
+      items: oralHistoryEpisodeItems,
+      viewAllHref: buildSectionLink('/oral-histories', query),
+      emptyMessage: oralHistoriesError || (isLoadingOralHistories ? 'Loading oral history episode results...' : 'No matching oral history episodes.'),
     },
     {
       key: 'composites',
@@ -237,10 +278,10 @@ export default function SearchPage() {
     },
     {
       key: 'written-history',
-      title: 'Written History',
+      title: 'Club History',
       items: writtenHistoryItems,
       viewAllHref: buildSectionLink('/written-history', query),
-      emptyMessage: writtenHistoriesError || (isLoadingWrittenHistories ? 'Loading written history results...' : 'No matching written histories.'),
+      emptyMessage: writtenHistoriesError || (isLoadingWrittenHistories ? 'Loading club history results...' : 'No matching club history documents.'),
     },
   ];
 
@@ -251,7 +292,7 @@ export default function SearchPage() {
           <p className="searchPage__eyebrow">German Club Alumni Archives</p>
           <h1 className="searchPage__title">Search the Archive</h1>
           <p className="searchPage__lede">
-            Search across members, oral histories, composites, scrapbooks, and written history from one
+            Search across members, oral histories, composites, scrapbooks, and club history from one
             place.
           </p>
 
@@ -330,7 +371,11 @@ function filterByTitle(items, normalizedQuery) {
     return items;
   }
 
-  return items.filter((item) => String(item.title || '').toLowerCase().includes(normalizedQuery));
+  return items.filter((item) => [
+    item.title,
+    item.meta,
+    item.searchText,
+  ].some((value) => String(value || '').toLowerCase().includes(normalizedQuery)));
 }
 
 function buildSectionLink(pathname, query, extraParams = {}) {
@@ -369,4 +414,155 @@ function buildMemberMeta(profile) {
   }
 
   return 'Member profile';
+}
+
+function buildOralHistoryItems(episodes) {
+  const groupsByInterviewee = new Map();
+
+  (Array.isArray(episodes) ? episodes : []).forEach((episode) => {
+    const interviewee = normalizeSearchText(episode?.interviewee);
+
+    if (!interviewee) {
+      return;
+    }
+
+    const key = interviewee.toLowerCase();
+    const existingGroup = groupsByInterviewee.get(key) || {
+      interviewee,
+      episodes: [],
+    };
+
+    existingGroup.episodes.push(episode);
+    groupsByInterviewee.set(key, existingGroup);
+  });
+
+  return Array.from(groupsByInterviewee.values())
+    .sort((leftGroup, rightGroup) => leftGroup.interviewee.localeCompare(rightGroup.interviewee))
+    .map((group) => ({
+      key: `oral-history-${slugifySearchValue(group.interviewee)}`,
+      title: `${group.interviewee} Oral History`,
+      meta: buildOralHistoryMeta(group.episodes),
+      searchText: [
+        group.interviewee,
+        'oral history',
+        'interview',
+        ...group.episodes.flatMap((episode) => [
+          episode?.title,
+          episode?.category,
+          episode?.key,
+        ]),
+      ].filter(Boolean).join(' '),
+      href: buildOralHistoryLink(group.interviewee),
+    }));
+}
+
+function buildOralHistoryEpisodeItems(episodes) {
+  return (Array.isArray(episodes) ? episodes : [])
+    .map((episode) => {
+      const interviewee = normalizeSearchText(episode?.interviewee);
+      const isFullLength = Boolean(episode?.isFullLength);
+      const episodeNumber = isFullLength ? null : Number(episode?.episodeNumber || 0);
+      const episodeLabel = isFullLength ? 'Full Interview' : `Episode ${episodeNumber || ''}`.trim();
+      const title = formatOralHistoryEpisodeTitle(episode?.title);
+      const displayTitle = [
+        interviewee || 'Oral History',
+        [episodeLabel, title].filter(Boolean).join(': '),
+      ].filter(Boolean).join(' - ');
+
+      return {
+        key: `oral-history-episode-${episode?.oralHistoryId || episode?.key || slugifySearchValue(displayTitle)}`,
+        title: displayTitle,
+        meta: isFullLength
+          ? 'Full Interview | Oral History'
+          : `${normalizeSearchText(episode?.category) || 'Episode'} | Oral History Episode`,
+        searchText: [
+          interviewee,
+          episode?.title,
+          episode?.category,
+          episode?.key,
+          isFullLength ? 'full interview' : '',
+          episodeNumber ? `episode ${episodeNumber}` : '',
+          episodeNumber ? String(episodeNumber) : '',
+          'oral history episode',
+        ].filter(Boolean).join(' '),
+        href: buildOralHistoryLink(interviewee, episode?.oralHistoryId || episode?.key),
+      };
+    })
+    .sort((leftItem, rightItem) => leftItem.title.localeCompare(rightItem.title));
+}
+
+function buildOralHistoryLink(interviewee, episodeId = '') {
+  const searchParams = new URLSearchParams();
+  const normalizedInterviewee = normalizeSearchText(interviewee);
+  const normalizedEpisodeId = normalizeSearchText(episodeId);
+
+  if (normalizedInterviewee) {
+    searchParams.set('interviewee', normalizedInterviewee);
+  }
+
+  if (normalizedEpisodeId) {
+    searchParams.set('episode', normalizedEpisodeId);
+  }
+
+  const serializedParams = searchParams.toString();
+  return serializedParams ? `/oral-histories?${serializedParams}` : '/oral-histories';
+}
+
+function buildOralHistoryMeta(episodes) {
+  const fullInterviews = episodes.filter((episode) => Boolean(episode?.isFullLength)).length;
+  const episodeCount = Math.max(0, episodes.length - fullInterviews);
+  const parts = [];
+
+  if (fullInterviews > 0) {
+    parts.push(`${fullInterviews} full interview${fullInterviews === 1 ? '' : 's'}`);
+  }
+
+  if (episodeCount > 0) {
+    parts.push(`${episodeCount} episode${episodeCount === 1 ? '' : 's'}`);
+  }
+
+  return parts.length > 0 ? parts.join(' | ') : 'Oral History Interview';
+}
+
+function buildClubHistoryMeta(history) {
+  const years = extractAssociatedYears([
+    history?.title,
+    history?.key,
+    history?.description,
+    history?.originalFilename,
+  ]);
+
+  return years.length > 0 ? `Club History Document | ${years.join(', ')}` : 'Club History Document';
+}
+
+function formatOralHistoryEpisodeTitle(title) {
+  const normalizedTitle = normalizeSearchText(title);
+
+  if (!normalizedTitle) {
+    return '';
+  }
+
+  return normalizedTitle.replace(/^episode\s+\d+\s*(?:-|:|\u2013|\u2014)\s*/i, '').trim();
+}
+
+function extractAssociatedYears(values) {
+  const detectedYears = new Set();
+
+  (Array.isArray(values) ? values : []).forEach((value) => {
+    const matches = String(value || '').match(/\b(19|20)\d{2}\b/g) || [];
+    matches.forEach((match) => detectedYears.add(match));
+  });
+
+  return Array.from(detectedYears).sort((leftYear, rightYear) => Number(leftYear) - Number(rightYear));
+}
+
+function normalizeSearchText(value) {
+  return String(value || '').trim();
+}
+
+function slugifySearchValue(value) {
+  return normalizeSearchText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'item';
 }
