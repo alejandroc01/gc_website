@@ -40,7 +40,7 @@ const NAV_ITEMS = [
       { label: 'Composites', to: '/composites', end: true },
       { label: 'Scrapbooks', to: '/scrapbooks', end: true },
       { label: 'Oral Histories', to: '/oral-histories', end: true },
-      { label: 'Written History', to: '/written-history', end: true },
+      { label: 'Club History', to: '/written-history', end: true },
     ],
   },
   {

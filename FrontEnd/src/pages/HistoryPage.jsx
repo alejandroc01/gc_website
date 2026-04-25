@@ -541,7 +541,7 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
       return;
     }
 
-    setYearError(`No history document is available for ${normalizedYear}.`);
+    setYearError(`No club history document is available for ${normalizedYear}.`);
   }, [availableYears, handleSelectYear, yearInput]);
 
   const handleOpenRelatedMedia = useCallback((option) => {
@@ -604,9 +604,9 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
 
             <div className="historyPage__displayIntro">
               <p className="historyPage__displayEyebrow">German Club Digital Archives</p>
-              <h1 className="historyPage__displayTitle">History of the German Club</h1>
+              <h1 className="historyPage__displayTitle">Club History</h1>
               <p className="historyPage__displayLede">
-                Browse written histories by year and open archival documents for a full-screen reading view.
+                Browse club history documents by year and open archival PDFs for a full-screen reading view.
               </p>
             </div>
 
@@ -645,13 +645,13 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
 
             {isLoadingHistories ? (
               <article className="historyPage__displayShell historyPage__displayShell--message">
-                <p className="historyPage__displayMessage">Loading history documents...</p>
+                <p className="historyPage__displayMessage">Loading club history documents...</p>
               </article>
             ) : null}
 
             {!isLoadingHistories && !loadError && displayDocuments.length === 0 ? (
               <article className="historyPage__displayShell historyPage__displayShell--message">
-                <p className="historyPage__displayMessage">No history documents with years are available yet.</p>
+                <p className="historyPage__displayMessage">No club history documents with years are available yet.</p>
               </article>
             ) : null}
 
@@ -724,7 +724,7 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
                       value={Math.max(activeSliderIndex, 0)}
                       disabled={availableYears.length <= 1}
                       onChange={(event) => handleSelectYear(availableYears[Number(event.target.value)] || selectedYear)}
-                      aria-label="Select history document year"
+                      aria-label="Select club history document year"
                     />
                   </div>
 
@@ -919,7 +919,7 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
         <div className="container historyPage__heroGrid">
           <div className="historyPage__intro">
             <p className="historyPage__eyebrow">German Club Alumni Archives</p>
-            <h1 className="historyPage__title">History of the German Club</h1>
+            <h1 className="historyPage__title">Club History</h1>
             <p className="historyPage__lede">
               Browse primary documents, anniversary writeups, and archival histories in a card-based
               collection.
@@ -946,16 +946,16 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
             <div className="historyPage__sectionHeader">
               <div>
                 <div>
-                  <h2 className="historyPage__sectionTitle">Historical Document Library</h2>
+                  <h2 className="historyPage__sectionTitle">Club History Library</h2>
                 </div>
               </div>
               <label className="historyPage__search" htmlFor="history-document-search">
-                <span className="sr-only">Search written histories</span>
+                <span className="sr-only">Search club history documents</span>
                 <input
                   id="history-document-search"
                   className="historyPage__searchInput"
                   type="search"
-                  placeholder="Search by history name"
+                  placeholder="Search by club history name"
                   value={searchQuery}
                   onChange={handleSearchChange}
                 />
@@ -965,12 +965,12 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
             <div className="historyPage__libraryContent">
               {loadError ? (
                 <div className="historyPage__emptyState">
-                  <p className="historyPage__emptyTitle">Unable to load history PDFs.</p>
+                  <p className="historyPage__emptyTitle">Unable to load club history PDFs.</p>
                   <p className="historyPage__emptyCopy">{loadError}</p>
                 </div>
               ) : isLoadingHistories ? (
                 <div className="historyPage__emptyState">
-                  <p className="historyPage__emptyTitle">Loading history PDFs...</p>
+                  <p className="historyPage__emptyTitle">Loading club history PDFs...</p>
                 </div>
               ) : filteredHistoryDocuments.length > 0 ? (
                 <div className="historyPage__grid" aria-label="History document cards">
@@ -985,7 +985,7 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
                           className="button historyPage__cardButton"
                           onClick={() => handleOpenDocument(document)}
                         >
-                          Open History
+                          Open Club History
                         </button>
                       </div>
                     </article>
@@ -993,12 +993,12 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
                 </div>
               ) : historyDocuments.length > 0 && normalizedSearchQuery ? (
                 <div className="historyPage__emptyState">
-                  <p className="historyPage__emptyTitle">No matching history PDFs.</p>
-                  <p className="historyPage__emptyCopy">Try a different history name.</p>
+                  <p className="historyPage__emptyTitle">No matching club history PDFs.</p>
+                  <p className="historyPage__emptyCopy">Try a different club history name.</p>
                 </div>
               ) : (
                 <div className="historyPage__emptyState">
-                  <p className="historyPage__emptyTitle">No history PDFs added yet.</p>
+                  <p className="historyPage__emptyTitle">No club history PDFs added yet.</p>
                 </div>
               )}
             </div>
@@ -1016,14 +1016,14 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
           <button
             type="button"
             className="historyPage__modalOverlay"
-            aria-label="Close history document viewer"
+            aria-label="Close club history document viewer"
             onClick={handleCloseDocument}
           />
 
           <div className="historyPage__modalPanel">
             <div className="historyPage__modalHeader">
               <div>
-                <p className="historyPage__modalLabel">History Viewer</p>
+                <p className="historyPage__modalLabel">Club History Viewer</p>
                 <h2 id="history-document-title" className="historyPage__modalTitle">
                   {activeDocument.title}
                 </h2>
@@ -1032,7 +1032,7 @@ export default function HistoryPage({ displayMode = false, onBack = null }) {
               <button
                 type="button"
                 className="historyPage__modalClose"
-                aria-label="Close history document viewer"
+                aria-label="Close club history document viewer"
                 onClick={handleCloseDocument}
               >
                 Close

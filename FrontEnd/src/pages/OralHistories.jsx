@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { getOralHistories } from '../api/composites.js';
 import fullscreenIconUrl from '../assets/icons/oral-history-fullscreen.svg';
@@ -24,6 +25,7 @@ const DISPLAY_VIDEO_CONTROLS_HIDE_MS = 2800;
  * The page now loads uploaded oral history videos from backend storage.
  */
 export default function OralHistories({ displayMode = false, onBack = null }) {
+  const [searchParams] = useSearchParams();
   const [episodes, setEpisodes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
@@ -43,6 +45,14 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
   const displayVideoRef = useRef(null);
   const displayVideoControlsTimeoutRef = useRef(null);
   const pendingDisplayAutoplayIdRef = useRef('');
+  const requestedInterviewee = useMemo(
+    () => String(searchParams.get('interviewee') || '').trim(),
+    [searchParams],
+  );
+  const requestedEpisodeId = useMemo(
+    () => String(searchParams.get('episode') || '').trim(),
+    [searchParams],
+  );
 
   useEffect(() => {
     let isActive = true;
@@ -206,6 +216,54 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
     ],
     [categories],
   );
+
+  useEffect(() => {
+    if (episodes.length === 0 || (!requestedInterviewee && !requestedEpisodeId)) {
+      return;
+    }
+
+    const requestedEpisode = requestedEpisodeId
+      ? episodes.find((episode) => (
+        String(episode?.oralHistoryId || '').trim() === requestedEpisodeId
+        || String(episode?.key || '').trim() === requestedEpisodeId
+      ))
+      : null;
+
+    if (requestedEpisode) {
+      const nextInterviewee = normalizeIntervieweeName(requestedEpisode.interviewee);
+
+      if (nextInterviewee) {
+        setActiveInterviewee(nextInterviewee);
+      }
+
+      setActiveCategory('');
+      setActiveOralHistoryId(String(requestedEpisode.oralHistoryId || ''));
+      return;
+    }
+
+    if (!requestedInterviewee) {
+      return;
+    }
+
+    const matchingInterviewee = findMatchingIntervieweeName(interviewees, requestedInterviewee);
+
+    if (!matchingInterviewee) {
+      return;
+    }
+
+    const matchingEpisodes = episodes.filter(
+      (episode) => normalizeIntervieweeName(episode.interviewee) === normalizeIntervieweeName(matchingInterviewee),
+    );
+    const preferredEpisode = matchingEpisodes.find((episode) => episode.isFullLength)
+      || matchingEpisodes[0];
+
+    setActiveInterviewee(matchingInterviewee);
+    setActiveCategory('');
+
+    if (preferredEpisode?.oralHistoryId) {
+      setActiveOralHistoryId(String(preferredEpisode.oralHistoryId));
+    }
+  }, [episodes, interviewees, requestedEpisodeId, requestedInterviewee]);
 
   const showDisplayVideoControls = () => {
     if (!displayMode) {

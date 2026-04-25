@@ -123,10 +123,10 @@ export default function HistoryUploadPage() {
     setIsPreparing(true);
 
     try {
-      const normalizedName = validateRequiredField(formValues.name, 'Enter a history name.');
+      const normalizedName = validateRequiredField(formValues.name, 'Enter a club history name.');
       const normalizedDescription = validateRequiredField(
         formValues.description,
-        'Enter a description for this history document.',
+        'Enter a description for this club history document.',
       );
 
       if (isEditingHistory) {
@@ -150,7 +150,7 @@ export default function HistoryUploadPage() {
       const normalizedKey = validateHistoryKey(formValues.key);
 
       if (!selectedFile) {
-        throw new Error('Choose a PDF file before preparing the history upload.');
+        throw new Error('Choose a PDF file before preparing the club history upload.');
       }
 
       await validatePdfFile(selectedFile);
@@ -207,7 +207,7 @@ export default function HistoryUploadPage() {
 
   const handleDeleteHistory = async (history) => {
     const confirmed = window.confirm(
-      `Delete "${history.title}"? This will remove the written history PDF from backend storage.`,
+      `Delete "${history.title}"? This will remove the club history PDF from backend storage.`,
     );
 
     if (!confirmed) {
@@ -239,7 +239,7 @@ export default function HistoryUploadPage() {
     <section className="section compositeAdmin">
       <div className="container">
         <div className="compositePageHeader">
-          <h1 className="compositePageHeader__title">Upload Written History PDF</h1>
+          <h1 className="compositePageHeader__title">Upload Club History PDF</h1>
         </div>
 
         <div style={{ marginBottom: '24px' }}>
@@ -251,9 +251,9 @@ export default function HistoryUploadPage() {
         <article className="compositePanel compositePanel--spacious">
           <div className="compositePanel__header">
             <div>
-              <h2 className="compositePanel__title">Prepare a History Document</h2>
+              <h2 className="compositePanel__title">Prepare a Club History Document</h2>
               <p className="compositePanel__description">
-                Upload a single written-history PDF first. Once the file is selected, the page will
+                Upload a single club history PDF first. Once the file is selected, the page will
                 derive the title and key from the filename and let you refine the metadata.
               </p>
             </div>
@@ -262,7 +262,7 @@ export default function HistoryUploadPage() {
           <form className="compositeUploadForm" onSubmit={handleSubmit}>
             <div className="historyUploadEditor">
               <div className="compositeField">
-                <span className="compositeField__label">History PDF</span>
+                <span className="compositeField__label">Club History PDF</span>
                 <button
                   type="button"
                   className={`compositeDropzone${isDraggingFile ? ' compositeDropzone--active' : ''}`}
@@ -338,7 +338,7 @@ export default function HistoryUploadPage() {
                     <span className="historyUploadEditor__summaryLabel">
                       {isEditingHistory ? 'Stored metadata' : 'Derived draft'}
                     </span>
-                    <strong className="historyUploadEditor__summaryValue">{formValues.name || 'Untitled history'}</strong>
+                    <strong className="historyUploadEditor__summaryValue">{formValues.name || 'Untitled club history'}</strong>
                     <p className="historyUploadEditor__summaryMeta">
                       Key: <strong>{formValues.key || 'pending'}</strong>
                     </p>
@@ -364,7 +364,7 @@ export default function HistoryUploadPage() {
                     </h3>
                     <p className="historyUploadEditor__metadataDescription">
                       Edit the derived values if the filename was not quite right, then add the public
-                      description shown with the history card.
+                      description shown with the club history card.
                     </p>
                   </div>
                 </div>
@@ -376,7 +376,7 @@ export default function HistoryUploadPage() {
                       className="compositeField__input"
                       type="text"
                       name="name"
-                      placeholder="enter history title"
+                      placeholder="enter club history title"
                       value={formValues.name}
                       onChange={handleFieldChange}
                     />
@@ -400,7 +400,7 @@ export default function HistoryUploadPage() {
                     <textarea
                       className="compositeField__input compositeField__textarea"
                       name="description"
-                      placeholder="write a short summary shown on the written history card"
+                      placeholder="write a short summary shown on the club history card"
                       rows={5}
                       value={formValues.description}
                       onChange={handleFieldChange}
@@ -419,10 +419,10 @@ export default function HistoryUploadPage() {
                 {isPreparing
                   ? isEditingHistory
                     ? 'Saving Changes...'
-                    : 'Uploading History...'
+                    : 'Uploading Club History...'
                   : isEditingHistory
                     ? 'Save Changes'
-                    : 'Upload History'}
+                    : 'Upload Club History'}
               </button>
 
               {isEditingHistory ? (
@@ -462,22 +462,22 @@ export default function HistoryUploadPage() {
         <article className="compositePanel compositePanel--spacious">
           <div className="compositePanel__header">
             <div>
-              <h2 className="compositePanel__title">Stored Written Histories</h2>
+              <h2 className="compositePanel__title">Stored Club History Documents</h2>
               <p className="compositePanel__description">
-                These written histories are currently stored by the backend and available to the site.
+                These club history documents are currently stored by the backend and available to the site.
               </p>
             </div>
           </div>
 
           {isLoadingHistories ? (
             <div className="compositeEmptyState">
-              <p className="compositeEmptyState__description">Loading written histories...</p>
+              <p className="compositeEmptyState__description">Loading club history documents...</p>
             </div>
           ) : storedHistories.length === 0 ? (
             <div className="compositeEmptyState">
-              <h3 className="compositeEmptyState__title">No stored written histories yet.</h3>
+              <h3 className="compositeEmptyState__title">No stored club history documents yet.</h3>
               <p className="compositeEmptyState__description">
-                After a PDF upload completes, the written history will appear here.
+                After a PDF upload completes, the club history document will appear here.
               </p>
             </div>
           ) : (
@@ -538,7 +538,7 @@ export default function HistoryUploadPage() {
 
           {latestStoredHistory ? (
             <p className="compositeMessage" style={{ marginTop: '18px' }}>
-              Latest stored history: <strong>{latestStoredHistory.title}</strong> using filename{' '}
+              Latest stored club history: <strong>{latestStoredHistory.title}</strong> using filename{' '}
               <strong>{latestStoredHistory.originalFilename || latestStoredHistory.fileName}</strong>.
             </p>
           ) : null}
@@ -562,7 +562,7 @@ function validateHistoryKey(value) {
   const normalizedValue = value.trim().toLowerCase();
 
   if (!normalizedValue) {
-    throw new Error('Enter a history key before preparing the PDF.');
+    throw new Error('Enter a club history key before preparing the PDF.');
   }
 
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(normalizedValue)) {
@@ -613,7 +613,7 @@ function stripKnownExtensions(fileName) {
 
 function formatHistoryTitle(value) {
   if (!value) {
-    return 'Untitled History';
+    return 'Untitled Club History';
   }
 
   const hasLowerAndUpperCase = /[a-z]/.test(value) && /[A-Z]/.test(value);

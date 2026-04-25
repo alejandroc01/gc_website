@@ -48,10 +48,10 @@ export const UPLOAD_CARDS = [
   {
     key: 'upload-history',
     imageSrc: '/images/homepageimage.jpg',
-    imageAlt: 'History document upload preview',
-    title: 'Upload History PDF',
-    description: 'Prepare a history document PDF with its key, name, and description for future archive storage.',
-    buttonText: 'Open History Upload',
+    imageAlt: 'Club history document upload preview',
+    title: 'Upload Club History PDF',
+    description: 'Prepare a club history PDF with its key, name, and description for future archive storage.',
+    buttonText: 'Open Club History Upload',
     to: '/upload/written-history',
   },
 ];
