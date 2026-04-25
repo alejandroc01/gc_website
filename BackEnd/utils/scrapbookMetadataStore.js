@@ -105,17 +105,18 @@ async function readScrapbookMetadataRows() {
     return parseScrapbookMetadataRows(csvText);
 }
 
-async function importScrapbookMetadataCsv(csvText, profiles = []) {
+async function importScrapbookMetadataCsv(csvText, profiles = [], options = {}) {
     const { headers } = parseCsvRecords(csvText);
     validateMetadataHeaders(headers);
     const rows = parseScrapbookMetadataRows(csvText);
+    const selectedYear = validateImportedMetadataYear(rows, options.scrapbookYear);
     const existingCsvText = await readScrapbookMetadataCsvText();
     const mergedCsvText = mergeScrapbookMetadataCsv(existingCsvText, csvText);
 
     await ensureScrapbookMetadataDirectory();
     await fs.writeFile(scrapbookMetadataPath, mergedCsvText);
 
-    return buildScrapbookMetadataReview(rows, profiles);
+    return buildScrapbookMetadataReview(rows, profiles, { selectedYear });
 }
 
 async function getScrapbookMetadataReview(profiles = [], options = {}) {
@@ -124,6 +125,82 @@ async function getScrapbookMetadataReview(profiles = [], options = {}) {
     const reviewRows = selectedYear ? filterScrapbookMetadataRowsByYear(rows, selectedYear) : rows;
 
     return buildScrapbookMetadataReview(reviewRows, profiles, { selectedYear });
+}
+
+async function getScrapbookMetadataPage(identifier) {
+    const normalizedIdentifier = normalizeIdentifierKey(identifier);
+
+    if (!normalizedIdentifier) {
+        return null;
+    }
+
+    const metadataRows = await readScrapbookMetadataRows();
+    const rowsByIdentifier = new Map(
+        metadataRows.map((row) => [normalizeIdentifierKey(row.identifier), row]),
+    );
+    const row = findMetadataRowByIdentifier(rowsByIdentifier, identifier);
+
+    if (!row) {
+        return null;
+    }
+
+    const parentRow = row.isPartOf ? rowsByIdentifier.get(normalizeIdentifierKey(row.isPartOf)) : null;
+    const displayRow = parentRow || row;
+    const matchedItems = metadataRows
+        .filter((metadataRow) => normalizeIdentifierKey(metadataRow.isPartOf) === normalizeIdentifierKey(displayRow.identifier))
+        .map((metadataRow) => ({
+            identifier: metadataRow.identifier,
+            title: metadataRow.title,
+            category: metadataRow.category,
+            description: metadataRow.description,
+            matchedNames: metadataRow.tags,
+            isDetail: true,
+        }));
+    const uploadedPagesByIdentifier = await buildUploadedPagesByIdentifier();
+    const uploadedPage = findUploadedPageForGroup(
+        {
+            identifier: displayRow.identifier,
+            matchedItems,
+        },
+        uploadedPagesByIdentifier,
+    );
+    const year = displayRow.date || uploadedPage?.scrapbookYear || "";
+
+    return {
+        identifier: displayRow.identifier,
+        requestedIdentifier: row.identifier,
+        title: displayRow.title,
+        year,
+        description: displayRow.description,
+        category: displayRow.category,
+        source: displayRow.source,
+        pageNumber: extractPageNumber(displayRow.identifier),
+        members: displayRow.tags,
+        matchedItems: matchedItems.sort(compareMatchedItems),
+        imageUrl: uploadedPage?.imageUrl || "",
+        thumbnailUrl: uploadedPage?.thumbnailUrl || "",
+        originalFilename: uploadedPage?.originalFilename || "",
+        scrapbookLink: uploadedPage
+            ? buildScrapbookLink(uploadedPage.scrapbookYear || year, uploadedPage.pageIndex)
+            : buildScrapbookLink(year, null),
+    };
+}
+
+function findMetadataRowByIdentifier(rowsByIdentifier, identifier) {
+    const exactMatch = rowsByIdentifier.get(normalizeIdentifierKey(identifier));
+
+    if (exactMatch) {
+        return exactMatch;
+    }
+
+    const requestedCanonicalKey = buildCanonicalScrapbookPageKey("", identifier);
+
+    if (!requestedCanonicalKey) {
+        return null;
+    }
+
+    return Array.from(rowsByIdentifier.values())
+        .find((row) => buildCanonicalScrapbookPageKey(row.date, row.identifier) === requestedCanonicalKey) || null;
 }
 
 async function listScrapbookMetadataYears() {
@@ -143,6 +220,59 @@ async function listScrapbookMetadataYears() {
     return Array.from(yearCounts.entries())
         .map(([year, rowCount]) => ({ year, rowCount }))
         .sort((leftYear, rightYear) => Number(leftYear.year) - Number(rightYear.year));
+}
+
+async function deleteScrapbookMetadataYear(year) {
+    const selectedYear = normalizeMetadataYear(year);
+
+    if (!selectedYear) {
+        const error = new Error("Choose a metadata year before deleting stored metadata.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const existingCsvText = await readScrapbookMetadataCsvText();
+    const existingRecords = parseCsvRecords(existingCsvText);
+    const rowsToKeep = [];
+    const deletedIdentifiers = new Set();
+
+    existingRecords.rows.forEach((row) => {
+        if (extractMetadataYear(row.Date) === selectedYear) {
+            const identifierKey = normalizeIdentifierKey(row.Identifier);
+
+            if (identifierKey) {
+                deletedIdentifiers.add(identifierKey);
+            }
+
+            return;
+        }
+
+        rowsToKeep.push(row);
+    });
+
+    if (deletedIdentifiers.size === 0) {
+        return {
+            deletedYear: selectedYear,
+            deletedRowCount: 0,
+            removedProfileLinkCount: 0,
+        };
+    }
+
+    await ensureScrapbookMetadataDirectory();
+    await fs.writeFile(scrapbookMetadataPath, serializeCsvRecords(existingRecords.headers, rowsToKeep));
+
+    const linksStore = await readMetadataLinksStore();
+    const originalLinkCount = linksStore.profileLinks.length;
+    linksStore.profileLinks = linksStore.profileLinks.filter(
+        (link) => !deletedIdentifiers.has(normalizeIdentifierKey(link.identifier)),
+    );
+    await writeMetadataLinksStore(linksStore);
+
+    return {
+        deletedYear: selectedYear,
+        deletedRowCount: deletedIdentifiers.size,
+        removedProfileLinkCount: originalLinkCount - linksStore.profileLinks.length,
+    };
 }
 
 async function saveScrapbookMetadataProfileLinks(linksInput) {
@@ -229,9 +359,9 @@ async function buildScrapbookMetadataReview(metadataRows, profiles = [], options
                 profile: profileId ? summarizeProfile(profileMap.get(String(profileId))) : null,
             };
         });
-        const uploadedPage = uploadedPagesByIdentifier.get(normalizeIdentifierKey(row.identifier));
+        const uploadedPage = findUploadedPageByIdentifier(uploadedPagesByIdentifier, row.identifier, row.date);
         const parentUploadedPage = row.isPartOf
-            ? uploadedPagesByIdentifier.get(normalizeIdentifierKey(row.isPartOf))
+            ? findUploadedPageByIdentifier(uploadedPagesByIdentifier, row.isPartOf, row.date)
             : null;
         const linkedUploadedPage = uploadedPage || parentUploadedPage;
 
@@ -276,12 +406,24 @@ async function buildUploadedPagesByIdentifier() {
                 return;
             }
 
-            uploadedPagesByIdentifier.set(key, {
+            const uploadedPage = {
                 scrapbookYear: scrapbook.scrapbookYear,
                 pageIndex: index,
                 imageUrl: pageEntry.imageUrl || "",
+                thumbnailUrl: pageEntry.thumbnailUrl || "",
                 originalFilename: pageEntry.originalFilename || "",
-            });
+            };
+
+            uploadedPagesByIdentifier.set(key, uploadedPage);
+
+            const canonicalPageKey = buildCanonicalScrapbookPageKey(
+                scrapbook.scrapbookYear,
+                pageEntry.originalFilename,
+            );
+
+            if (canonicalPageKey && !uploadedPagesByIdentifier.has(canonicalPageKey)) {
+                uploadedPagesByIdentifier.set(canonicalPageKey, uploadedPage);
+            }
         });
     });
 
@@ -289,7 +431,7 @@ async function buildUploadedPagesByIdentifier() {
 }
 
 function enrichScrapbookGroup(group, uploadedPagesByIdentifier) {
-    const uploadedPage = uploadedPagesByIdentifier.get(normalizeIdentifierKey(group.identifier));
+    const uploadedPage = findUploadedPageForGroup(group, uploadedPagesByIdentifier);
     const year = group.year || uploadedPage?.scrapbookYear || "";
     const pageNumber = group.pageNumber || (Number.isInteger(uploadedPage?.pageIndex) ? uploadedPage.pageIndex + 1 : null);
 
@@ -299,12 +441,36 @@ function enrichScrapbookGroup(group, uploadedPagesByIdentifier) {
         pageNumber,
         isUploaded: Boolean(uploadedPage),
         imageUrl: uploadedPage?.imageUrl || "",
+        thumbnailUrl: uploadedPage?.thumbnailUrl || "",
         originalFilename: uploadedPage?.originalFilename || "",
         to: uploadedPage
             ? buildScrapbookLink(uploadedPage.scrapbookYear || year, uploadedPage.pageIndex)
             : buildScrapbookLink(year, null),
         matchedItems: group.matchedItems.sort(compareMatchedItems),
     };
+}
+
+function findUploadedPageForGroup(group, uploadedPagesByIdentifier) {
+    const groupUploadedPage = findUploadedPageByIdentifier(uploadedPagesByIdentifier, group.identifier, group.year);
+
+    if (groupUploadedPage) {
+        return groupUploadedPage;
+    }
+
+    return (Array.isArray(group.matchedItems) ? group.matchedItems : [])
+        .map((item) => findUploadedPageByIdentifier(uploadedPagesByIdentifier, item?.identifier, group.year))
+        .find(Boolean) || null;
+}
+
+function findUploadedPageByIdentifier(uploadedPagesByIdentifier, identifier, year) {
+    const exactMatch = uploadedPagesByIdentifier.get(normalizeIdentifierKey(identifier));
+
+    if (exactMatch) {
+        return exactMatch;
+    }
+
+    const canonicalPageKey = buildCanonicalScrapbookPageKey(year, identifier);
+    return canonicalPageKey ? uploadedPagesByIdentifier.get(canonicalPageKey) || null : null;
 }
 
 function buildProfileAliases(profile) {
@@ -396,6 +562,32 @@ function validateMetadataHeaders(headers) {
         error.statusCode = 400;
         throw error;
     }
+}
+
+function validateImportedMetadataYear(rows, scrapbookYear) {
+    const selectedYear = normalizeMetadataYear(scrapbookYear);
+
+    if (!selectedYear) {
+        const error = new Error("Enter a four-digit scrapbook year before importing metadata.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const mismatchedRows = (Array.isArray(rows) ? rows : []).filter((row) => extractMetadataYear(row.date) !== selectedYear);
+
+    if (mismatchedRows.length > 0) {
+        const previewIdentifiers = mismatchedRows
+            .slice(0, 5)
+            .map((row) => row.identifier || "Unnamed row")
+            .join(", ");
+        const error = new Error(
+            `Metadata CSV Date values must match ${selectedYear}. ${mismatchedRows.length} row${mismatchedRows.length === 1 ? "" : "s"} did not match${previewIdentifiers ? `: ${previewIdentifiers}` : ""}.`,
+        );
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return selectedYear;
 }
 
 async function readScrapbookMetadataCsvText() {
@@ -595,6 +787,19 @@ function normalizeIdentifierKey(identifier) {
         .replace(/\.[a-z0-9]+$/i, "");
 }
 
+function buildCanonicalScrapbookPageKey(year, identifier) {
+    const normalizedIdentifier = normalizeIdentifierKey(identifier);
+    const explicitYearMatch = normalizedIdentifier.match(/((?:19|20)\d{2})\s*scrapb/i);
+    const normalizedYear = String(explicitYearMatch?.[1] || year || "").trim();
+    const pageNumber = extractPageNumber(identifier);
+
+    if (!normalizedYear || !pageNumber) {
+        return "";
+    }
+
+    return `${normalizedYear.toLowerCase()}-p${pageNumber}`;
+}
+
 function extractPageNumber(identifier) {
     const pageMatch = String(identifier || "").match(/-p(\d+)/i);
     return pageMatch ? Number(pageMatch[1]) : null;
@@ -647,6 +852,8 @@ function compareMatchedItems(leftItem, rightItem) {
 }
 
 module.exports = {
+    deleteScrapbookMetadataYear,
+    getScrapbookMetadataPage,
     getScrapbookMetadataReview,
     importScrapbookMetadataCsv,
     listProfileScrapbookReferences,
