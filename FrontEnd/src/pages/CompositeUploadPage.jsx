@@ -147,7 +147,7 @@ export default function CompositeUploadPage() {
 
         <div style={{ marginBottom: '24px' }}>
           <Link className="button compositeButton" to="/upload">
-            Back to upload options
+            Back to Admin Tools
           </Link>
         </div>
 
