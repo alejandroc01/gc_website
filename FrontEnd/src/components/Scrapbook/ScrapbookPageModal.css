@@ -137,6 +137,7 @@
   margin: 0 0 8px;
   font-size: clamp(1.5rem, 2.6vw, 2rem);
   line-height: 1.15;
+  text-align: center;
 }
 
 .scrapbookPageModal__year {
@@ -149,6 +150,7 @@
   font-size: 1.2rem;
   font-weight: 700;
   font-style: italic;
+  text-align: center;
 }
 
 .scrapbookPageModal__meta,
@@ -230,7 +232,9 @@
     align-self: start;
   }
 
-  .scrapbookPageModal__year {
-    text-align: left;
+  .scrapbookPageModal__title,
+  .scrapbookPageModal__year,
+  .scrapbookPageModal__page {
+    text-align: center;
   }
 }
