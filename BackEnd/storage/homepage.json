@@ -1,7 +1,31 @@
 {
   "homepage": {
-    "title": "Alumni Archives",
+    "eyebrow": "German Club of Virginia Tech",
+    "title": "Digital Archives",
     "description": "This is a test description. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Donec a diam lectus. Sed sit amet ipsum mauris. Maecenas congue ligula ac quam viverra nec consectetur ante hendrerit. Donec et mollis dolor. Praesent et diam eget libero egestas mattis sit amet vitae augue.",
+    "textStyles": {
+      "eyebrow": {
+        "fontFamily": "smallcaps",
+        "fontSize": 15,
+        "isBold": false,
+        "isItalic": false,
+        "isUnderlined": false
+      },
+      "title": {
+        "fontFamily": "display",
+        "fontSize": 52,
+        "isBold": false,
+        "isItalic": false,
+        "isUnderlined": false
+      },
+      "description": {
+        "fontFamily": "body",
+        "fontSize": 17,
+        "isBold": false,
+        "isItalic": false,
+        "isUnderlined": false
+      }
+    },
     "imageOriginalFilename": null,
     "storedFilePath": null,
     "imageWidth": null,

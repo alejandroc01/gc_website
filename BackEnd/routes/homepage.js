@@ -8,6 +8,7 @@ const { getImageMetadata } = require("../utils/imageMetadata");
 const {
     getHomepageContent,
     getHomepageRecord,
+    normalizeHomepageTextStyles,
     replaceHomepageContent,
     updateHomepageMetadata,
 } = require("../utils/homepageStore");
@@ -53,9 +54,16 @@ router.get("/", async (_req, res, next) => {
 
 router.put("/", async (req, res, next) => {
     try {
+        const eyebrow = sanitizeHomepageEyebrow(req.body?.eyebrow);
         const title = sanitizeHomepageTitle(req.body?.title);
         const description = sanitizeHomepageDescription(req.body?.description);
-        const updatedHomepageContent = await updateHomepageMetadata({ title, description });
+        const textStyles = normalizeHomepageTextStyles(req.body?.textStyles);
+        const updatedHomepageContent = await updateHomepageMetadata({
+            eyebrow,
+            title,
+            description,
+            textStyles,
+        });
 
         return res.json(updatedHomepageContent);
     } catch (error) {
@@ -65,8 +73,10 @@ router.put("/", async (req, res, next) => {
 
 router.post("/upload-sessions", async (req, res, next) => {
     try {
+        const eyebrow = sanitizeHomepageEyebrow(req.body?.eyebrow);
         const title = sanitizeHomepageTitle(req.body?.title);
         const description = sanitizeHomepageDescription(req.body?.description);
+        const textStyles = normalizeHomepageTextStyles(req.body?.textStyles);
         const originalFilename = sanitizeOriginalFilename(req.body?.originalFilename);
         const mimeType = sanitizeOptionalMimeType(req.body?.mimeType);
         const totalSize = sanitizeHomepageUploadSize(req.body?.totalSize);
@@ -78,8 +88,10 @@ router.post("/upload-sessions", async (req, res, next) => {
         });
 
         const uploadSession = createHomepageUploadSessionRecord({
+            eyebrow,
             title,
             description,
+            textStyles,
             originalFilename,
             mimeType,
             totalSize,
@@ -212,8 +224,10 @@ router.post("/upload-sessions/:uploadId/complete", async (req, res, next) => {
 
         const storedFilePath = buildHomepageStoredFilePath(namedFilename);
         const updatedHomepageContent = await replaceHomepageContent({
+            eyebrow: uploadSession.eyebrow,
             title: uploadSession.title,
             description: uploadSession.description,
+            textStyles: uploadSession.textStyles,
             imageOriginalFilename: uploadSession.originalFilename,
             storedFilePath,
             imageWidth: width,
@@ -271,6 +285,18 @@ router.delete("/upload-sessions/:uploadId", async (req, res, next) => {
     }
 });
 
+function sanitizeHomepageEyebrow(rawEyebrow) {
+    const normalizedEyebrow = String(rawEyebrow || "").trim() || "German Club of Virginia Tech";
+
+    if (normalizedEyebrow.length > 160) {
+        const error = new Error("Homepage eyebrow text must be 160 characters or fewer.");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return normalizedEyebrow;
+}
+
 function sanitizeHomepageTitle(rawTitle) {
     const normalizedTitle = String(rawTitle || "").trim();
 
@@ -313,8 +339,10 @@ function buildHomepageImageFilename(extension) {
 }
 
 function createHomepageUploadSessionRecord({
+    eyebrow,
     title,
     description,
+    textStyles,
     originalFilename,
     mimeType,
     totalSize,
@@ -329,8 +357,10 @@ function createHomepageUploadSessionRecord({
 
     return {
         uploadId,
+        eyebrow,
         title,
         description,
+        textStyles: normalizeHomepageTextStyles(textStyles),
         originalFilename,
         mimeType,
         extension,
@@ -393,8 +423,10 @@ function summarizeHomepageUploadSession(uploadSession) {
 function normalizeHomepageUploadSession(uploadSession) {
     return {
         uploadId: sanitizeHomepageUploadSessionId(uploadSession?.uploadId),
+        eyebrow: sanitizeHomepageEyebrow(uploadSession?.eyebrow),
         title: sanitizeHomepageTitle(uploadSession?.title),
         description: sanitizeHomepageDescription(uploadSession?.description),
+        textStyles: normalizeHomepageTextStyles(uploadSession?.textStyles),
         originalFilename: sanitizeOriginalFilename(uploadSession?.originalFilename),
         mimeType: sanitizeOptionalMimeType(uploadSession?.mimeType),
         extension: sanitizeHomepageUploadExtension(uploadSession?.extension),

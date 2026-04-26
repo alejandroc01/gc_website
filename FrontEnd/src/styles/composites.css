@@ -333,6 +333,95 @@
   color: var(--muted);
 }
 
+.homepageTextEditor {
+  display: grid;
+  gap: 18px;
+}
+
+.homepageTextEditor__block {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(38, 21, 56, 0.12);
+}
+
+.homepageTextEditor__block:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.homepageTextToolbar {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(260px, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+}
+
+.homepageTextToolbar__field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.homepageTextToolbar__select {
+  min-height: 48px;
+}
+
+.homepageTextToolbar__sizeControls {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) 88px;
+  gap: 10px;
+  align-items: center;
+}
+
+.homepageTextToolbar__range {
+  width: 100%;
+  accent-color: var(--deep-purple);
+}
+
+.homepageTextToolbar__number {
+  min-height: 48px;
+  padding: 12px;
+}
+
+.homepageTextToolbar__formatGroup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+}
+
+.homepageTextToolbar__formatButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgba(38, 21, 56, 0.18);
+  background: #fff;
+  color: var(--deep-purple);
+  font-size: 17px;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.homepageTextToolbar__formatButton:hover,
+.homepageTextToolbar__formatButton--active {
+  border-color: var(--deep-purple);
+  background: var(--deep-purple);
+  color: #fff;
+}
+
+.homepageTextToolbar__formatButton:focus-visible {
+  outline: 3px solid rgba(198, 162, 74, 0.45);
+  outline-offset: 2px;
+}
+
+.homepageTextToolbar__underline {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .compositeUploadListControls {
   display: flex;
   align-items: end;
@@ -893,6 +982,14 @@
   .scrapbookAdminPages__name {
     white-space: normal;
   }
+
+  .homepageTextToolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .homepageTextToolbar__formatGroup {
+    justify-content: flex-start;
+  }
 }
 
 
@@ -927,8 +1024,9 @@
   font-family: var(--font-smallcaps);
   font-size: clamp(0.8rem, 0.72vw, 1rem);
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--muted);
+  overflow-wrap: anywhere;
+  text-underline-offset: 0.12em;
 }
 
 .homepageEditorPreview__title {
@@ -936,6 +1034,8 @@
   font-family: var(--font-display);
   font-size: clamp(2rem, 3vw, 3rem);
   line-height: 1.05;
+  overflow-wrap: anywhere;
+  text-underline-offset: 0.08em;
 }
 
 .homepageEditorPreview__description {
@@ -943,6 +1043,8 @@
   color: var(--muted);
   line-height: 1.7;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-underline-offset: 0.12em;
 }
 
 .compositeEditor__topBar {

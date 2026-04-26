@@ -349,15 +349,34 @@ async function abortScrapbookUploadSession(uploadId) {
   });
 }
 
-async function createHomepageUploadSession(file, title, description, totalChunks) {
+function normalizeHomepageUploadContent(homepageContentOrTitle, description = '') {
+  if (
+    homepageContentOrTitle
+    && typeof homepageContentOrTitle === 'object'
+    && !Array.isArray(homepageContentOrTitle)
+  ) {
+    return {
+      eyebrow: homepageContentOrTitle.eyebrow,
+      title: homepageContentOrTitle.title,
+      description: homepageContentOrTitle.description,
+      textStyles: homepageContentOrTitle.textStyles,
+    };
+  }
+
+  return {
+    title: homepageContentOrTitle,
+    description,
+  };
+}
+
+async function createHomepageUploadSession(file, homepageContent, totalChunks) {
   return requestJson('/api/homepage/upload-sessions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      title,
-      description,
+      ...homepageContent,
       originalFilename: file.name,
       mimeType: file.type || '',
       totalSize: file.size,
@@ -611,13 +630,28 @@ export async function uploadScrapbook(file, scrapbookYear, options = {}) {
   }
 }
 
-export async function uploadHomepageContent(file, title, description, options = {}) {
+export async function uploadHomepageContent(
+  file,
+  homepageContentOrTitle,
+  optionsOrDescription = {},
+  maybeOptions = {},
+) {
+  const isObjectPayload = (
+    homepageContentOrTitle
+    && typeof homepageContentOrTitle === 'object'
+    && !Array.isArray(homepageContentOrTitle)
+  );
+  const homepageContent = normalizeHomepageUploadContent(
+    homepageContentOrTitle,
+    isObjectPayload ? '' : optionsOrDescription,
+  );
+  const options = isObjectPayload ? optionsOrDescription : maybeOptions;
   const totalChunks = Math.max(1, Math.ceil(file.size / compositeUploadChunkSizeBytes));
   const onProgress = typeof options?.onProgress === 'function' ? options.onProgress : null;
   let uploadId = '';
 
   try {
-    const uploadSession = await createHomepageUploadSession(file, title, description, totalChunks);
+    const uploadSession = await createHomepageUploadSession(file, homepageContent, totalChunks);
 
     uploadId = String(uploadSession?.uploadId || '');
 

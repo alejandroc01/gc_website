@@ -26,8 +26,9 @@
   font-family: var(--font-smallcaps);
   font-size: clamp(0.8rem, 0.72vw, 1rem);
   letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--muted);
+  overflow-wrap: anywhere;
+  text-underline-offset: 0.12em;
 }
 
 .hero__title {
@@ -38,6 +39,8 @@
   letter-spacing: 0.02em;
   line-height: 1.05;
   font-size: clamp(2.25rem, 3.2vw, 3.6rem);
+  overflow-wrap: anywhere;
+  text-underline-offset: 0.08em;
 }
 
 .hero__description {
@@ -46,6 +49,9 @@
   line-height: 1.7;
   font-size: 16.5px;
   max-width: 58ch;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  text-underline-offset: 0.12em;
 }
 
 @media (max-width: 900px) {

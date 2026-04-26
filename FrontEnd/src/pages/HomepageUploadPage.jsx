@@ -7,16 +7,43 @@ import {
   uploadHomepageContent,
 } from '../api/composites.js';
 import {
-  HOMEPAGE_SITE_EYEBROW,
-  DEFAULT_HOMEPAGE_TITLE,
+  HOMEPAGE_FONT_OPTIONS,
+  buildHomepageTextStyle,
   loadStoredHomepageContent,
   normalizeHomepageContent,
+  normalizeHomepageTextStyles,
   persistHomepageContent,
 } from '../constants/homepageContent.js';
 import '../styles/composites.css';
 
 const acceptedTypes = '.jpg,.jpeg,.png,.webp';
 const initialHomepageContent = loadStoredHomepageContent() || normalizeHomepageContent(null);
+const homepageTextEditorFields = [
+  {
+    key: 'eyebrow',
+    label: 'Eyebrow Text',
+    placeholder: 'German Club of Virginia Tech',
+    rows: 1,
+    minSize: 10,
+    maxSize: 40,
+  },
+  {
+    key: 'title',
+    label: 'Site Title',
+    placeholder: 'Digital Archives',
+    rows: 1,
+    minSize: 24,
+    maxSize: 96,
+  },
+  {
+    key: 'description',
+    label: 'Homepage Description',
+    placeholder: 'Write the homepage description shown in the hero',
+    rows: 6,
+    minSize: 12,
+    maxSize: 42,
+  },
+];
 
 export default function HomepageUploadPage() {
   const [formValues, setFormValues] = useState(() => buildFormValues(initialHomepageContent));
@@ -96,6 +123,21 @@ export default function HomepageUploadPage() {
     setStatusSummary('');
   };
 
+  const handleTextStyleChange = (styleKey, propertyName, nextValue) => {
+    setFormValues((currentValues) => ({
+      ...currentValues,
+      textStyles: normalizeHomepageTextStyles({
+        ...currentValues.textStyles,
+        [styleKey]: {
+          ...currentValues.textStyles?.[styleKey],
+          [propertyName]: nextValue,
+        },
+      }),
+    }));
+    setStatusError('');
+    setStatusSummary('');
+  };
+
   const handleFileSelection = (nextFile) => {
     setSelectedFile(nextFile);
     setStatusError('');
@@ -112,17 +154,28 @@ export default function HomepageUploadPage() {
     setIsSaving(true);
 
     try {
+      const normalizedEyebrow = validateRequiredField(
+        formValues.eyebrow,
+        'Enter the eyebrow text before saving.',
+      );
+      const normalizedTitle = validateRequiredField(
+        formValues.title,
+        'Enter a homepage title before saving.',
+      );
       const normalizedDescription = validateRequiredField(
         formValues.description,
         'Enter a homepage description before saving.',
       );
+      const homepageMetadata = {
+        eyebrow: normalizedEyebrow,
+        title: normalizedTitle,
+        description: normalizedDescription,
+        textStyles: normalizeHomepageTextStyles(formValues.textStyles),
+      };
 
       const savedHomepageContent = normalizeHomepageContent(selectedFile
-        ? await saveWithImage(selectedFile, normalizedDescription, setUploadProgress)
-        : await updateHomepageContent({
-          title: DEFAULT_HOMEPAGE_TITLE,
-          description: normalizedDescription,
-        }));
+        ? await saveWithImage(selectedFile, homepageMetadata, setUploadProgress)
+        : await updateHomepageContent(homepageMetadata));
 
       setHomepageContent(savedHomepageContent);
       setFormValues(buildFormValues(savedHomepageContent));
@@ -134,7 +187,7 @@ export default function HomepageUploadPage() {
       setStatusSummary(
         selectedFile
           ? 'Saved the homepage content and uploaded a new hero image.'
-          : 'Saved the homepage description.',
+          : 'Saved the homepage content.',
       );
     } catch (error) {
       setStatusError(error.message);
@@ -144,7 +197,10 @@ export default function HomepageUploadPage() {
     }
   };
 
+  const previewEyebrow = formValues.eyebrow.trim() || homepageContent.eyebrow;
+  const previewTitle = formValues.title.trim() || homepageContent.title;
   const previewDescription = formValues.description.trim() || homepageContent.description;
+  const previewTextStyles = normalizeHomepageTextStyles(formValues.textStyles);
   const previewImageUrl = selectedFilePreviewUrl || homepageContent.imageUrl;
 
   return (
@@ -166,7 +222,7 @@ export default function HomepageUploadPage() {
             <div>
               <h2 className="compositePanel__title">Homepage Content</h2>
               <p className="compositePanel__description">
-                Use the options below to edit the hero image and description. The site title is fixed.
+                Edit the hero image, copy, and text styling.
               </p>
             </div>
           </div>
@@ -184,28 +240,18 @@ export default function HomepageUploadPage() {
                 />
               </label>
 
-              <label className="compositeField">
-                <span className="compositeField__label">Site Title</span>
-                <input
-                  className="compositeField__input"
-                  type="text"
-                  value={DEFAULT_HOMEPAGE_TITLE}
-                  readOnly
-                  aria-readonly="true"
-                />
-              </label>
-
-              <label className="compositeField profileManagerGrid__fullWidth">
-                <span className="compositeField__label">Homepage Description</span>
-                <textarea
-                  className="compositeField__input compositeField__textarea"
-                  name="description"
-                  placeholder="write the homepage description shown in the hero"
-                  rows={6}
-                  value={formValues.description}
-                  onChange={handleFieldChange}
-                />
-              </label>
+              <div className="homepageTextEditor profileManagerGrid__fullWidth">
+                {homepageTextEditorFields.map((field) => (
+                  <HomepageTextEditorField
+                    key={field.key}
+                    field={field}
+                    value={formValues[field.key]}
+                    textStyle={previewTextStyles[field.key]}
+                    onFieldChange={handleFieldChange}
+                    onStyleChange={handleTextStyleChange}
+                  />
+                ))}
+              </div>
             </div>
 
             <div className="compositeUploadForm__actions">
@@ -252,10 +298,10 @@ export default function HomepageUploadPage() {
           {isLoading ? <p className="compositeMessage">Loading saved homepage content...</p> : null}
           {loadError ? <p className="compositeMessage compositeMessage--warning">{loadError}</p> : null}
 
-            <div className="homepageEditorPreview">
-              <div className="homepageEditorPreview__media">
-                <img
-                  className="homepageEditorPreview__image"
+          <div className="homepageEditorPreview">
+            <div className="homepageEditorPreview__media">
+              <img
+                className="homepageEditorPreview__image"
                 src={previewImageUrl}
                 alt={homepageContent.imageAlt}
               />
@@ -263,9 +309,24 @@ export default function HomepageUploadPage() {
 
             <div className="homepageEditorPreview__content">
               <div>
-                <p className="homepageEditorPreview__eyebrow">{HOMEPAGE_SITE_EYEBROW}</p>
-                <h2 className="homepageEditorPreview__title">{DEFAULT_HOMEPAGE_TITLE}</h2>
-                <p className="homepageEditorPreview__description">{previewDescription}</p>
+                <p
+                  className="homepageEditorPreview__eyebrow"
+                  style={buildHomepageTextStyle(previewTextStyles.eyebrow, 'eyebrow')}
+                >
+                  {previewEyebrow}
+                </p>
+                <h2
+                  className="homepageEditorPreview__title"
+                  style={buildHomepageTextStyle(previewTextStyles.title, 'title')}
+                >
+                  {previewTitle}
+                </h2>
+                <p
+                  className="homepageEditorPreview__description"
+                  style={buildHomepageTextStyle(previewTextStyles.description, 'description')}
+                >
+                  {previewDescription}
+                </p>
               </div>
             </div>
           </div>
@@ -275,22 +336,165 @@ export default function HomepageUploadPage() {
   );
 }
 
-async function saveWithImage(file, description, onProgress) {
+function HomepageTextEditorField({
+  field,
+  value,
+  textStyle,
+  onFieldChange,
+  onStyleChange,
+}) {
+  const fieldId = `homepage-${field.key}-text`;
+
+  return (
+    <div className="homepageTextEditor__block">
+      <label className="compositeField" htmlFor={fieldId}>
+        <span className="compositeField__label">{field.label}</span>
+        {field.rows > 1 ? (
+          <textarea
+            id={fieldId}
+            className="compositeField__input compositeField__textarea"
+            name={field.key}
+            placeholder={field.placeholder}
+            rows={field.rows}
+            value={value}
+            onChange={onFieldChange}
+          />
+        ) : (
+          <input
+            id={fieldId}
+            className="compositeField__input"
+            type="text"
+            name={field.key}
+            placeholder={field.placeholder}
+            value={value}
+            onChange={onFieldChange}
+          />
+        )}
+      </label>
+
+      <HomepageTextStyleControls
+        field={field}
+        textStyle={textStyle}
+        onStyleChange={onStyleChange}
+      />
+    </div>
+  );
+}
+
+function HomepageTextStyleControls({
+  field,
+  textStyle,
+  onStyleChange,
+}) {
+  const sizeInputId = `homepage-${field.key}-size`;
+  const sizeLabelId = `homepage-${field.key}-size-label`;
+
+  return (
+    <div className="homepageTextToolbar" aria-label={`${field.label} text formatting`}>
+      <label className="homepageTextToolbar__field">
+        <span className="compositeField__label">Font</span>
+        <select
+          className="compositeField__input homepageTextToolbar__select"
+          value={textStyle.fontFamily}
+          onChange={(event) => onStyleChange(field.key, 'fontFamily', event.target.value)}
+        >
+          {HOMEPAGE_FONT_OPTIONS.map((fontOption) => (
+            <option key={fontOption.value} value={fontOption.value}>
+              {fontOption.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <div className="homepageTextToolbar__field homepageTextToolbar__field--size">
+        <span className="compositeField__label" id={sizeLabelId}>Size</span>
+        <span className="homepageTextToolbar__sizeControls">
+          <input
+            className="homepageTextToolbar__range"
+            type="range"
+            min={field.minSize}
+            max={field.maxSize}
+            value={textStyle.fontSize}
+            aria-labelledby={sizeLabelId}
+            onChange={(event) => onStyleChange(field.key, 'fontSize', Number(event.target.value))}
+          />
+          <input
+            id={sizeInputId}
+            className="compositeField__input homepageTextToolbar__number"
+            type="number"
+            min={field.minSize}
+            max={field.maxSize}
+            value={textStyle.fontSize}
+            aria-labelledby={sizeLabelId}
+            onChange={(event) => onStyleChange(field.key, 'fontSize', Number(event.target.value))}
+          />
+        </span>
+      </div>
+
+      <div className="homepageTextToolbar__formatGroup" aria-label={`${field.label} style toggles`}>
+        <button
+          type="button"
+          className={buildFormatButtonClassName(textStyle.isBold)}
+          aria-label={`Bold ${field.label}`}
+          aria-pressed={textStyle.isBold}
+          title="Bold"
+          onClick={() => onStyleChange(field.key, 'isBold', !textStyle.isBold)}
+        >
+          <strong>B</strong>
+        </button>
+        <button
+          type="button"
+          className={buildFormatButtonClassName(textStyle.isItalic)}
+          aria-label={`Italic ${field.label}`}
+          aria-pressed={textStyle.isItalic}
+          title="Italic"
+          onClick={() => onStyleChange(field.key, 'isItalic', !textStyle.isItalic)}
+        >
+          <em>I</em>
+        </button>
+        <button
+          type="button"
+          className={buildFormatButtonClassName(textStyle.isUnderlined)}
+          aria-label={`Underline ${field.label}`}
+          aria-pressed={textStyle.isUnderlined}
+          title="Underline"
+          onClick={() => onStyleChange(field.key, 'isUnderlined', !textStyle.isUnderlined)}
+        >
+          <span className="homepageTextToolbar__underline">U</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function buildFormatButtonClassName(isActive) {
+  return [
+    'homepageTextToolbar__formatButton',
+    isActive ? 'homepageTextToolbar__formatButton--active' : '',
+  ].filter(Boolean).join(' ');
+}
+
+async function saveWithImage(file, homepageMetadata, onProgress) {
   await validateImageFile(file);
 
-  return uploadHomepageContent(file, DEFAULT_HOMEPAGE_TITLE, description, {
+  return uploadHomepageContent(file, homepageMetadata, {
     onProgress,
   });
 }
 
 function buildFormValues(homepageContent) {
+  const normalizedHomepageContent = normalizeHomepageContent(homepageContent);
+
   return {
-    description: homepageContent.description,
+    eyebrow: normalizedHomepageContent.eyebrow,
+    title: normalizedHomepageContent.title,
+    description: normalizedHomepageContent.description,
+    textStyles: normalizedHomepageContent.textStyles,
   };
 }
 
 function validateRequiredField(value, emptyMessage) {
-  const normalizedValue = value.trim();
+  const normalizedValue = String(value || '').trim();
 
   if (!normalizedValue) {
     throw new Error(emptyMessage);

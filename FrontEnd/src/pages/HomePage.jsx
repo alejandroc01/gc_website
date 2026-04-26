@@ -6,8 +6,6 @@ import ActionCards from '../components/ActionCards/ActionCards.jsx';
 import CompositeCopyrightNotice from '../components/Composite/CompositeCopyrightNotice.jsx';
 import { getHomepageContent } from '../api/composites.js';
 import {
-  HOMEPAGE_SITE_EYEBROW,
-  DEFAULT_HOMEPAGE_TITLE,
   loadStoredHomepageContent,
   normalizeHomepageContent,
   persistHomepageContent,
@@ -62,9 +60,10 @@ export default function HomePage() {
         <Hero
           imageSrc={homepageContent.imageUrl}
           imageAlt={homepageContent.imageAlt}
-          eyebrow={HOMEPAGE_SITE_EYEBROW}
-          title={DEFAULT_HOMEPAGE_TITLE}
+          eyebrow={homepageContent.eyebrow}
+          title={homepageContent.title}
           description={homepageContent.description}
+          textStyles={homepageContent.textStyles}
         />
       ) : (
         <section className="hero section" aria-hidden="true">
