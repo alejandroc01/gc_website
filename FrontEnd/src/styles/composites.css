@@ -163,6 +163,14 @@
   outline-offset: 2px;
 }
 
+.adminPasswordInput__error {
+  display: block;
+  margin-top: 8px;
+  color: #8f2639;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
 .compositeField__textarea {
   resize: vertical;
   min-height: 132px;
@@ -470,9 +478,34 @@
   grid-column: 1 / -1;
 }
 
+.adminAccountToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.adminAccountToolbar__search {
+  flex: 1 1 320px;
+  max-width: 460px;
+}
+
+.adminAccountToolbar__count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.96rem;
+  white-space: nowrap;
+}
+
 .adminAccountList {
   display: grid;
   gap: 16px;
+  max-height: min(760px, 70vh);
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-gutter: stable;
 }
 
 .adminAccountCard {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useAdminSession } from '../components/AdminAuth/AdminAuthGate.jsx';
@@ -23,12 +23,26 @@ export default function AdminAccountsPage() {
   const [accounts, setAccounts] = useState([]);
   const [createValues, setCreateValues] = useState(initialCreateValues);
   const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [createPasswordError, setCreatePasswordError] = useState('');
+  const [accountSearchQuery, setAccountSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [statusError, setStatusError] = useState('');
 
   const isOwner = admin?.role === 'Owner';
+  const filteredAccounts = useMemo(() => {
+    const normalizedQuery = accountSearchQuery.trim().toLowerCase();
+
+    if (!isOwner || !normalizedQuery) {
+      return accounts;
+    }
+
+    return accounts.filter((account) => [
+      account.username,
+      account.role,
+    ].some((value) => String(value || '').toLowerCase().includes(normalizedQuery)));
+  }, [accountSearchQuery, accounts, isOwner]);
 
   useEffect(() => {
     let isActive = true;
@@ -70,6 +84,7 @@ export default function AdminAccountsPage() {
     }));
     setStatusError('');
     setStatusMessage('');
+    setCreatePasswordError('');
   };
 
   const handleCreateSubmit = async (event) => {
@@ -77,6 +92,7 @@ export default function AdminAccountsPage() {
     setIsCreating(true);
     setStatusError('');
     setStatusMessage('');
+    setCreatePasswordError('');
 
     try {
       assertPasswordsMatch(createValues.password, createValues.confirmPassword);
@@ -91,7 +107,11 @@ export default function AdminAccountsPage() {
       setShowCreatePassword(false);
       setStatusMessage(`Created admin account ${payload.account.username}.`);
     } catch (error) {
-      setStatusError(error.message);
+      if (isPasswordValidationError(error)) {
+        setCreatePasswordError(error.message);
+      } else {
+        setStatusError(error.message);
+      }
     } finally {
       setIsCreating(false);
     }
@@ -170,6 +190,7 @@ export default function AdminAccountsPage() {
                   isVisible={showCreatePassword}
                   onToggleVisibility={() => setShowCreatePassword((currentValue) => !currentValue)}
                   onChange={handleCreateChange}
+                  error={createPasswordError}
                 />
               </label>
 
@@ -216,8 +237,26 @@ export default function AdminAccountsPage() {
           {statusMessage ? <p className="compositeMessage compositeMessage--success">{statusMessage}</p> : null}
           {statusError ? <p className="compositeMessage compositeMessage--error">{statusError}</p> : null}
 
+          {isOwner ? (
+            <div className="adminAccountToolbar">
+              <label className="compositeField adminAccountToolbar__search">
+                <span className="compositeField__label">Search Accounts</span>
+                <input
+                  className="compositeField__input"
+                  type="search"
+                  value={accountSearchQuery}
+                  onChange={(event) => setAccountSearchQuery(event.target.value)}
+                  placeholder="Search by username or role"
+                />
+              </label>
+              <p className="adminAccountToolbar__count">
+                {filteredAccounts.length} of {accounts.length} account{accounts.length === 1 ? '' : 's'}
+              </p>
+            </div>
+          ) : null}
+
           <div className="adminAccountList">
-            {accounts.map((account) => (
+            {filteredAccounts.map((account) => (
               <AdminAccountRow
                 key={account.id}
                 account={account}
@@ -227,6 +266,9 @@ export default function AdminAccountsPage() {
                 onDeleted={handleAccountDeleted}
               />
             ))}
+            {!isLoading && filteredAccounts.length === 0 ? (
+              <p className="compositeMessage">No admin accounts match that search.</p>
+            ) : null}
           </div>
         </article>
       </div>
@@ -247,6 +289,7 @@ function AdminAccountRow({
   const [isDeleting, setIsDeleting] = useState(false);
   const [rowMessage, setRowMessage] = useState('');
   const [rowError, setRowError] = useState('');
+  const [passwordError, setPasswordError] = useState('');
 
   const isSelf = account.id === currentAdmin.id;
 
@@ -263,6 +306,7 @@ function AdminAccountRow({
     }));
     setRowMessage('');
     setRowError('');
+    setPasswordError('');
   };
 
   const handleSave = async (event) => {
@@ -270,6 +314,7 @@ function AdminAccountRow({
     setIsSaving(true);
     setRowMessage('');
     setRowError('');
+    setPasswordError('');
 
     try {
       const isChangingPassword = Boolean(values.password || values.confirmPassword);
@@ -296,7 +341,11 @@ function AdminAccountRow({
       setShowPassword(false);
       setRowMessage(`Saved ${payload.account.username}.`);
     } catch (error) {
-      setRowError(error.message);
+      if (isPasswordValidationError(error)) {
+        setPasswordError(error.message);
+      } else {
+        setRowError(error.message);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -379,6 +428,7 @@ function AdminAccountRow({
             placeholder="Re-enter new password"
             isVisible={showPassword}
             onToggleVisibility={() => setShowPassword((currentValue) => !currentValue)}
+            error={passwordError}
           />
         </label>
       </div>
@@ -416,12 +466,22 @@ function buildRowValues(account) {
 
 function assertPasswordsMatch(password, confirmPassword) {
   if (!password || !confirmPassword) {
-    throw new Error('Enter and confirm the new password.');
+    throw buildPasswordValidationError('Enter and confirm the new password.');
   }
 
   if (password !== confirmPassword) {
-    throw new Error('The password confirmation does not match.');
+    throw buildPasswordValidationError('The password does not match.');
   }
+}
+
+function buildPasswordValidationError(message) {
+  const error = new Error(message);
+  error.isPasswordValidationError = true;
+  return error;
+}
+
+function isPasswordValidationError(error) {
+  return Boolean(error?.isPasswordValidationError);
 }
 
 function PasswordInput({
@@ -432,27 +492,32 @@ function PasswordInput({
   onToggleVisibility,
   autoComplete = 'new-password',
   placeholder = '',
+  error = '',
 }) {
   return (
-    <span className="adminPasswordInput">
-      <input
-        className="compositeField__input"
-        name={name}
-        type={isVisible ? 'text' : 'password'}
-        autoComplete={autoComplete}
-        value={value}
-        onChange={onChange}
-        placeholder={placeholder}
-      />
-      <button
-        type="button"
-        className="adminPasswordInput__toggle"
-        onClick={onToggleVisibility}
-        aria-label={isVisible ? 'Hide password' : 'Show password'}
-      >
-        <EyeIcon isVisible={isVisible} />
-      </button>
-    </span>
+    <>
+      <span className="adminPasswordInput">
+        <input
+          className="compositeField__input"
+          name={name}
+          type={isVisible ? 'text' : 'password'}
+          autoComplete={autoComplete}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          aria-invalid={error ? 'true' : 'false'}
+        />
+        <button
+          type="button"
+          className="adminPasswordInput__toggle"
+          onClick={onToggleVisibility}
+          aria-label={isVisible ? 'Hide password' : 'Show password'}
+        >
+          <EyeIcon isVisible={isVisible} />
+        </button>
+      </span>
+      {error ? <span className="adminPasswordInput__error">{error}</span> : null}
+    </>
   );
 }
 
