@@ -22,6 +22,9 @@ const {
 const {
     listProfileOralHistoryReferences,
 } = require("../utils/oralHistoryStore");
+const {
+    listProfileHistoryReferences,
+} = require("../utils/historyStore");
 
 const router = express.Router();
 const upload = multer({
@@ -76,10 +79,11 @@ router.get("/:profileId", async (req, res, next) => {
             return res.status(404).json({ error: "Member profile not found." });
         }
 
-        const [relatedComposites, relatedScrapbookPages, relatedOralHistories] = await Promise.all([
+        const [relatedComposites, relatedScrapbookPages, relatedOralHistories, relatedClubHistories] = await Promise.all([
             listProfileCompositeReferences(profile.id),
             listProfileScrapbookReferences(profile),
             listProfileOralHistoryReferences(profile.id),
+            listProfileHistoryReferences(profile.id),
         ]);
         const primaryPortraitReference = relatedComposites[0] || null;
 
@@ -122,6 +126,16 @@ router.get("/:profileId", async (req, res, next) => {
                 category: entry.category,
                 isFullLength: entry.isFullLength,
                 episodeNumber: entry.episodeNumber,
+                uploadTimestamp: entry.uploadTimestamp,
+                updatedAt: entry.updatedAt,
+            })),
+            relatedClubHistories: relatedClubHistories.map((entry) => ({
+                historyId: entry.historyId,
+                key: entry.key,
+                title: entry.title,
+                description: entry.description,
+                pdfUrl: entry.pdfUrl,
+                originalFilename: entry.originalFilename,
                 uploadTimestamp: entry.uploadTimestamp,
                 updatedAt: entry.updatedAt,
             })),

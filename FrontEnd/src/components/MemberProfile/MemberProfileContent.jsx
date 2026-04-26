@@ -34,10 +34,12 @@ export default function MemberProfileContent({
   const compositeArchiveItems = buildCompositeItems(profile.relatedComposites, archiveLinkBuilder);
   const scrapbookArchiveItems = buildScrapbookItems(profile.relatedScrapbookPages, archiveLinkBuilder);
   const oralHistoryArchiveItems = buildOralHistoryItems(profile.relatedOralHistories, archiveLinkBuilder);
+  const clubHistoryArchiveItems = buildClubHistoryItems(profile.relatedClubHistories, archiveLinkBuilder);
   const hasArchiveMaterials = (
     compositeArchiveItems.length > 0
     || scrapbookArchiveItems.length > 0
     || oralHistoryArchiveItems.length > 0
+    || clubHistoryArchiveItems.length > 0
   );
 
   const showsCompositeCopyrightNotice = (
@@ -102,6 +104,12 @@ export default function MemberProfileContent({
               <ArchiveSection
                 label="Oral Histories"
                 items={oralHistoryArchiveItems}
+                onNavigate={onArchiveNavigate}
+                variant="titleList"
+              />
+              <ArchiveSection
+                label="Club History"
+                items={clubHistoryArchiveItems}
                 onNavigate={onArchiveNavigate}
                 variant="titleList"
               />
@@ -342,12 +350,34 @@ function buildOralHistoryItems(relatedOralHistories, archiveLinkBuilder = null) 
     }));
 }
 
+function buildClubHistoryItems(relatedClubHistories, archiveLinkBuilder = null) {
+  return [...(Array.isArray(relatedClubHistories) ? relatedClubHistories : [])]
+    .sort(compareClubHistoryArchiveItems)
+    .map((history) => ({
+      compositeId: history.historyId,
+      annotationId: `${history.historyId}-club-history`,
+      title: history.title || 'Untitled club history',
+      year: '',
+      note: '',
+      to: buildClubHistoryLink(history, archiveLinkBuilder),
+    }));
+}
+
 function buildCompositeLink(compositeYear, archiveLinkBuilder = null) {
   const normalizedYear = String(compositeYear || '').trim();
   const to = normalizedYear ? `/composites?year=${encodeURIComponent(normalizedYear)}` : '/composites';
 
   return archiveLinkBuilder
     ? archiveLinkBuilder({ kind: 'composite', year: normalizedYear, to })
+    : to;
+}
+
+function buildClubHistoryLink(history, archiveLinkBuilder = null) {
+  const historyKey = String(history?.key || '').trim();
+  const to = historyKey ? `/written-history?history=${encodeURIComponent(historyKey)}` : '/written-history';
+
+  return archiveLinkBuilder
+    ? archiveLinkBuilder({ kind: 'clubHistory', history: historyKey, to })
     : to;
 }
 
@@ -493,6 +523,12 @@ function compareOralHistoryArchiveItems(leftItem, rightItem) {
   }
 
   return Number(leftItem.episodeNumber || 0) - Number(rightItem.episodeNumber || 0);
+}
+
+function compareClubHistoryArchiveItems(leftItem, rightItem) {
+  return String(leftItem.title || '').localeCompare(String(rightItem.title || ''), undefined, {
+    sensitivity: 'base',
+  });
 }
 
 function isBoardDepartment(department) {
