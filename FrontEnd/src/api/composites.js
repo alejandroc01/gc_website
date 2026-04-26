@@ -1085,6 +1085,16 @@ export function createOralHistory(formData) {
   });
 }
 
+export function updateOralHistory(oralHistoryId, metadata) {
+  return requestJson(`/api/oral-histories/${encodeURIComponent(oralHistoryId)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(metadata),
+  });
+}
+
 export function deleteOralHistory(oralHistoryId) {
   return requestJson(`/api/oral-histories/${oralHistoryId}`, {
     method: 'DELETE',

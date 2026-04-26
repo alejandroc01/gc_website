@@ -45,6 +45,7 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
   const displayVideoRef = useRef(null);
   const displayVideoControlsTimeoutRef = useRef(null);
   const pendingDisplayAutoplayIdRef = useRef('');
+  const featuredTitleRef = useRef(null);
   const requestedInterviewee = useMemo(
     () => String(searchParams.get('interviewee') || '').trim(),
     [searchParams],
@@ -200,6 +201,9 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
     [activeCategory, activeInterviewee, visibleEpisodes],
   );
   const activePoster = useOralHistoryPoster(activeEpisode, activeInterviewee || activeEpisode?.interviewee);
+  const activeEpisodeTitle = activeEpisode
+    ? formatEpisodeTitle(activeEpisode.title)
+    : 'Episode 1 will appear here after upload';
   const activeIntervieweeLabel = activeInterviewee || activeEpisode?.interviewee || 'No interview selected';
   const activeCategoryLabel = getActiveCategoryLabel(activeEpisode, activeInterviewee);
   const displayIntervieweeOptions = useMemo(
@@ -216,6 +220,8 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
     ],
     [categories],
   );
+
+  useSingleLineTitleFit(featuredTitleRef, activeEpisodeTitle);
 
   useEffect(() => {
     if (episodes.length === 0 || (!requestedInterviewee && !requestedEpisodeId)) {
@@ -778,8 +784,8 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
             <div className="oralHistories__panelHeader">
               <div>
                 <p className="oralHistories__sectionLabel">Featured Recording</p>
-                <h2 className="oralHistories__sectionTitle">
-                  {activeEpisode ? formatEpisodeTitle(activeEpisode.title) : 'Episode 1 will appear here after upload'}
+                <h2 ref={featuredTitleRef} className="oralHistories__sectionTitle">
+                  {activeEpisodeTitle}
                 </h2>
               </div>
               <div className="oralHistories__panelControls">
@@ -869,6 +875,58 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
       </section>
     </div>
   );
+}
+
+function useSingleLineTitleFit(titleRef, titleText) {
+  useEffect(() => {
+    const titleElement = titleRef.current;
+
+    if (!titleElement || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    let animationFrame = 0;
+
+    const fitTitle = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        titleElement.style.removeProperty('--oral-history-title-size');
+
+        const computedStyle = window.getComputedStyle(titleElement);
+        const maxFontSize = Number.parseFloat(computedStyle.fontSize) || 44;
+        const minFontSize = 22;
+        const availableWidth = titleElement.clientWidth;
+        const requiredWidth = titleElement.scrollWidth;
+
+        if (!availableWidth || !requiredWidth || requiredWidth <= availableWidth) {
+          titleElement.style.removeProperty('--oral-history-title-size');
+          return;
+        }
+
+        const fittedFontSize = Math.max(
+          minFontSize,
+          Math.floor(maxFontSize * (availableWidth / requiredWidth) * 100) / 100,
+        );
+
+        titleElement.style.setProperty('--oral-history-title-size', `${fittedFontSize}px`);
+      });
+    };
+
+    fitTitle();
+    window.addEventListener('resize', fitTitle);
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(fitTitle)
+      : null;
+
+    resizeObserver?.observe(titleElement.parentElement || titleElement);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener('resize', fitTitle);
+      resizeObserver?.disconnect();
+    };
+  }, [titleRef, titleText]);
 }
 
 function getActiveCategoryLabel(activeEpisode, activeInterviewee) {

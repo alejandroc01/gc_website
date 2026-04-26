@@ -8,6 +8,7 @@ const {
     createOralHistory,
     deleteOralHistory,
     listOralHistories,
+    updateOralHistory,
 } = require("../utils/oralHistoryStore");
 const {
     buildOralHistoryStoredFilePath,
@@ -86,6 +87,7 @@ router.post("/upload-sessions", async (req, res, next) => {
         const category = sanitizeRequiredText(req.body?.category, "Oral history category");
         const isFullLength = sanitizeBoolean(req.body?.isFullLength);
         const episodeNumber = sanitizeEpisodeNumber(req.body?.episodeNumber, { isRequired: !isFullLength });
+        const profileIds = sanitizeProfileIds(req.body?.profileIds);
         const originalFilename = sanitizeOriginalFilename(req.body?.originalFilename);
         const mimeType = sanitizeOptionalMimeType(req.body?.mimeType);
         const totalSize = sanitizeOralHistoryUploadSize(req.body?.totalSize);
@@ -107,6 +109,7 @@ router.post("/upload-sessions", async (req, res, next) => {
             category,
             isFullLength,
             episodeNumber,
+            profileIds,
             originalFilename,
             mimeType,
             totalSize,
@@ -235,6 +238,7 @@ router.post("/upload-sessions/:uploadId/complete", async (req, res, next) => {
             category: uploadSession.category,
             isFullLength: uploadSession.isFullLength,
             episodeNumber: uploadSession.episodeNumber,
+            profileIds: uploadSession.profileIds,
             originalFilename: uploadSession.originalFilename,
             fileSize: uploadSession.totalSize,
             mimeType: uploadSession.mimeType,
@@ -310,6 +314,7 @@ router.post("/", upload.single("video"), async (req, res, next) => {
         const category = sanitizeRequiredText(req.body?.category, "Oral history category");
         const isFullLength = sanitizeBoolean(req.body?.isFullLength);
         const episodeNumber = sanitizeEpisodeNumber(req.body?.episodeNumber, { isRequired: !isFullLength });
+        const profileIds = sanitizeProfileIds(req.body?.profileIds);
         const oralHistoryId = req.generatedOralHistoryId;
 
         if (!oralHistoryId) {
@@ -335,6 +340,7 @@ router.post("/", upload.single("video"), async (req, res, next) => {
             category,
             isFullLength,
             episodeNumber,
+            profileIds,
             originalFilename: req.file.originalname,
             fileSize: req.file.size,
             mimeType: req.file.mimetype,
@@ -344,6 +350,31 @@ router.post("/", upload.single("video"), async (req, res, next) => {
         return res.status(201).json(createdOralHistory);
     } catch (error) {
         await cleanupUploadedFile();
+        return next(error);
+    }
+});
+
+router.put("/:oralHistoryId", async (req, res, next) => {
+    try {
+        const isFullLength = sanitizeBoolean(req.body?.isFullLength);
+        const metadata = {
+            key: sanitizeOralHistoryKey(req.body?.key),
+            title: sanitizeRequiredText(req.body?.title, "Oral history title"),
+            description: sanitizeOptionalText(req.body?.description),
+            interviewee: sanitizeRequiredText(req.body?.interviewee, "Interviewee name"),
+            category: sanitizeRequiredText(req.body?.category, "Oral history category"),
+            isFullLength,
+            episodeNumber: sanitizeEpisodeNumber(req.body?.episodeNumber, { isRequired: !isFullLength }),
+            profileIds: sanitizeProfileIds(req.body?.profileIds),
+        };
+        const updatedEntry = await updateOralHistory(req.params.oralHistoryId, metadata);
+
+        if (!updatedEntry) {
+            return res.status(404).json({ error: "Oral history not found." });
+        }
+
+        return res.json(updatedEntry);
+    } catch (error) {
         return next(error);
     }
 });
@@ -407,6 +438,24 @@ function sanitizeRequiredText(value, label) {
 
 function sanitizeOptionalText(value) {
     return String(value || "").trim().slice(0, 240);
+}
+
+function sanitizeProfileIds(profileIds) {
+    let rawProfileIds = profileIds;
+
+    if (typeof rawProfileIds === "string") {
+        try {
+            rawProfileIds = JSON.parse(rawProfileIds);
+        } catch {
+            rawProfileIds = rawProfileIds.split(",");
+        }
+    }
+
+    return Array.from(new Set(
+        (Array.isArray(rawProfileIds) ? rawProfileIds : [])
+            .map((profileId) => String(profileId || "").trim())
+            .filter(Boolean),
+    )).slice(0, 20);
 }
 
 function sanitizeBoolean(value) {
@@ -543,6 +592,7 @@ function createOralHistoryUploadSessionRecord({
     category,
     isFullLength,
     episodeNumber,
+    profileIds,
     originalFilename,
     mimeType,
     totalSize,
@@ -567,6 +617,7 @@ function createOralHistoryUploadSessionRecord({
         category,
         isFullLength,
         episodeNumber,
+        profileIds: sanitizeProfileIds(profileIds),
         originalFilename,
         mimeType,
         extension,
@@ -622,6 +673,7 @@ function normalizeOralHistoryUploadSession(uploadSession) {
         episodeNumber: sanitizeEpisodeNumber(uploadSession?.episodeNumber, {
             isRequired: !sanitizeBoolean(uploadSession?.isFullLength),
         }),
+        profileIds: sanitizeProfileIds(uploadSession?.profileIds),
         originalFilename: sanitizeOriginalFilename(uploadSession?.originalFilename),
         mimeType: sanitizeOptionalMimeType(uploadSession?.mimeType),
         extension: sanitizeOralHistoryUploadExtension(uploadSession?.extension),

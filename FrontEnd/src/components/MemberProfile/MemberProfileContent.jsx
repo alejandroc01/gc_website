@@ -31,6 +31,15 @@ export default function MemberProfileContent({
     badges.push('Deceased');
   }
 
+  const compositeArchiveItems = buildCompositeItems(profile.relatedComposites, archiveLinkBuilder);
+  const scrapbookArchiveItems = buildScrapbookItems(profile.relatedScrapbookPages, archiveLinkBuilder);
+  const oralHistoryArchiveItems = buildOralHistoryItems(profile.relatedOralHistories, archiveLinkBuilder);
+  const hasArchiveMaterials = (
+    compositeArchiveItems.length > 0
+    || scrapbookArchiveItems.length > 0
+    || oralHistoryArchiveItems.length > 0
+  );
+
   const showsCompositeCopyrightNotice = (
     profile.portrait?.mode === 'composite-reference'
     || (Array.isArray(profile.relatedComposites) && profile.relatedComposites.length > 0)
@@ -74,22 +83,30 @@ export default function MemberProfileContent({
             </div>
           ) : null}
 
-          <div className="member__materials" aria-label="Related archives">
-            <h2 className="member__subheading">Included in the Archives</h2>
-            <ArchiveSection
-              label="Composites"
-              items={buildCompositeItems(profile.relatedComposites, archiveLinkBuilder)}
-              onNavigate={onArchiveNavigate}
-            />
-            <ArchiveSection
-              label="Featured in Scrapbook Pages"
-              items={buildScrapbookItems(profile.relatedScrapbookPages, archiveLinkBuilder)}
-              onNavigate={onArchiveNavigate}
-              onOpenScrapbookViewer={setActiveScrapbookIdentifier}
-              preferLinkNavigation={Boolean(archiveLinkBuilder)}
-              variant="stacked"
-            />
-          </div>
+          {hasArchiveMaterials ? (
+            <div className="member__materials" aria-label="Related archives">
+              <h2 className="member__subheading">Included in the Archives</h2>
+              <ArchiveSection
+                label="Composites"
+                items={compositeArchiveItems}
+                onNavigate={onArchiveNavigate}
+              />
+              <ArchiveSection
+                label="Featured in Scrapbook Pages"
+                items={scrapbookArchiveItems}
+                onNavigate={onArchiveNavigate}
+                onOpenScrapbookViewer={setActiveScrapbookIdentifier}
+                preferLinkNavigation={Boolean(archiveLinkBuilder)}
+                variant="stacked"
+              />
+              <ArchiveSection
+                label="Oral Histories"
+                items={oralHistoryArchiveItems}
+                onNavigate={onArchiveNavigate}
+                variant="titleList"
+              />
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -150,46 +167,49 @@ function ArchiveSection({
   variant = 'default',
 }) {
   const hasItems = Array.isArray(items) && items.length > 0;
+
+  if (!hasItems) {
+    return null;
+  }
+
   const isYearOnlySection = hasItems && items.every((item) => item.yearOnly);
-  const isScrollableSection = variant === 'stacked' && hasItems && items.length > 6;
+  const isScrollableSection = variant === 'titleList' || (variant === 'stacked' && items.length > 6);
 
   return (
     <section
       className={[
         'member__archiveSection',
         variant === 'stacked' ? 'member__archiveSection--stacked' : '',
+        variant === 'titleList' ? 'member__archiveSection--titleList' : '',
       ].filter(Boolean).join(' ')}
       aria-label={label}
     >
       <div className="member__archiveHeader">
         <p className="member__archiveLabel">{label}</p>
         <span className="member__archiveCount">
-          {hasItems ? `${items.length} item${items.length > 1 ? 's' : ''}` : 'No entries yet'}
+          {items.length} item{items.length > 1 ? 's' : ''}
         </span>
       </div>
 
-      {hasItems ? (
-        <div
-          className={[
-            'member__materialsGrid',
-            isYearOnlySection ? 'member__materialsGrid--yearOnly' : '',
-            isScrollableSection ? 'member__materialsGrid--scrollable' : '',
-          ].filter(Boolean).join(' ')}
-        >
-          {items.map((item) => (
-            <MaterialCard
-              key={`${label}-${item.compositeId}-${item.annotationId}`}
-              {...item}
-              onNavigate={onNavigate}
-              onOpenScrapbookViewer={onOpenScrapbookViewer}
-              preferLinkNavigation={preferLinkNavigation}
-              variant={variant}
-            />
-          ))}
-        </div>
-      ) : (
-        <p className="member__archiveEmpty">No {label.toLowerCase()} listed for this member yet.</p>
-      )}
+      <div
+        className={[
+          'member__materialsGrid',
+          isYearOnlySection ? 'member__materialsGrid--yearOnly' : '',
+          isScrollableSection ? 'member__materialsGrid--scrollable' : '',
+          variant === 'titleList' ? 'member__materialsGrid--titleList' : '',
+        ].filter(Boolean).join(' ')}
+      >
+        {items.map((item) => (
+          <MaterialCard
+            key={`${label}-${item.compositeId}-${item.annotationId}`}
+            {...item}
+            onNavigate={onNavigate}
+            onOpenScrapbookViewer={onOpenScrapbookViewer}
+            preferLinkNavigation={preferLinkNavigation}
+            variant={variant}
+          />
+        ))}
+      </div>
     </section>
   );
 }
@@ -213,10 +233,14 @@ function MaterialCard({
     'member__materialCard',
     yearOnly ? 'member__materialCard--yearOnly' : '',
     variant === 'stacked' ? 'member__materialCard--stacked' : '',
+    variant === 'titleList' ? 'member__materialCard--titleList' : '',
   ].filter(Boolean).join(' ');
   const isScrapbookCard = variant === 'stacked';
+  const isTitleListCard = variant === 'titleList';
   const thumbnailSrc = thumbnailUrl || imageUrl;
-  const cardContent = isScrapbookCard ? (
+  const cardContent = isTitleListCard ? (
+    <p className="member__materialTitle">{title}</p>
+  ) : isScrapbookCard ? (
     <>
       {thumbnailSrc ? (
         <div className="member__materialThumbnail">
@@ -305,12 +329,51 @@ function buildScrapbookItems(relatedScrapbookPages, archiveLinkBuilder = null) {
     }));
 }
 
+function buildOralHistoryItems(relatedOralHistories, archiveLinkBuilder = null) {
+  return [...(Array.isArray(relatedOralHistories) ? relatedOralHistories : [])]
+    .sort(compareOralHistoryArchiveItems)
+    .map((oralHistory) => ({
+      compositeId: oralHistory.oralHistoryId,
+      annotationId: `${oralHistory.oralHistoryId}-oral-history`,
+      title: oralHistory.title || 'Untitled oral history',
+      year: formatOralHistoryArchiveLabel(oralHistory),
+      note: buildOralHistoryNote(oralHistory),
+      to: buildOralHistoryLink(oralHistory, archiveLinkBuilder),
+    }));
+}
+
 function buildCompositeLink(compositeYear, archiveLinkBuilder = null) {
   const normalizedYear = String(compositeYear || '').trim();
   const to = normalizedYear ? `/composites?year=${encodeURIComponent(normalizedYear)}` : '/composites';
 
   return archiveLinkBuilder
     ? archiveLinkBuilder({ kind: 'composite', year: normalizedYear, to })
+    : to;
+}
+
+function buildOralHistoryLink(oralHistory, archiveLinkBuilder = null) {
+  const interviewee = String(oralHistory?.interviewee || '').trim();
+  const episodeId = String(oralHistory?.oralHistoryId || oralHistory?.key || '').trim();
+  const searchParams = new URLSearchParams();
+
+  if (interviewee) {
+    searchParams.set('interviewee', interviewee);
+  }
+
+  if (episodeId) {
+    searchParams.set('episode', episodeId);
+  }
+
+  const query = searchParams.toString();
+  const to = query ? `/oral-histories?${query}` : '/oral-histories';
+
+  return archiveLinkBuilder
+    ? archiveLinkBuilder({
+      kind: 'oralHistoryEpisode',
+      interviewee,
+      episode: episodeId,
+      to,
+    })
     : to;
 }
 
@@ -341,6 +404,17 @@ function buildScrapbookLink(scrapbookYear, pageNumber, archiveLinkBuilder = null
       to,
     })
     : to;
+}
+
+function formatOralHistoryArchiveLabel(oralHistory) {
+  return oralHistory?.isFullLength ? 'Full Interview' : `Episode ${oralHistory?.episodeNumber || ''}`.trim();
+}
+
+function buildOralHistoryNote(oralHistory) {
+  return [
+    oralHistory.interviewee,
+    oralHistory.category,
+  ].filter(Boolean).join(' | ');
 }
 
 function buildScrapbookNote(scrapbookPage) {
@@ -411,6 +485,14 @@ function compareScrapbookArchiveItems(leftPage, rightPage) {
   return String(leftPage.title || '').localeCompare(String(rightPage.title || ''), undefined, {
     sensitivity: 'base',
   });
+}
+
+function compareOralHistoryArchiveItems(leftItem, rightItem) {
+  if (Boolean(leftItem.isFullLength) !== Boolean(rightItem.isFullLength)) {
+    return leftItem.isFullLength ? -1 : 1;
+  }
+
+  return Number(leftItem.episodeNumber || 0) - Number(rightItem.episodeNumber || 0);
 }
 
 function isBoardDepartment(department) {

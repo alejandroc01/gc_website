@@ -106,16 +106,16 @@
 }
 
 .oralHistories__panelHeader {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(456px, max-content);
+  align-items: start;
   gap: 24px;
   margin-bottom: 22px;
 }
 
 .oralHistories__panelControls {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: end;
   justify-content: flex-end;
   gap: 16px;
@@ -123,9 +123,15 @@
 
 .oralHistories__sectionTitle {
   margin: 0;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-display);
   font-weight: 500;
-  font-size: clamp(2rem, 3vw, 2.75rem);
+  font-size: var(--oral-history-title-size, clamp(2rem, 3vw, 2.75rem));
+  line-height: 1.08;
   color: #17111f;
 }
 
@@ -936,12 +942,12 @@
   }
 
   .oralHistories__panelHeader {
-    flex-direction: column;
-    align-items: start;
+    grid-template-columns: 1fr;
   }
 
   .oralHistories__panelControls {
     width: 100%;
+    flex-wrap: wrap;
     justify-content: start;
   }
 
