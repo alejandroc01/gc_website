@@ -311,9 +311,9 @@ export default function SearchBar({
   const handleSelect = (result) => {
     setOpen(false);
     setIsFilterMenuOpen(false);
-    setQuery(result.label);
 
     if (displayMode && result.kind === 'member' && result.profileId && onDisplayMemberSelect) {
+      setQuery(result.label);
       onDisplayMemberSelect(result.profileId);
       return;
     }
@@ -323,8 +323,19 @@ export default function SearchBar({
       return;
     }
 
+    setQuery(result.label);
     const target = displayMode ? buildDisplayModeSearchTarget(result) : result.to;
     setTimeout(() => navigate(target), 100);
+  };
+
+  const handleCloseScrapbookModal = () => {
+    setActiveScrapbookIdentifier('');
+
+    if (query.trim().length > 0) {
+      setTimeout(() => {
+        setOpen(true);
+      }, 0);
+    }
   };
 
   const handleClearQuery = () => {
@@ -484,7 +495,7 @@ export default function SearchBar({
       {activeScrapbookIdentifier ? (
         <ScrapbookPageModal
           identifier={activeScrapbookIdentifier}
-          onClose={() => setActiveScrapbookIdentifier('')}
+          onClose={handleCloseScrapbookModal}
         />
       ) : null}
     </section>
