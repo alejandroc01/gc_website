@@ -23,7 +23,7 @@ export default function AdminAccountsPage() {
   const [accounts, setAccounts] = useState([]);
   const [createValues, setCreateValues] = useState(initialCreateValues);
   const [showCreatePassword, setShowCreatePassword] = useState(false);
-  const [createPasswordError, setCreatePasswordError] = useState('');
+  const [createPasswordSubmitError, setCreatePasswordSubmitError] = useState('');
   const [accountSearchQuery, setAccountSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
@@ -43,6 +43,11 @@ export default function AdminAccountsPage() {
       account.role,
     ].some((value) => String(value || '').toLowerCase().includes(normalizedQuery)));
   }, [accountSearchQuery, accounts, isOwner]);
+  const createPasswordError = getPasswordConfirmationError(
+    createValues.password,
+    createValues.confirmPassword,
+    createPasswordSubmitError,
+  );
 
   useEffect(() => {
     let isActive = true;
@@ -84,7 +89,7 @@ export default function AdminAccountsPage() {
     }));
     setStatusError('');
     setStatusMessage('');
-    setCreatePasswordError('');
+    setCreatePasswordSubmitError('');
   };
 
   const handleCreateSubmit = async (event) => {
@@ -92,7 +97,7 @@ export default function AdminAccountsPage() {
     setIsCreating(true);
     setStatusError('');
     setStatusMessage('');
-    setCreatePasswordError('');
+    setCreatePasswordSubmitError('');
 
     try {
       assertPasswordsMatch(createValues.password, createValues.confirmPassword);
@@ -108,7 +113,7 @@ export default function AdminAccountsPage() {
       setStatusMessage(`Created admin account ${payload.account.username}.`);
     } catch (error) {
       if (isPasswordValidationError(error)) {
-        setCreatePasswordError(error.message);
+        setCreatePasswordSubmitError(error.message);
       } else {
         setStatusError(error.message);
       }
@@ -289,9 +294,14 @@ function AdminAccountRow({
   const [isDeleting, setIsDeleting] = useState(false);
   const [rowMessage, setRowMessage] = useState('');
   const [rowError, setRowError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
+  const [passwordSubmitError, setPasswordSubmitError] = useState('');
 
   const isSelf = account.id === currentAdmin.id;
+  const passwordError = getPasswordConfirmationError(
+    values.password,
+    values.confirmPassword,
+    passwordSubmitError,
+  );
 
   useEffect(() => {
     setValues(buildRowValues(account));
@@ -306,7 +316,7 @@ function AdminAccountRow({
     }));
     setRowMessage('');
     setRowError('');
-    setPasswordError('');
+    setPasswordSubmitError('');
   };
 
   const handleSave = async (event) => {
@@ -314,7 +324,7 @@ function AdminAccountRow({
     setIsSaving(true);
     setRowMessage('');
     setRowError('');
-    setPasswordError('');
+    setPasswordSubmitError('');
 
     try {
       const isChangingPassword = Boolean(values.password || values.confirmPassword);
@@ -342,7 +352,7 @@ function AdminAccountRow({
       setRowMessage(`Saved ${payload.account.username}.`);
     } catch (error) {
       if (isPasswordValidationError(error)) {
-        setPasswordError(error.message);
+        setPasswordSubmitError(error.message);
       } else {
         setRowError(error.message);
       }
@@ -484,6 +494,14 @@ function isPasswordValidationError(error) {
   return Boolean(error?.isPasswordValidationError);
 }
 
+function getPasswordConfirmationError(password, confirmPassword, submitError = '') {
+  if (password && confirmPassword && password !== confirmPassword) {
+    return 'The password does not match.';
+  }
+
+  return submitError;
+}
+
 function PasswordInput({
   name,
   value,
@@ -495,7 +513,7 @@ function PasswordInput({
   error = '',
 }) {
   return (
-    <>
+    <span className="adminPasswordInputGroup">
       <span className="adminPasswordInput">
         <input
           className="compositeField__input"
@@ -516,8 +534,8 @@ function PasswordInput({
           <EyeIcon isVisible={isVisible} />
         </button>
       </span>
-      {error ? <span className="adminPasswordInput__error">{error}</span> : null}
-    </>
+      {error ? <span className="adminPasswordInput__error" role="alert">{error}</span> : null}
+    </span>
   );
 }
 
