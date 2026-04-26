@@ -4,6 +4,10 @@ const historyUploadChunkSizeBytes = 1024 * 1024;
 const oralHistoryUploadChunkSizeBytes = 512 * 1024;
 const oralHistoryUploadChunkRetryCount = 3;
 const adminAuthTokenStorageKey = 'gc-admin-auth-token';
+const searchIndexCacheDurationMs = 60 * 1000;
+let cachedSearchIndex = null;
+let cachedSearchIndexLoadedAt = 0;
+let pendingSearchIndexRequest = null;
 
 async function requestJson(url, options = {}) {
   const response = await fetch(buildApiUrl(url), buildAuthenticatedRequestOptions(options));
@@ -186,6 +190,41 @@ function buildOptionalYearQuery(year) {
 
 export function getHistories() {
   return requestJson('/api/histories');
+}
+
+export function getSearchIndex({ forceRefresh = false } = {}) {
+  const now = Date.now();
+
+  if (
+    !forceRefresh
+    && cachedSearchIndex
+    && now - cachedSearchIndexLoadedAt < searchIndexCacheDurationMs
+  ) {
+    return Promise.resolve(cachedSearchIndex);
+  }
+
+  if (!forceRefresh && pendingSearchIndexRequest) {
+    return pendingSearchIndexRequest;
+  }
+
+  const query = forceRefresh ? '?refresh=1' : '';
+  pendingSearchIndexRequest = requestJson(`/api/search/index${query}`)
+    .then((searchIndex) => {
+      cachedSearchIndex = searchIndex;
+      cachedSearchIndexLoadedAt = Date.now();
+      return searchIndex;
+    })
+    .finally(() => {
+      pendingSearchIndexRequest = null;
+    });
+
+  return pendingSearchIndexRequest;
+}
+
+export function clearCachedSearchIndex() {
+  cachedSearchIndex = null;
+  cachedSearchIndexLoadedAt = 0;
+  pendingSearchIndexRequest = null;
 }
 
 export function updateHistory(historyId, metadata) {
