@@ -1,22 +1,8 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
-import { UPLOAD_CARDS } from '../../data/uploadCards.js';
 import { requestFullscreenForElement } from '../../utils/fullscreen.js';
 import './Navbar.css';
-
-const UPLOAD_MENU_ITEMS = [
-  {
-    label: 'Upload Page',
-    to: '/upload',
-    end: true,
-  },
-  ...UPLOAD_CARDS.map(({ title, to, end }) => ({
-    label: title,
-    to,
-    end,
-  })),
-];
 
 const NAV_ITEMS = [
   {
@@ -63,14 +49,6 @@ const NAV_ITEMS = [
       },
     ],
   },
-  {
-    type: 'menu',
-    key: 'upload',
-    label: 'Upload',
-    align: 'end',
-    match: ({ pathname }) => pathname === '/upload' || pathname.startsWith('/upload/'),
-    items: UPLOAD_MENU_ITEMS,
-  },
 ];
 
 /**
@@ -78,7 +56,7 @@ const NAV_ITEMS = [
  *
  * Requirements implemented:
  * - Left: logo image + title text "German Club of Virginia Tech"
- * - Right: navigation links with grouped collection/display/upload dropdowns
+ * - Right: navigation links with grouped collection/display dropdowns
  * - Auto-hides when scrolling down and reveals when scrolling up
  * - When revealed (scrolling up), shows a thin gold line under the bar + subtle drop shadow
  * - When at the very top of the page, the bar blends into the page (no shadow/line)

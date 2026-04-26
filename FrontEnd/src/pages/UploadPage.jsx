@@ -15,7 +15,7 @@ export default function UploadPage() {
               margin: '0 0 12px',
             }}
           >
-            Upload
+            Admin Tools
           </h1>
           <p style={{ margin: 0, color: 'var(--muted)', maxWidth: 720 }}>
             Choose an upload flow below to begin adding new archive materials.

@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 import './Footer.css';
 
 /**
@@ -75,6 +77,11 @@ export default function Footer() {
               <a className="footer__link" href="https://vtgc.net/german-club/recent-news">
                 Latest News
               </a>
+            </li>
+            <li>
+              <Link className="footer__link" to="/upload">
+                Admin Tools
+              </Link>
             </li>
           </ul>
         </div>
