@@ -3,19 +3,43 @@ const compositeUploadChunkSizeBytes = 256 * 1024;
 const historyUploadChunkSizeBytes = 1024 * 1024;
 const oralHistoryUploadChunkSizeBytes = 512 * 1024;
 const oralHistoryUploadChunkRetryCount = 3;
+const adminAuthTokenStorageKey = 'gc-admin-auth-token';
 
 async function requestJson(url, options = {}) {
-  const response = await fetch(buildApiUrl(url), options);
+  const response = await fetch(buildApiUrl(url), buildAuthenticatedRequestOptions(options));
   const responseText = await response.text();
   const payload = normalizeResponseUrls(parseResponseBody(responseText));
 
   if (!response.ok) {
     const errorMessage = buildErrorMessage(response, payload);
 
+    if (response.status === 401) {
+      clearStoredAdminAuthToken();
+    }
+
     throw new Error(errorMessage);
   }
 
   return payload;
+}
+
+function buildAuthenticatedRequestOptions(options = {}) {
+  const token = getStoredAdminAuthToken();
+
+  if (!token) {
+    return options;
+  }
+
+  const headers = new Headers(options.headers || {});
+
+  if (!headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  return {
+    ...options,
+    headers,
+  };
 }
 
 function parseResponseBody(responseText) {
@@ -178,6 +202,80 @@ export function getHomepageContent() {
   return requestJson('/api/homepage');
 }
 
+export function getStoredAdminAuthToken() {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  return window.localStorage.getItem(adminAuthTokenStorageKey) || '';
+}
+
+export function setStoredAdminAuthToken(token) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(adminAuthTokenStorageKey, String(token || ''));
+}
+
+export function clearStoredAdminAuthToken() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.removeItem(adminAuthTokenStorageKey);
+}
+
+export async function loginAdmin({ username, password }) {
+  const payload = await requestJson('/api/admin/login', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ username, password }),
+  });
+
+  if (payload?.token) {
+    setStoredAdminAuthToken(payload.token);
+  }
+
+  return payload;
+}
+
+export function getCurrentAdmin() {
+  return requestJson('/api/admin/me');
+}
+
+export function getAdminAccounts() {
+  return requestJson('/api/admin/accounts');
+}
+
+export function createAdminAccount(adminAccount) {
+  return requestJson('/api/admin/accounts', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(adminAccount),
+  });
+}
+
+export function updateAdminAccount(adminId, updates) {
+  return requestJson(`/api/admin/accounts/${encodeURIComponent(adminId)}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(updates),
+  });
+}
+
+export function deleteAdminAccount(adminId) {
+  return requestJson(`/api/admin/accounts/${encodeURIComponent(adminId)}`, {
+    method: 'DELETE',
+  });
+}
+
 export function updateHomepageContent(homepageContent) {
   return requestJson('/api/homepage', {
     method: 'PUT',
@@ -254,11 +352,19 @@ export async function exportProfilesCsv(selectedTags = []) {
   const queryString = new URLSearchParams({
     tags: normalizedTags.join(','),
   }).toString();
-  const response = await fetch(buildApiUrl(`/api/profiles/export?${queryString}`));
+  const response = await fetch(
+    buildApiUrl(`/api/profiles/export?${queryString}`),
+    buildAuthenticatedRequestOptions(),
+  );
 
   if (!response.ok) {
     const responseText = await response.text();
     const payload = normalizeResponseUrls(parseResponseBody(responseText));
+
+    if (response.status === 401) {
+      clearStoredAdminAuthToken();
+    }
+
     throw new Error(buildErrorMessage(response, payload));
   }
 

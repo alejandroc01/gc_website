@@ -1,12 +1,15 @@
 const express = require("express");
 const cors = require("cors");
 
+const adminRoutes = require("./routes/admins");
 const compositeRoutes = require("./routes/composites");
 const historyRoutes = require("./routes/histories");
 const homepageRoutes = require("./routes/homepage");
 const oralHistoryRoutes = require("./routes/oralHistories");
 const profileRoutes = require("./routes/profiles");
 const scrapbookRoutes = require("./routes/scrapbooks");
+const { requireAdminAuth } = require("./utils/adminAuth");
+const { ensureAdminStore } = require("./utils/adminStore");
 const { ensureCompositeStore } = require("./utils/compositeStore");
 const { ensureHistoryStore } = require("./utils/historyStore");
 const { ensureHomepageStore } = require("./utils/homepageStore");
@@ -32,12 +35,13 @@ app.get("/api/test", (_req, res) => {
     res.json({ message: "Hello from the composite archive server!" });
 });
 
-app.use("/api/profiles", profileRoutes);
-app.use("/api/composites", compositeRoutes);
-app.use("/api/histories", historyRoutes);
-app.use("/api/scrapbooks", scrapbookRoutes);
-app.use("/api/homepage", homepageRoutes);
-app.use("/api/oral-histories", oralHistoryRoutes);
+app.use("/api/admin", adminRoutes);
+app.use("/api/profiles", requireAdminForUnsafeRequests, profileRoutes);
+app.use("/api/composites", requireAdminForUnsafeRequests, compositeRoutes);
+app.use("/api/histories", requireAdminForUnsafeRequests, historyRoutes);
+app.use("/api/scrapbooks", requireAdminForUnsafeRequests, scrapbookRoutes);
+app.use("/api/homepage", requireAdminForUnsafeRequests, homepageRoutes);
+app.use("/api/oral-histories", requireAdminForUnsafeRequests, oralHistoryRoutes);
 
 app.use((error, _req, res, _next) => {
     if (error && error.type === "entity.parse.failed") {
@@ -62,7 +66,22 @@ app.use((error, _req, res, _next) => {
 
 const PORT = process.env.PORT || 3000;
 
+function requireAdminForUnsafeRequests(req, res, next) {
+    if (["GET", "HEAD", "OPTIONS"].includes(req.method) && !isAdminOnlyReadRequest(req)) {
+        return next();
+    }
+
+    return requireAdminAuth(req, res, next);
+}
+
+function isAdminOnlyReadRequest(req) {
+    return req.method === "GET"
+        && req.baseUrl === "/api/profiles"
+        && req.path === "/export";
+}
+
 Promise.all([
+    ensureAdminStore(),
     ensureCompositeStore(),
     ensureHistoryStore(),
     ensureHomepageStore(),

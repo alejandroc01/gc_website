@@ -1,0 +1,112 @@
+.adminAuthPage {
+  min-height: calc(100vh - var(--nav-height));
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, rgba(38, 21, 56, 0.05), rgba(255, 255, 255, 0.95));
+}
+
+.adminAuthDialog {
+  width: min(440px, calc(100vw - 32px));
+  display: grid;
+  gap: 16px;
+  padding: 28px;
+  border: 1px solid var(--border);
+  background: #fff;
+  box-shadow: var(--shadow-md);
+}
+
+.adminAuthDialog__eyebrow {
+  margin: 0;
+  font-family: var(--font-smallcaps);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.adminAuthDialog__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  line-height: 1.05;
+}
+
+.adminAuthDialog__copy,
+.adminAuthDialog__error {
+  margin: 0;
+  line-height: 1.6;
+}
+
+.adminAuthDialog__copy {
+  color: var(--muted);
+}
+
+.adminAuthDialog__error {
+  color: #8f2639;
+}
+
+.adminAuthDialog__field {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.adminAuthDialog__field span {
+  font-family: var(--font-smallcaps);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.adminAuthDialog__field input {
+  width: 100%;
+  min-height: 48px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  font-size: 16px;
+}
+
+.adminAuthDialog__field input:focus {
+  outline: none;
+  border-color: rgba(42, 24, 70, 0.5);
+  box-shadow: 0 0 0 4px rgba(198, 162, 74, 0.25);
+}
+
+.adminSessionBar {
+  border-bottom: 1px solid rgba(38, 21, 56, 0.1);
+  background: rgba(250, 249, 251, 0.96);
+}
+
+.adminSessionBar__inner {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.adminSessionBar__button {
+  border: 0;
+  background: transparent;
+  color: var(--deep-purple);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.adminSessionBar__button:focus-visible {
+  outline: 3px solid rgba(198, 162, 74, 0.45);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .adminSessionBar__inner {
+    justify-content: space-between;
+  }
+}

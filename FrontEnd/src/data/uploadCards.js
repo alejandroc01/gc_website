@@ -54,4 +54,13 @@ export const UPLOAD_CARDS = [
     buttonText: 'Open Club History Upload',
     to: '/upload/written-history',
   },
+  {
+    key: 'admin-accounts',
+    imageSrc: '/images/person-icon.svg',
+    imageAlt: 'Admin account management icon',
+    title: 'Admin Accounts',
+    description: 'Create admin accounts, assign roles, and manage passwords for restricted archive tools.',
+    buttonText: 'Manage Admin Accounts',
+    to: '/upload/admins',
+  },
 ];

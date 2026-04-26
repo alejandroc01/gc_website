@@ -3,6 +3,7 @@ import { Routes, Route } from 'react-router-dom';
 import Navbar from './components/Navbar/Navbar.jsx';
 import Footer from './components/Footer/Footer.jsx';
 import ScrollToTop from './components/ScrollToTop.jsx';
+import AdminAuthGate from './components/AdminAuth/AdminAuthGate.jsx';
 
 import HomePage from './pages/HomePage.jsx';
 import PlaceholderPage from './pages/PlaceholderPage.jsx';
@@ -21,6 +22,7 @@ import HistoryPage from './pages/HistoryPage.jsx';
 import HistoryUploadPage from './pages/HistoryUploadPage.jsx';
 import ScrapbookUploadPage from './pages/ScrapbookUploadPage.jsx';
 import ScrapbooksPage from './pages/ScrapbooksPage.jsx';
+import AdminAccountsPage from './pages/AdminAccountsPage.jsx';
 
 /**
  * App
@@ -45,14 +47,15 @@ export default function App() {
           <Route path="/written-history" element={<HistoryPage />} />
           <Route path="/search" element={<SearchPage />} />
           <Route path="/display-mode" element={<DisplayModePage />} />
-          <Route path="/upload" element={<UploadPage />} />
-          <Route path="/upload/composites" element={<CompositeUploadPage />} />
-          <Route path="/upload/profiles" element={<ProfileUploadPage />} />
-          <Route path="/upload/homepage" element={<HomepageUploadPage />} />
-          <Route path="/upload/oral-histories" element={<OralHistoryUploadPage />} />
-          <Route path="/upload/written-history" element={<HistoryUploadPage />} />
-          <Route path="/upload/scrapbooks" element={<ScrapbookUploadPage />} />
-          <Route path="/upload/composites/:compositeId" element={<CompositeEditorPage />} />
+          <Route path="/upload" element={<AdminRoute><UploadPage /></AdminRoute>} />
+          <Route path="/upload/admins" element={<AdminRoute><AdminAccountsPage /></AdminRoute>} />
+          <Route path="/upload/composites" element={<AdminRoute><CompositeUploadPage /></AdminRoute>} />
+          <Route path="/upload/profiles" element={<AdminRoute><ProfileUploadPage /></AdminRoute>} />
+          <Route path="/upload/homepage" element={<AdminRoute><HomepageUploadPage /></AdminRoute>} />
+          <Route path="/upload/oral-histories" element={<AdminRoute><OralHistoryUploadPage /></AdminRoute>} />
+          <Route path="/upload/written-history" element={<AdminRoute><HistoryUploadPage /></AdminRoute>} />
+          <Route path="/upload/scrapbooks" element={<AdminRoute><ScrapbookUploadPage /></AdminRoute>} />
+          <Route path="/upload/composites/:compositeId" element={<AdminRoute><CompositeEditorPage /></AdminRoute>} />
           <Route path="/member" element={<MemberPage />} />
           <Route path="/member/:profileId" element={<MemberPage />} />
 
@@ -64,4 +67,8 @@ export default function App() {
       <Footer />
     </>
   );
+}
+
+function AdminRoute({ children }) {
+  return <AdminAuthGate>{children}</AdminAuthGate>;
 }
