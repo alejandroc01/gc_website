@@ -14,6 +14,7 @@ const adminRoles = ['Owner', 'Administrator'];
 const initialCreateValues = {
   username: '',
   password: '',
+  confirmPassword: '',
   role: 'Administrator',
 };
 
@@ -21,6 +22,7 @@ export default function AdminAccountsPage() {
   const { admin, setAdmin } = useAdminSession();
   const [accounts, setAccounts] = useState([]);
   const [createValues, setCreateValues] = useState(initialCreateValues);
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
@@ -77,9 +79,16 @@ export default function AdminAccountsPage() {
     setStatusMessage('');
 
     try {
-      const payload = await createAdminAccount(createValues);
+      assertPasswordsMatch(createValues.password, createValues.confirmPassword);
+
+      const payload = await createAdminAccount({
+        username: createValues.username,
+        password: createValues.password,
+        role: createValues.role,
+      });
       setAccounts((currentAccounts) => [...currentAccounts, payload.account]);
       setCreateValues(initialCreateValues);
+      setShowCreatePassword(false);
       setStatusMessage(`Created admin account ${payload.account.username}.`);
     } catch (error) {
       setStatusError(error.message);
@@ -142,12 +151,24 @@ export default function AdminAccountsPage() {
 
               <label className="compositeField">
                 <span className="compositeField__label">Password</span>
-                <input
-                  className="compositeField__input"
+                <PasswordInput
                   name="password"
-                  type="password"
                   autoComplete="new-password"
                   value={createValues.password}
+                  isVisible={showCreatePassword}
+                  onToggleVisibility={() => setShowCreatePassword((currentValue) => !currentValue)}
+                  onChange={handleCreateChange}
+                />
+              </label>
+
+              <label className="compositeField">
+                <span className="compositeField__label">Confirm Password</span>
+                <PasswordInput
+                  name="confirmPassword"
+                  autoComplete="new-password"
+                  value={createValues.confirmPassword}
+                  isVisible={showCreatePassword}
+                  onToggleVisibility={() => setShowCreatePassword((currentValue) => !currentValue)}
                   onChange={handleCreateChange}
                 />
               </label>
@@ -221,6 +242,7 @@ function AdminAccountRow({
   onDeleted,
 }) {
   const [values, setValues] = useState(() => buildRowValues(account));
+  const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [rowMessage, setRowMessage] = useState('');
@@ -250,6 +272,16 @@ function AdminAccountRow({
     setRowError('');
 
     try {
+      const isChangingPassword = Boolean(values.password || values.confirmPassword);
+
+      if (isChangingPassword) {
+        assertPasswordsMatch(values.password, values.confirmPassword);
+      }
+
+      if (!isOwner && !values.password) {
+        throw new Error('Enter a new password before saving.');
+      }
+
       const updates = isOwner
         ? {
           username: values.username,
@@ -258,13 +290,10 @@ function AdminAccountRow({
         }
         : { password: values.password };
 
-      if (!isOwner && !values.password) {
-        throw new Error('Enter a new password before saving.');
-      }
-
       const payload = await updateAdminAccount(account.id, updates);
       onSaved(payload.account);
-      setValues((currentValues) => ({ ...currentValues, password: '' }));
+      setValues((currentValues) => ({ ...currentValues, password: '', confirmPassword: '' }));
+      setShowPassword(false);
       setRowMessage(`Saved ${payload.account.username}.`);
     } catch (error) {
       setRowError(error.message);
@@ -329,14 +358,27 @@ function AdminAccountRow({
 
         <label className="compositeField">
           <span className="compositeField__label">New Password</span>
-          <input
-            className="compositeField__input"
+          <PasswordInput
             name="password"
-            type="password"
             autoComplete="new-password"
             value={values.password}
             onChange={handleValueChange}
             placeholder="Leave blank to keep current password"
+            isVisible={showPassword}
+            onToggleVisibility={() => setShowPassword((currentValue) => !currentValue)}
+          />
+        </label>
+
+        <label className="compositeField">
+          <span className="compositeField__label">Confirm Password</span>
+          <PasswordInput
+            name="confirmPassword"
+            autoComplete="new-password"
+            value={values.confirmPassword}
+            onChange={handleValueChange}
+            placeholder="Re-enter new password"
+            isVisible={showPassword}
+            onToggleVisibility={() => setShowPassword((currentValue) => !currentValue)}
           />
         </label>
       </div>
@@ -368,5 +410,75 @@ function buildRowValues(account) {
     username: account.username,
     role: account.role,
     password: '',
+    confirmPassword: '',
   };
+}
+
+function assertPasswordsMatch(password, confirmPassword) {
+  if (!password || !confirmPassword) {
+    throw new Error('Enter and confirm the new password.');
+  }
+
+  if (password !== confirmPassword) {
+    throw new Error('The password confirmation does not match.');
+  }
+}
+
+function PasswordInput({
+  name,
+  value,
+  onChange,
+  isVisible,
+  onToggleVisibility,
+  autoComplete = 'new-password',
+  placeholder = '',
+}) {
+  return (
+    <span className="adminPasswordInput">
+      <input
+        className="compositeField__input"
+        name={name}
+        type={isVisible ? 'text' : 'password'}
+        autoComplete={autoComplete}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+      />
+      <button
+        type="button"
+        className="adminPasswordInput__toggle"
+        onClick={onToggleVisibility}
+        aria-label={isVisible ? 'Hide password' : 'Show password'}
+      >
+        <EyeIcon isVisible={isVisible} />
+      </button>
+    </span>
+  );
+}
+
+function EyeIcon({ isVisible }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M2.75 12S5.85 5.75 12 5.75 21.25 12 21.25 12 18.15 18.25 12 18.25 2.75 12 2.75 12Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 14.75A2.75 2.75 0 1 0 12 9.25a2.75 2.75 0 0 0 0 5.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      {!isVisible ? (
+        <path
+          d="M4.5 4.5 19.5 19.5"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+      ) : null}
+    </svg>
+  );
 }
