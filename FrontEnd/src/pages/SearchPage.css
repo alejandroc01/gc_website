@@ -28,16 +28,8 @@
   color: #17111f;
 }
 
-.searchPage__eyebrow,
-.searchPage__lede {
+.searchPage__eyebrow {
   text-align: center;
-}
-
-.searchPage__lede {
-  margin: 0 auto;
-  max-width: 46rem;
-  color: var(--muted);
-  line-height: 1.7;
 }
 
 .searchPage__barWrap {
@@ -61,6 +53,21 @@
   outline: none;
   border-color: rgba(42, 24, 70, 0.5);
   box-shadow: 0 0 0 4px rgba(198, 162, 74, 0.25);
+}
+
+.searchPage__bar::-webkit-search-cancel-button,
+.searchPage__bar::-webkit-search-decoration,
+.searchPage__bar::-webkit-search-results-button,
+.searchPage__bar::-webkit-search-results-decoration {
+  display: none;
+  appearance: none;
+}
+
+.searchPage__bar::-ms-clear,
+.searchPage__bar::-ms-reveal {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 .searchPage__clearButton {
@@ -189,6 +196,11 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 18px;
+  max-height: 378px;
+  overflow-y: auto;
+  padding: 2px 8px 2px 2px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .searchPage__card {

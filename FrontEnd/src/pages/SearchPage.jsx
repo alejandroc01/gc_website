@@ -13,7 +13,6 @@ import {
 import ScrapbookPageModal from '../components/Scrapbook/ScrapbookPageModal.jsx';
 import './SearchPage.css';
 
-const SECTION_CARD_LIMIT = 12;
 const SEARCH_FILTER_OPTIONS = [
   { id: 'member', label: 'Members', sectionTitle: 'Members', viewAllHref: '' },
   { id: 'composite', label: 'Composites', sectionTitle: 'Composites', viewAllHref: '/composites' },
@@ -207,7 +206,7 @@ export default function SearchPage() {
   const normalizedQuery = query.trim().toLowerCase();
 
   const resultsByFilterId = useMemo(() => {
-    if (!normalizedQuery || noFiltersSelected) {
+    if (noFiltersSelected) {
       return {};
     }
 
@@ -278,7 +277,6 @@ export default function SearchPage() {
       items: resultsByFilterId[option.id] || [],
       emptyMessage: buildSectionEmptyMessage({
         option,
-        hasQuery: Boolean(normalizedQuery),
         isLoading: isSearchDataLoading
           || (option.id === 'scrapbookPage' && isMemberScrapbookLoading),
         loadError,
@@ -312,9 +310,6 @@ export default function SearchPage() {
         <div className="container">
           <p className="searchPage__eyebrow">German Club Alumni Archives</p>
           <h1 className="searchPage__title">Advanced Search</h1>
-          <p className="searchPage__lede">
-            Search the same archive index used on the homepage, then narrow results by collection.
-          </p>
 
           <div className="searchPage__barWrap">
             <label className="sr-only" htmlFor="archive-search-page-input">
@@ -358,13 +353,11 @@ export default function SearchPage() {
           </div>
 
           <p className="searchPage__summary" role="status" aria-live="polite">
-            {!normalizedQuery
-              ? 'Enter a search term to see grouped archive results.'
-              : noFiltersSelected
+            {noFiltersSelected
                 ? 'Select at least one filter to search the archive.'
                 : isSearchDataLoading
                   ? 'Loading archive search data...'
-                  : `${resultCount} matching result${resultCount === 1 ? '' : 's'}.`}
+                  : `${resultCount} ${normalizedQuery ? 'matching' : 'archive'} result${resultCount === 1 ? '' : 's'}.`}
           </p>
         </div>
       </section>
@@ -407,7 +400,7 @@ function SectionRow({
   emptyMessage,
   onOpenScrapbookPage,
 }) {
-  const visibleItems = items.slice(0, SECTION_CARD_LIMIT);
+  const visibleItems = items;
 
   return (
     <section className="searchPage__section" aria-label={title}>
@@ -477,16 +470,11 @@ function SearchResultCard({ item, title, onOpenScrapbookPage }) {
 
 function buildSectionEmptyMessage({
   option,
-  hasQuery,
   isLoading,
   loadError,
 }) {
   if (loadError) {
     return loadError;
-  }
-
-  if (!hasQuery) {
-    return 'Enter a search term to search this collection.';
   }
 
   if (isLoading) {
@@ -807,7 +795,7 @@ function buildTaggedScrapbookSearchItems(metadataRows, query, memberScrapbookIte
         kind: 'scrapbookPage',
         label: `${rawName} in ${row.title || 'scrapbook page'}`,
         meta: buildTaggedScrapbookMeta(row),
-        score: score + 16,
+        score: query ? score + 16 : score,
         year: String(row?.year || '').trim(),
         pageIndex: normalizeZeroBasedInteger(row?.pageIndex),
         pageNumber: normalizePositiveInteger(row?.pageNumber),
@@ -918,7 +906,7 @@ function buildUploadedScrapbookPageSearchItems(scrapbooks, query) {
         key: `uploaded-scrapbook-page-${scrapbook?.scrapbookId || year || 'scrapbook'}-${pageEntry.pageId || pageNumber}`,
         kind: 'scrapbookPage',
         label,
-        meta: buildUploadedScrapbookPageMeta({ year, pageNumber, originalFilename }),
+        meta: buildUploadedScrapbookPageMeta({ year, pageNumber }),
         score,
         year,
         pageIndex,
@@ -979,17 +967,20 @@ function buildScrapbookPageLabel({ year, pageNumber, title }) {
   return pageNumber ? `${baseTitle} Page ${pageNumber}` : `${baseTitle} Page`;
 }
 
-function buildUploadedScrapbookPageMeta({ year, pageNumber, originalFilename }) {
+function buildUploadedScrapbookPageMeta({ year, pageNumber }) {
   const noteParts = [
     year ? `${year} Scrapbook` : 'Scrapbook page',
     pageNumber ? `Page ${pageNumber}` : '',
-    originalFilename || '',
   ].filter(Boolean);
 
   return noteParts.join(' | ');
 }
 
 function getSearchScore(fields, query, { exactBoost = 0 } = {}) {
+  if (!query) {
+    return 1;
+  }
+
   let bestScore = 0;
 
   fields.forEach((field) => {
