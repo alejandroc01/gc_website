@@ -49,6 +49,25 @@
   min-height: 260px;
 }
 
+.scrapbookPageModal__imageButton {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+
+.scrapbookPageModal__imageButton:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 5px;
+}
+
+.scrapbookPageModal__imageButton:hover .scrapbookPageModal__image--full,
+.scrapbookPageModal__imageButton:focus-visible .scrapbookPageModal__image--full {
+  transform: scale(1.012);
+}
+
 .scrapbookPageModal__imageStage {
   position: relative;
   display: flex;
@@ -141,6 +160,58 @@
 .scrapbookPageModal__meta span,
 .scrapbookPageModal__members span {
   font-weight: 700;
+}
+
+.scrapbookPageModal__expandedBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1450;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100vw;
+  height: 100vh;
+  padding: clamp(16px, 3vw, 42px);
+  border: 0;
+  background: rgba(12, 10, 14, 0.88);
+  cursor: zoom-out;
+  animation: scrapbookPageModalFadeIn 180ms ease-out;
+}
+
+.scrapbookPageModal__expandedBackdrop:focus-visible {
+  outline: 3px solid rgba(255, 255, 255, 0.85);
+  outline-offset: -10px;
+}
+
+.scrapbookPageModal__expandedImage {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+  animation: scrapbookPageModalImageIn 220ms ease-out;
+}
+
+@keyframes scrapbookPageModalFadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scrapbookPageModalImageIn {
+  from {
+    opacity: 0;
+    transform: scale(0.975);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @media (max-width: 760px) {

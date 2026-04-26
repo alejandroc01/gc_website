@@ -8,6 +8,7 @@ export default function ScrapbookPageModal({ identifier, onClose }) {
   const [isLoading, setIsLoading] = useState(true);
   const [pageError, setPageError] = useState('');
   const [isFullImageLoaded, setIsFullImageLoaded] = useState(false);
+  const [isImageExpanded, setIsImageExpanded] = useState(false);
 
   useEffect(() => {
     let isActive = true;
@@ -49,6 +50,11 @@ export default function ScrapbookPageModal({ identifier, onClose }) {
 
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
+        if (isImageExpanded) {
+          setIsImageExpanded(false);
+          return;
+        }
+
         onClose();
       }
     };
@@ -59,10 +65,11 @@ export default function ScrapbookPageModal({ identifier, onClose }) {
       document.body.style.overflow = overflow;
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [onClose]);
+  }, [isImageExpanded, onClose]);
 
   useEffect(() => {
     setIsFullImageLoaded(false);
+    setIsImageExpanded(false);
   }, [page?.imageUrl, page?.thumbnailUrl]);
 
   const handleBackdropClick = (event) => {
@@ -106,31 +113,38 @@ export default function ScrapbookPageModal({ identifier, onClose }) {
           <>
             <div className="scrapbookPageModal__imageWrap">
               {fullImageSrc ? (
-                <div className="scrapbookPageModal__imageStage">
-                  {previewImageSrc ? (
+                <button
+                  type="button"
+                  className="scrapbookPageModal__imageButton"
+                  onClick={() => setIsImageExpanded(true)}
+                  aria-label={`Enlarge ${page.title || pageLabel}`}
+                >
+                  <div className="scrapbookPageModal__imageStage">
+                    {previewImageSrc ? (
+                      <img
+                        className={[
+                          'scrapbookPageModal__image',
+                          'scrapbookPageModal__image--preview',
+                          isFullImageLoaded ? 'scrapbookPageModal__image--hidden' : '',
+                        ].filter(Boolean).join(' ')}
+                        src={previewImageSrc}
+                        alt=""
+                        aria-hidden="true"
+                      />
+                    ) : null}
                     <img
                       className={[
                         'scrapbookPageModal__image',
-                        'scrapbookPageModal__image--preview',
-                        isFullImageLoaded ? 'scrapbookPageModal__image--hidden' : '',
+                        'scrapbookPageModal__image--full',
+                        !isFullImageLoaded ? 'scrapbookPageModal__image--loading' : '',
+                        hasLayeredPreview && !isFullImageLoaded ? 'scrapbookPageModal__image--pending' : '',
                       ].filter(Boolean).join(' ')}
-                      src={previewImageSrc}
-                      alt=""
-                      aria-hidden="true"
+                      src={fullImageSrc}
+                      alt={page.title || pageLabel}
+                      onLoad={() => setIsFullImageLoaded(true)}
                     />
-                  ) : null}
-                  <img
-                    className={[
-                      'scrapbookPageModal__image',
-                      'scrapbookPageModal__image--full',
-                      !isFullImageLoaded ? 'scrapbookPageModal__image--loading' : '',
-                      hasLayeredPreview && !isFullImageLoaded ? 'scrapbookPageModal__image--pending' : '',
-                    ].filter(Boolean).join(' ')}
-                    src={fullImageSrc}
-                    alt={page.title || pageLabel}
-                    onLoad={() => setIsFullImageLoaded(true)}
-                  />
-                </div>
+                  </div>
+                </button>
               ) : (
                 <div className="scrapbookPageModal__missingImage">Image not uploaded</div>
               )}
@@ -156,6 +170,21 @@ export default function ScrapbookPageModal({ identifier, onClose }) {
           </>
         )}
       </article>
+
+      {isImageExpanded && fullImageSrc ? (
+        <button
+          type="button"
+          className="scrapbookPageModal__expandedBackdrop"
+          onClick={() => setIsImageExpanded(false)}
+          aria-label="Return to scrapbook page details"
+        >
+          <img
+            className="scrapbookPageModal__expandedImage"
+            src={fullImageSrc}
+            alt={page?.title || pageLabel}
+          />
+        </button>
+      ) : null}
     </div>
   );
 }
