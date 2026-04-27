@@ -15,6 +15,21 @@ let activeCompositeId = null;
 
 async function ensureCompositeOcrQueued(compositeId) {
     const currentState = await getCompositeOcrState(compositeId);
+    const composite = await getCompositeById(compositeId);
+
+    if (!composite) {
+        await deleteCompositeOcrState(compositeId);
+        return {
+            ...currentState,
+            status: "error",
+            error: "Composite not found.",
+        };
+    }
+
+    // Saved annotations are authoritative; do not re-run OCR just because the cache is missing or old.
+    if (hasCompositeAnnotations(composite)) {
+        return buildAnnotatedCompositeOcrState(currentState);
+    }
 
     if (isReadyState(currentState)) {
         return currentState;
@@ -115,6 +130,25 @@ async function processCompositeOcr(compositeId) {
             error: error?.message || "OCR processing failed for this composite.",
         });
     }
+}
+
+function buildAnnotatedCompositeOcrState(state) {
+    if (state?.status === "ready") {
+        return state;
+    }
+
+    return {
+        ...state,
+        status: "ready",
+        cacheVersion: compositeOcrCacheVersion,
+        textBoxes: state?.textBoxes || [],
+        generatedAt: state?.generatedAt || null,
+        error: null,
+    };
+}
+
+function hasCompositeAnnotations(composite) {
+    return Array.isArray(composite?.annotations) && composite.annotations.length > 0;
 }
 
 function isReadyState(state) {
