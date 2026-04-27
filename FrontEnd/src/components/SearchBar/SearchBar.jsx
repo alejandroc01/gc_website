@@ -732,7 +732,7 @@ function buildMemberScrapbookSearchItems(profiles, query) {
       itemsByKey.set(key, {
         key,
         kind: 'scrapbookPage',
-        label: `${profileLabel} in ${page.title || 'scrapbook page'}`,
+        label: buildFeaturedScrapbookPageLabel(profileLabel, page),
         meta: buildMemberScrapbookMeta(page),
         score: memberScore + 18,
         year: String(page.year || '').trim(),
@@ -781,7 +781,7 @@ function buildTaggedScrapbookSearchItems(metadataRows, query, memberScrapbookIte
       itemsByKey.set(key, {
         key,
         kind: 'scrapbookPage',
-        label: `${rawName} in ${row.title || 'scrapbook page'}`,
+        label: buildFeaturedScrapbookPageLabel(rawName, row),
         meta: buildTaggedScrapbookMeta(row),
         score: score + 16,
         year: String(row?.year || '').trim(),
@@ -815,7 +815,6 @@ function buildMetadataScrapbookPageSearchItems(metadataRows, query) {
       pageNumber ? `page ${pageNumber}` : '',
       pageNumber ? String(pageNumber) : '',
       'scrapbook page',
-      ...(Array.isArray(row?.people) ? row.people.map((person) => person?.rawName) : []),
     ];
     const score = getSearchScore(fields, query, {
       exactBoost: year === query ? 26 : 0,
@@ -842,6 +841,7 @@ function buildMetadataScrapbookPageSearchItems(metadataRows, query) {
       pageIndex: normalizeZeroBasedInteger(row?.pageIndex),
       pageNumber,
       to,
+      modalIdentifier: row.identifier,
     });
   });
 
@@ -946,6 +946,14 @@ function buildMemberScrapbookMeta(page) {
   ].filter(Boolean);
 
   return noteParts.join(' | ');
+}
+
+function buildFeaturedScrapbookPageLabel(memberName, page) {
+  const title = String(page?.title || '').trim() || 'scrapbook page';
+  const pageNumber = normalizePositiveInteger(page?.pageNumber);
+  const pageLabel = pageNumber ? ` Page ${pageNumber}` : '';
+
+  return `${memberName} featured in ${title}${pageLabel}`;
 }
 
 function buildScrapbookPageLabel({ year, pageNumber, title }) {
