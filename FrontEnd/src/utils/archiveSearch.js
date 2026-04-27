@@ -28,12 +28,12 @@ export function getFilteredSearchSections(searchIndex, selectedFilterIds, query)
 }
 
 export function filterSearchItems(items, normalizedQuery) {
-  return (Array.isArray(items) ? items : [])
+  return dedupeScoredSearchItems((Array.isArray(items) ? items : [])
     .map((item) => {
       const score = scoreSearchItem(item, normalizedQuery);
       return score > 0 ? { ...item, score } : null;
     })
-    .filter(Boolean)
+    .filter(Boolean))
     .sort(compareSearchItems);
 }
 
@@ -88,4 +88,46 @@ function scoreSearchItem(item, normalizedQuery) {
 
   const exactBoost = exactValues.includes(normalizedQuery) ? Number(item?.exactBoost || 0) : 0;
   return bestScore + exactBoost;
+}
+
+function dedupeScoredSearchItems(items) {
+  const itemsByResultKey = new Map();
+
+  items.forEach((item) => {
+    const resultKey = buildSearchResultDedupeKey(item);
+    const existingItem = itemsByResultKey.get(resultKey);
+
+    if (!existingItem || compareSearchItems(item, existingItem) < 0) {
+      itemsByResultKey.set(resultKey, item);
+    }
+  });
+
+  return Array.from(itemsByResultKey.values());
+}
+
+function buildSearchResultDedupeKey(item) {
+  if (item?.kind === 'scrapbookPage') {
+    const year = String(item?.year || '').trim().toLowerCase();
+    const pageNumber = normalizePositiveInteger(item?.pageNumber)
+      || extractPageNumber(item?.modalIdentifier)
+      || extractPageNumber(item?.to);
+
+    if (year && pageNumber) {
+      return `scrapbook-page-${year}-page-${pageNumber}`;
+    }
+  }
+
+  const target = String(item?.to || item?.modalIdentifier || item?.key || '').trim().toLowerCase();
+  return `${item?.kind || 'item'}-${target}`;
+}
+
+function extractPageNumber(value) {
+  const pageMatch = String(value || '').match(/(?:[?&]page=|-p)(\d+)/i);
+  return pageMatch ? Number(pageMatch[1]) : null;
+}
+
+function normalizePositiveInteger(value) {
+  const normalizedValue = Number(value);
+
+  return Number.isInteger(normalizedValue) && normalizedValue > 0 ? normalizedValue : null;
 }

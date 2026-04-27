@@ -266,7 +266,7 @@ function buildOralHistoryEpisodeSearchItem(episode) {
 }
 
 function buildScrapbookPageSearchItems(scrapbooks, metadataRows, profiles) {
-    return dedupeSearchItems([
+    return mergeScrapbookPageSearchItems([
         ...buildUploadedScrapbookPageSearchItems(scrapbooks),
         ...buildMetadataScrapbookPageSearchItems(scrapbooks, metadataRows),
         ...buildTaggedScrapbookSearchItems(scrapbooks, metadataRows, profiles),
@@ -301,6 +301,7 @@ function buildUploadedScrapbookPageSearchItems(scrapbooks) {
             items.push(createSearchItem({
                 key: `uploaded-scrapbook-page-${scrapbook?.scrapbookId || year || "scrapbook"}-${pageEntry.pageId || pageNumber}`,
                 kind: "scrapbookPage",
+                scrapbookPageSourceRank: 0,
                 label,
                 meta: buildUploadedScrapbookPageMeta({ year, pageNumber }),
                 year,
@@ -339,6 +340,7 @@ function buildMetadataScrapbookPageSearchItems(scrapbooks, metadataRows) {
         return createSearchItem({
             key: `metadata-scrapbook-page-${normalizeSearchKey(row?.identifier || label)}`,
             kind: "scrapbookPage",
+            scrapbookPageSourceRank: row?.isPartOf ? 2 : 3,
             label,
             meta: buildTaggedScrapbookMeta({ year, pageNumber, category: row?.category }),
             year,
@@ -387,6 +389,7 @@ function buildTaggedScrapbookSearchItems(scrapbooks, metadataRows, profiles) {
             items.push(createSearchItem({
                 key: `tagged-scrapbook-${normalizeSearchKey(normalizedName)}-${normalizeSearchKey(row?.identifier || row?.title || normalizedName)}`,
                 kind: "scrapbookPage",
+                scrapbookPageSourceRank: 1,
                 label: buildFeaturedScrapbookPageLabel(displayName, { title: row?.title, pageNumber }),
                 meta: buildTaggedScrapbookMeta({ year, pageNumber, category: row?.category }),
                 profileId: matchedProfile?.id || "",
@@ -462,6 +465,94 @@ function dedupeSearchItems(items) {
     });
 
     return Array.from(dedupedItems.values());
+}
+
+function mergeScrapbookPageSearchItems(items) {
+    const mergedItems = new Map();
+
+    dedupeSearchItems(items).forEach((item) => {
+        const mergeKey = buildScrapbookPageMergeKey(item);
+
+        if (!mergeKey) {
+            mergedItems.set(item.key, item);
+            return;
+        }
+
+        const existingItem = mergedItems.get(mergeKey);
+
+        if (!existingItem) {
+            mergedItems.set(mergeKey, {
+                ...item,
+                key: mergeKey,
+            });
+            return;
+        }
+
+        const preferredItem = choosePreferredScrapbookPageItem(existingItem, item);
+
+        mergedItems.set(mergeKey, {
+            ...preferredItem,
+            key: mergeKey,
+            searchFields: normalizeSearchFields([
+                existingItem.searchFields,
+                item.searchFields,
+                existingItem.label,
+                item.label,
+                existingItem.meta,
+                item.meta,
+            ]),
+            exactValues: normalizeSearchFields([existingItem.exactValues, item.exactValues]),
+            exactBoost: Math.max(Number(existingItem.exactBoost || 0), Number(item.exactBoost || 0)),
+            pageIndex: normalizeZeroBasedInteger(existingItem.pageIndex) ?? normalizeZeroBasedInteger(item.pageIndex),
+            pageNumber: normalizePositiveInteger(existingItem.pageNumber) || normalizePositiveInteger(item.pageNumber),
+            modalIdentifier: preferredItem.modalIdentifier || existingItem.modalIdentifier || item.modalIdentifier || "",
+            profileId: preferredItem.profileId || existingItem.profileId || item.profileId || "",
+            to: preferredItem.to || existingItem.to || item.to,
+        });
+    });
+
+    return Array.from(mergedItems.values());
+}
+
+function choosePreferredScrapbookPageItem(leftItem, rightItem) {
+    const leftRank = Number(leftItem?.scrapbookPageSourceRank || 0);
+    const rightRank = Number(rightItem?.scrapbookPageSourceRank || 0);
+
+    if (rightRank !== leftRank) {
+        return rightRank > leftRank ? rightItem : leftItem;
+    }
+
+    const leftHasModal = Boolean(leftItem?.modalIdentifier);
+    const rightHasModal = Boolean(rightItem?.modalIdentifier);
+
+    if (rightHasModal !== leftHasModal) {
+        return rightHasModal ? rightItem : leftItem;
+    }
+
+    return String(rightItem?.label || "").length > String(leftItem?.label || "").length
+        ? rightItem
+        : leftItem;
+}
+
+function buildScrapbookPageMergeKey(item) {
+    const year = String(item?.year || "").trim().toLowerCase();
+    const pageNumber = normalizePositiveInteger(item?.pageNumber)
+        || extractPageNumber(item?.modalIdentifier)
+        || extractPageNumber(item?.to);
+
+    if (year && pageNumber) {
+        return `scrapbook-page-${year}-page-${pageNumber}`;
+    }
+
+    const to = String(item?.to || "").trim().toLowerCase();
+
+    if (to) {
+        return `scrapbook-page-target-${to}`;
+    }
+
+    const modalIdentifier = normalizeIdentifierKey(item?.modalIdentifier);
+
+    return modalIdentifier ? `scrapbook-page-modal-${modalIdentifier}` : "";
 }
 
 function buildUploadedPagesByIdentifier(scrapbooks) {
