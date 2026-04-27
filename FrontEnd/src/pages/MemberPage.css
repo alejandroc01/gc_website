@@ -231,6 +231,12 @@
   padding-right: 6px;
 }
 
+.member__materialsGrid--titleList {
+  grid-template-columns: 1fr;
+  max-height: 260px;
+  gap: 8px;
+}
+
 .member__materialsGrid--yearOnly {
   grid-template-columns: repeat(auto-fit, minmax(96px, max-content));
   justify-content: start;
@@ -267,6 +273,11 @@
   align-items: stretch;
   gap: 0;
   padding: 12px;
+}
+
+.member__materialCard--titleList {
+  display: block;
+  padding: 10px 12px;
 }
 
 .member__materialCard:hover {
@@ -337,6 +348,10 @@
   order: 1;
   text-align: center;
   font-style: italic;
+}
+
+.member__materialCard--titleList .member__materialTitle {
+  margin: 0;
 }
 
 .member__materialNote {

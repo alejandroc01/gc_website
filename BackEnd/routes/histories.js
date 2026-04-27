@@ -83,6 +83,7 @@ router.post("/upload-sessions", async (req, res, next) => {
         const key = sanitizeHistoryKey(req.body?.key);
         const title = sanitizeRequiredText(req.body?.title, "Written history title");
         const description = sanitizeOptionalText(req.body?.description);
+        const profileIds = sanitizeProfileIds(req.body?.profileIds);
         const originalFilename = sanitizeOriginalFilename(req.body?.originalFilename);
         const mimeType = sanitizeOptionalMimeType(req.body?.mimeType);
         const totalSize = sanitizeHistoryUploadSize(req.body?.totalSize);
@@ -99,6 +100,7 @@ router.post("/upload-sessions", async (req, res, next) => {
             key,
             title,
             description,
+            profileIds,
             originalFilename,
             mimeType,
             totalSize,
@@ -212,6 +214,7 @@ router.post("/upload-sessions/:uploadId/complete", async (req, res, next) => {
             key: uploadSession.key,
             title: uploadSession.title,
             description: uploadSession.description,
+            profileIds: uploadSession.profileIds,
             originalFilename: uploadSession.originalFilename,
             fileSize: uploadSession.totalSize,
             mimeType: uploadSession.mimeType,
@@ -283,6 +286,7 @@ router.post("/", upload.single("historyPdf"), async (req, res, next) => {
         const key = sanitizeHistoryKey(req.body?.key);
         const title = sanitizeRequiredText(req.body?.title, "Written history title");
         const description = sanitizeOptionalText(req.body?.description);
+        const profileIds = sanitizeProfileIds(req.body?.profileIds);
         const historyId = req.generatedHistoryId;
         const existingHistories = await listHistories();
 
@@ -307,6 +311,7 @@ router.post("/", upload.single("historyPdf"), async (req, res, next) => {
             key,
             title,
             description,
+            profileIds,
             originalFilename: req.file.originalname,
             fileSize: req.file.size,
             mimeType: req.file.mimetype,
@@ -324,9 +329,11 @@ router.put("/:historyId", async (req, res, next) => {
     try {
         const title = sanitizeRequiredText(req.body?.title, "Written history title");
         const description = sanitizeOptionalText(req.body?.description);
+        const profileIds = sanitizeProfileIds(req.body?.profileIds);
         const updatedHistory = await updateHistory(req.params.historyId, {
             title,
             description,
+            profileIds,
         });
 
         if (!updatedHistory) {
@@ -398,6 +405,34 @@ function sanitizeRequiredText(value, label) {
 
 function sanitizeOptionalText(value) {
     return String(value || "").trim().slice(0, 1000);
+}
+
+function sanitizeProfileIds(profileIds) {
+    let rawProfileIds = profileIds;
+
+    if (typeof rawProfileIds === "string") {
+        const trimmedValue = rawProfileIds.trim();
+
+        if (!trimmedValue) {
+            rawProfileIds = [];
+        } else if (trimmedValue.startsWith("[") && trimmedValue.endsWith("]")) {
+            try {
+                rawProfileIds = JSON.parse(trimmedValue);
+            } catch (_error) {
+                rawProfileIds = trimmedValue.split(",");
+            }
+        } else {
+            rawProfileIds = trimmedValue.split(",");
+        }
+    }
+
+    return Array.from(
+        new Set(
+            (Array.isArray(rawProfileIds) ? rawProfileIds : [])
+                .map((profileId) => String(profileId || "").trim())
+                .filter(Boolean),
+        ),
+    ).slice(0, 20);
 }
 
 function sanitizeOriginalFilename(rawFilename) {
@@ -498,6 +533,7 @@ function createHistoryUploadSessionRecord({
     key,
     title,
     description,
+    profileIds,
     originalFilename,
     mimeType,
     totalSize,
@@ -518,6 +554,7 @@ function createHistoryUploadSessionRecord({
         key,
         title,
         description,
+        profileIds: sanitizeProfileIds(profileIds),
         originalFilename,
         mimeType,
         extension,
@@ -567,6 +604,7 @@ function normalizeHistoryUploadSession(uploadSession) {
         key: sanitizeHistoryKey(uploadSession?.key),
         title: sanitizeRequiredText(uploadSession?.title, "Written history title"),
         description: sanitizeOptionalText(uploadSession?.description),
+        profileIds: sanitizeProfileIds(uploadSession?.profileIds),
         originalFilename: sanitizeOriginalFilename(uploadSession?.originalFilename),
         mimeType: sanitizeOptionalMimeType(uploadSession?.mimeType),
         extension: sanitizeHistoryUploadExtension(uploadSession?.extension),

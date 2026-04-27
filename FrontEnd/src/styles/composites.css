@@ -128,6 +128,62 @@
   box-shadow: 0 0 0 4px rgba(198, 162, 74, 0.25);
 }
 
+.adminPasswordInputGroup {
+  position: relative;
+  display: block;
+}
+
+.adminPasswordInput {
+  position: relative;
+  display: block;
+}
+
+.adminPasswordInput input {
+  padding-right: 48px;
+}
+
+.adminPasswordInput__toggle {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+  border: 0;
+  background: transparent;
+  color: var(--deep-purple);
+  cursor: pointer;
+}
+
+.adminPasswordInput__toggle:hover,
+.adminPasswordInput__toggle:focus-visible {
+  color: #17111f;
+}
+
+.adminPasswordInput__toggle:focus-visible {
+  outline: 3px solid rgba(198, 162, 74, 0.45);
+  outline-offset: 2px;
+}
+
+.adminPasswordInput__error {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 12;
+  display: block;
+  width: min(100%, 360px);
+  padding: 8px 10px;
+  border: 1px solid rgba(143, 38, 57, 0.28);
+  background: #fff;
+  box-shadow: var(--shadow-sm);
+  color: #8f2639;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
 .compositeField__textarea {
   resize: vertical;
   min-height: 132px;
@@ -136,6 +192,14 @@
 .compositeField__input--file {
   padding: 12px;
   cursor: pointer;
+}
+
+.compositeField__hint {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.45;
 }
 
 .compositeUploadForm {
@@ -424,7 +488,7 @@
 
 .adminAccountForm {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 18px;
   align-items: end;
 }
@@ -432,11 +496,37 @@
 .adminAccountForm__actions {
   display: flex;
   align-items: center;
+  grid-column: 1 / -1;
+}
+
+.adminAccountToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.adminAccountToolbar__search {
+  flex: 1 1 320px;
+  max-width: 460px;
+}
+
+.adminAccountToolbar__count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.96rem;
+  white-space: nowrap;
 }
 
 .adminAccountList {
   display: grid;
   gap: 16px;
+  max-height: min(760px, 70vh);
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-gutter: stable;
 }
 
 .adminAccountCard {
@@ -468,7 +558,7 @@
 
 .adminAccountCard__grid {
   display: grid;
-  grid-template-columns: minmax(160px, 0.7fr) minmax(160px, 0.55fr) minmax(220px, 1fr);
+  grid-template-columns: minmax(150px, 0.75fr) minmax(150px, 0.6fr) repeat(2, minmax(210px, 1fr));
   gap: 14px;
 }
 
@@ -476,6 +566,178 @@
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
+}
+
+.oralHistoryStoredToolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.oralHistoryStoredToolbar__search {
+  flex: 1 1 360px;
+  max-width: 540px;
+}
+
+.oralHistoryStoredToolbar__count {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.96rem;
+  white-space: nowrap;
+}
+
+.oralHistoryStoredList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 18px;
+  max-height: min(900px, 72vh);
+  overflow-y: auto;
+  padding-right: 8px;
+  scrollbar-gutter: stable;
+}
+
+.oralHistoryEditModalBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px 18px;
+  overflow-y: auto;
+  background: rgba(16, 10, 28, 0.58);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.oralHistoryEditModal {
+  width: min(980px, 100%);
+  max-height: min(860px, calc(100vh - 56px));
+  overflow-y: auto;
+  box-shadow: var(--shadow-md);
+}
+
+.oralHistoryEditModal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.oralHistoryEditModal__form {
+  display: grid;
+  gap: 16px;
+}
+
+.compositeUploadProgress {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid rgba(38, 21, 56, 0.12);
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.compositeUploadProgress__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--deep-purple);
+  font-weight: 700;
+}
+
+.compositeUploadProgress__header span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compositeUploadProgress__bar {
+  position: relative;
+  height: 10px;
+  overflow: hidden;
+  border: 1px solid rgba(38, 21, 56, 0.14);
+  background: rgba(38, 21, 56, 0.08);
+}
+
+.compositeUploadProgress__barFill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--deep-purple), var(--gold));
+  transition: width 160ms ease;
+}
+
+.compositeUploadProgress__meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.oralHistoryProfilePicker {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(38, 21, 56, 0.1);
+  background: #fff;
+}
+
+.oralHistoryProfilePicker__chips,
+.oralHistoryProfilePicker__results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.oralHistoryProfilePicker__chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 10px;
+  border: 1px solid rgba(38, 21, 56, 0.16);
+  background: rgba(198, 162, 74, 0.14);
+  color: var(--deep-purple);
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.oralHistoryProfilePicker__option {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: min(100%, 240px);
+  max-width: 100%;
+  padding: 10px;
+  border: 1px solid rgba(38, 21, 56, 0.1);
+  background: var(--surface-muted);
+  cursor: pointer;
+}
+
+.oralHistoryProfilePicker__option input {
+  margin-top: 3px;
+  accent-color: var(--deep-purple);
+}
+
+.oralHistoryProfilePicker__option span {
+  display: grid;
+  gap: 3px;
+}
+
+.oralHistoryProfilePicker__option small,
+.oralHistoryProfilePicker__hint {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.oralHistoryProfilePicker__hint {
+  margin: 0;
 }
 
 .compositeUploadListControls {
@@ -1927,7 +2189,8 @@
     min-height: 84px;
   }
 
-  .profileModal__header {
+  .profileModal__header,
+  .oralHistoryEditModal__header {
     flex-direction: column;
     align-items: stretch;
   }
@@ -1964,6 +2227,15 @@
   .compositeUploadListControls {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .oralHistoryEditModalBackdrop {
+    align-items: flex-start;
+    padding: 14px;
+  }
+
+  .oralHistoryEditModal {
+    max-height: calc(100vh - 28px);
   }
 
   .compositeUploadListControls__search {

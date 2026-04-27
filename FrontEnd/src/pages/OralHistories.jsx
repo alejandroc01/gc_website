@@ -32,6 +32,7 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
   const [activeInterviewee, setActiveInterviewee] = useState('');
   const [activeCategory, setActiveCategory] = useState('');
   const [activeOralHistoryId, setActiveOralHistoryId] = useState('');
+  const [activeVideoQuality, setActiveVideoQuality] = useState('high');
   const [openDisplayDropdown, setOpenDisplayDropdown] = useState('');
   const [areDisplayVideoControlsVisible, setAreDisplayVideoControlsVisible] = useState(true);
   const [isDisplayVideoFullscreen, setIsDisplayVideoFullscreen] = useState(false);
@@ -42,9 +43,12 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
     isPlaying: false,
   });
   const displayFiltersRef = useRef(null);
+  const standardVideoRef = useRef(null);
   const displayVideoRef = useRef(null);
   const displayVideoControlsTimeoutRef = useRef(null);
   const pendingDisplayAutoplayIdRef = useRef('');
+  const pendingQualitySwitchRef = useRef(null);
+  const featuredTitleRef = useRef(null);
   const requestedInterviewee = useMemo(
     () => String(searchParams.get('interviewee') || '').trim(),
     [searchParams],
@@ -200,6 +204,21 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
     [activeCategory, activeInterviewee, visibleEpisodes],
   );
   const activePoster = useOralHistoryPoster(activeEpisode, activeInterviewee || activeEpisode?.interviewee);
+  const activeEpisodeTitle = activeEpisode
+    ? formatEpisodeTitle(activeEpisode.title)
+    : 'Episode 1 will appear here after upload';
+  const hasLowResVersion = Boolean(activeEpisode?.lowResVideoUrl);
+  const activeVideoSource = !displayMode && activeVideoQuality === 'low' && hasLowResVersion
+    ? {
+      url: activeEpisode.lowResVideoUrl,
+      mimeType: activeEpisode.lowResMimeType || activeEpisode.mimeType || 'video/mp4',
+      quality: 'low',
+    }
+    : {
+      url: activeEpisode?.videoUrl || '',
+      mimeType: activeEpisode?.mimeType || 'video/mp4',
+      quality: 'high',
+    };
   const activeIntervieweeLabel = activeInterviewee || activeEpisode?.interviewee || 'No interview selected';
   const activeCategoryLabel = getActiveCategoryLabel(activeEpisode, activeInterviewee);
   const displayIntervieweeOptions = useMemo(
@@ -216,6 +235,18 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
     ],
     [categories],
   );
+
+  useSingleLineTitleFit(featuredTitleRef, activeEpisodeTitle);
+
+  useEffect(() => {
+    if (!hasLowResVersion && activeVideoQuality !== 'high') {
+      setActiveVideoQuality('high');
+    }
+  }, [activeEpisode?.oralHistoryId, activeVideoQuality, hasLowResVersion]);
+
+  useEffect(() => {
+    pendingQualitySwitchRef.current = null;
+  }, [activeEpisode?.oralHistoryId]);
 
   useEffect(() => {
     if (episodes.length === 0 || (!requestedInterviewee && !requestedEpisodeId)) {
@@ -433,6 +464,54 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
     showDisplayVideoControls();
   };
 
+  const handleVideoQualityChange = (nextQuality) => {
+    if (nextQuality === activeVideoQuality) {
+      return;
+    }
+
+    const videoElement = standardVideoRef.current;
+    const currentTime = Number(videoElement?.currentTime || 0);
+    const duration = Number(videoElement?.duration || 0);
+
+    pendingQualitySwitchRef.current = {
+      currentTime: Number.isFinite(currentTime) ? currentTime : 0,
+      progress: Number.isFinite(duration) && duration > 0 ? currentTime / duration : 0,
+      shouldPlay: Boolean(videoElement && !videoElement.paused && !videoElement.ended),
+    };
+    setActiveVideoQuality(nextQuality);
+  };
+
+  const handleStandardVideoLoadedMetadata = () => {
+    const videoElement = standardVideoRef.current;
+    const pendingQualitySwitch = pendingQualitySwitchRef.current;
+
+    if (!videoElement || !pendingQualitySwitch) {
+      return;
+    }
+
+    pendingQualitySwitchRef.current = null;
+
+    const duration = Number(videoElement.duration || 0);
+    const fallbackTime = Number.isFinite(duration) && duration > 0
+      ? duration * pendingQualitySwitch.progress
+      : pendingQualitySwitch.currentTime;
+    const nextTime = Number.isFinite(duration) && duration > 0
+      ? Math.min(pendingQualitySwitch.currentTime || fallbackTime, Math.max(duration - 0.25, 0))
+      : pendingQualitySwitch.currentTime;
+
+    if (Number.isFinite(nextTime) && nextTime > 0) {
+      try {
+        videoElement.currentTime = nextTime;
+      } catch {
+        // Some browsers reject seeking before enough data is buffered.
+      }
+    }
+
+    if (pendingQualitySwitch.shouldPlay) {
+      void videoElement.play().catch(() => {});
+    }
+  };
+
   const renderDisplayDropdown = ({ dropdownId, label, onChange, options, value }) => {
     const selectedOption = options.find((option) => option.value === value) || options[0];
     const isOpen = openDisplayDropdown === dropdownId;
@@ -493,7 +572,7 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
       preload="metadata"
       poster={activePoster}
       aria-label="Featured oral history video player"
-      key={activeEpisode?.oralHistoryId || 'oral-history-placeholder'}
+      key={`${activeEpisode?.oralHistoryId || 'oral-history-placeholder'}-${activeVideoSource.quality}`}
       playsInline
       onClick={options.onClick}
       onDurationChange={options.onDurationChange}
@@ -504,8 +583,8 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
       onTimeUpdate={options.onTimeUpdate}
       onVolumeChange={options.onVolumeChange}
     >
-      {activeEpisode?.videoUrl ? (
-        <source src={activeEpisode.videoUrl} type={activeEpisode.mimeType || 'video/mp4'} />
+      {activeVideoSource.url ? (
+        <source src={activeVideoSource.url} type={activeVideoSource.mimeType} />
       ) : null}
       Your browser does not support the video tag.
     </video>
@@ -778,8 +857,8 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
             <div className="oralHistories__panelHeader">
               <div>
                 <p className="oralHistories__sectionLabel">Featured Recording</p>
-                <h2 className="oralHistories__sectionTitle">
-                  {activeEpisode ? formatEpisodeTitle(activeEpisode.title) : 'Episode 1 will appear here after upload'}
+                <h2 ref={featuredTitleRef} className="oralHistories__sectionTitle">
+                  {activeEpisodeTitle}
                 </h2>
               </div>
               <div className="oralHistories__panelControls">
@@ -823,7 +902,35 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
 
             <div className="oralHistories__contentGrid">
               <div className="oralHistories__mediaFrame">
-                {renderVideoPlayer('oralHistories__video')}
+                {renderVideoPlayer('oralHistories__video', {
+                  onLoadedMetadata: handleStandardVideoLoadedMetadata,
+                  videoRef: standardVideoRef,
+                })}
+                {hasLowResVersion ? (
+                  <div className="oralHistories__qualitySwitch" aria-label="Video quality">
+                    <span className="oralHistories__qualityLabel">Video Quality</span>
+                    <div className="oralHistories__qualityButtons">
+                      <button
+                        type="button"
+                        className={`oralHistories__qualityButton${
+                          activeVideoQuality === 'high' ? ' oralHistories__qualityButton--active' : ''
+                        }`}
+                        onClick={() => handleVideoQualityChange('high')}
+                      >
+                        HD
+                      </button>
+                      <button
+                        type="button"
+                        className={`oralHistories__qualityButton${
+                          activeVideoQuality === 'low' ? ' oralHistories__qualityButton--active' : ''
+                        }`}
+                        onClick={() => handleVideoQualityChange('low')}
+                      >
+                        SD
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
 
               <aside className="oralHistories__playlist" aria-label="Episode playlist">
@@ -869,6 +976,58 @@ export default function OralHistories({ displayMode = false, onBack = null }) {
       </section>
     </div>
   );
+}
+
+function useSingleLineTitleFit(titleRef, titleText) {
+  useEffect(() => {
+    const titleElement = titleRef.current;
+
+    if (!titleElement || typeof window === 'undefined') {
+      return undefined;
+    }
+
+    let animationFrame = 0;
+
+    const fitTitle = () => {
+      window.cancelAnimationFrame(animationFrame);
+      animationFrame = window.requestAnimationFrame(() => {
+        titleElement.style.removeProperty('--oral-history-title-size');
+
+        const computedStyle = window.getComputedStyle(titleElement);
+        const maxFontSize = Number.parseFloat(computedStyle.fontSize) || 44;
+        const minFontSize = 22;
+        const availableWidth = titleElement.clientWidth;
+        const requiredWidth = titleElement.scrollWidth;
+
+        if (!availableWidth || !requiredWidth || requiredWidth <= availableWidth) {
+          titleElement.style.removeProperty('--oral-history-title-size');
+          return;
+        }
+
+        const fittedFontSize = Math.max(
+          minFontSize,
+          Math.floor(maxFontSize * (availableWidth / requiredWidth) * 100) / 100,
+        );
+
+        titleElement.style.setProperty('--oral-history-title-size', `${fittedFontSize}px`);
+      });
+    };
+
+    fitTitle();
+    window.addEventListener('resize', fitTitle);
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(fitTitle)
+      : null;
+
+    resizeObserver?.observe(titleElement.parentElement || titleElement);
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+      window.removeEventListener('resize', fitTitle);
+      resizeObserver?.disconnect();
+    };
+  }, [titleRef, titleText]);
 }
 
 function getActiveCategoryLabel(activeEpisode, activeInterviewee) {
@@ -1027,6 +1186,12 @@ function normalizeOralHistory(oralHistory) {
       : normalizeCategoryName(oralHistory?.category || getCategoryForTitle(oralHistory?.title)),
     isFullLength,
     episodeNumber: isFullLength ? null : Number(oralHistory?.episodeNumber || 0),
+    videoUrl: String(oralHistory?.videoUrl || ''),
+    lowResVideoUrl: String(oralHistory?.lowResVideoUrl || ''),
+    lowResOriginalFilename: String(oralHistory?.lowResOriginalFilename || ''),
+    lowResFileSize: Number(oralHistory?.lowResFileSize || 0),
+    lowResMimeType: String(oralHistory?.lowResMimeType || ''),
+    mimeType: String(oralHistory?.mimeType || ''),
   };
 }
 

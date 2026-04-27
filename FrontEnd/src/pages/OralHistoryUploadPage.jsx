@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { deleteOralHistory, getOralHistories, uploadOralHistory } from '../api/composites.js';
+import {
+  deleteOralHistory,
+  getOralHistories,
+  getProfiles,
+  updateOralHistory,
+  uploadOralHistory,
+  uploadOralHistoryLowRes,
+} from '../api/composites.js';
 import '../styles/composites.css';
 
 const acceptedVideoTypes = 'video/*,.mp4,.mov,.m4v,.webm';
@@ -26,6 +33,12 @@ export default function OralHistoryUploadPage() {
   const [statusSummary, setStatusSummary] = useState('');
   const [uploadProgress, setUploadProgress] = useState(null);
   const [storedEpisodes, setStoredEpisodes] = useState([]);
+  const [profiles, setProfiles] = useState([]);
+  const [storedEpisodeSearchQuery, setStoredEpisodeSearchQuery] = useState('');
+  const [editingOralHistoryId, setEditingOralHistoryId] = useState('');
+  const [editValues, setEditValues] = useState(null);
+  const [editStatusError, setEditStatusError] = useState('');
+  const [savingOralHistoryId, setSavingOralHistoryId] = useState('');
   const [selectedInterviewee, setSelectedInterviewee] = useState('');
   const [customInterviewees, setCustomInterviewees] = useState([]);
   const [isAddingInterviewee, setIsAddingInterviewee] = useState(false);
@@ -43,13 +56,17 @@ export default function OralHistoryUploadPage() {
       setStatusError('');
 
       try {
-        const loadedOralHistories = await getOralHistories();
+        const [loadedOralHistories, loadedProfiles] = await Promise.all([
+          getOralHistories(),
+          getProfiles(),
+        ]);
 
         if (!isActive) {
           return;
         }
 
         setStoredEpisodes(normalizeOralHistories(loadedOralHistories));
+        setProfiles(normalizeProfiles(loadedProfiles));
       } catch (error) {
         if (isActive) {
           setStatusError(error.message);
@@ -69,8 +86,32 @@ export default function OralHistoryUploadPage() {
   }, []);
 
   const latestStoredEpisode = useMemo(
-    () => (storedEpisodes.length > 0 ? storedEpisodes[storedEpisodes.length - 1] : null),
+    () => getLatestStoredEpisode(storedEpisodes),
     [storedEpisodes],
+  );
+
+  const profileOptions = useMemo(
+    () => profiles.map((profile) => ({
+      id: profile.id,
+      label: profile.displayName || `${profile.firstName || ''} ${profile.lastName || ''}`.trim() || 'Unnamed member',
+      meta: [profile.graduationYear ? `Class of ${profile.graduationYear}` : '', [profile.city, profile.stateProvince].filter(Boolean).join(', ')].filter(Boolean).join(' | '),
+    })),
+    [profiles],
+  );
+
+  const profileMap = useMemo(
+    () => new Map(profileOptions.map((profile) => [profile.id, profile])),
+    [profileOptions],
+  );
+
+  const filteredStoredEpisodes = useMemo(
+    () => filterStoredEpisodes(storedEpisodes, storedEpisodeSearchQuery, profileMap),
+    [profileMap, storedEpisodeSearchQuery, storedEpisodes],
+  );
+
+  const editingEpisode = useMemo(
+    () => storedEpisodes.find((episode) => episode.oralHistoryId === editingOralHistoryId) || null,
+    [editingOralHistoryId, storedEpisodes],
   );
 
   const nextAvailableEpisodeNumber = useMemo(
@@ -99,6 +140,10 @@ export default function OralHistoryUploadPage() {
         [fieldName]: fieldName === 'isFullLength' ? Boolean(value) : value,
       };
 
+      if (fieldName === 'title') {
+        nextEntry.isTitleEdited = true;
+      }
+
       if (fieldName === 'title' && entry.key === slugifyFilename(entry.file?.name || '')) {
         nextEntry.key = slugifyFilename(value);
       }
@@ -107,20 +152,53 @@ export default function OralHistoryUploadPage() {
         nextEntry.episodeNumber = '';
       }
 
-      return nextEntry;
+      return syncGeneratedTitleForEntry(nextEntry);
     }));
     setStatusError('');
     setStatusSummary('');
   };
 
+  const handleEntryProfileToggle = (entryId, profileId) => {
+    setUploadEntries((currentEntries) => currentEntries.map((entry) => (
+      entry.id === entryId
+        ? { ...entry, profileIds: toggleProfileId(entry.profileIds, profileId) }
+        : entry
+    )));
+    setStatusError('');
+    setStatusSummary('');
+  };
+
+  const handleEntryLowResFileChange = async (entryId, file) => {
+    setStatusError('');
+    setStatusSummary('');
+
+    if (!file) {
+      setUploadEntries((currentEntries) => currentEntries.map((entry) => (
+        entry.id === entryId ? { ...entry, lowResFile: null } : entry
+      )));
+      return;
+    }
+
+    try {
+      await validateVideoFile(file);
+      setUploadEntries((currentEntries) => currentEntries.map((entry) => (
+        entry.id === entryId ? { ...entry, lowResFile: file } : entry
+      )));
+    } catch (error) {
+      setStatusError(error.message);
+    }
+  };
+
   const applyIntervieweeToEntries = (intervieweeName) => {
-    setUploadEntries((currentEntries) => assignEpisodeNumbersForInterviewee(
-      currentEntries.map((entry) => ({
-        ...entry,
-        interviewee: intervieweeName,
-      })),
-      storedEpisodes,
-      intervieweeName,
+    setUploadEntries((currentEntries) => (
+      assignEpisodeNumbersForInterviewee(
+        currentEntries.map((entry) => syncGeneratedTitleForEntry({
+          ...entry,
+          interviewee: intervieweeName,
+        })),
+        storedEpisodes,
+        intervieweeName,
+      )
     ));
   };
 
@@ -168,7 +246,7 @@ export default function OralHistoryUploadPage() {
         return existingName ? currentNames : [...currentNames, nextCategoryName];
       });
 
-      setUploadEntries((currentEntries) => currentEntries.map((entry) => ({
+      setUploadEntries((currentEntries) => currentEntries.map((entry) => syncGeneratedTitleForEntry({
         ...entry,
         category: entry.category || nextCategoryName,
       })));
@@ -196,7 +274,7 @@ export default function OralHistoryUploadPage() {
       ]);
 
       const createdEntries = nextFiles.map((file) => {
-        const title = deriveTitleFromFilename(file.name);
+        const filenameTitle = deriveTitleFromFilename(file.name);
         const nextKey = getUniqueKey(slugifyFilename(file.name), existingKeys);
 
         return {
@@ -204,11 +282,14 @@ export default function OralHistoryUploadPage() {
           file,
           isFullLength: false,
           episodeNumber: '',
-          title,
+          title: '',
+          isTitleEdited: false,
           key: nextKey,
           interviewee: selectedInterviewee,
-          category: getCategoryForTitle(title),
+          category: getCategoryForTitle(filenameTitle),
           description: '',
+          profileIds: [],
+          lowResFile: null,
         };
       });
 
@@ -241,10 +322,15 @@ export default function OralHistoryUploadPage() {
 
       const createdEntries = [];
       const failedEntries = [];
+      const lowResFailedEntries = [];
 
       for (const entry of uploadEntries) {
         try {
           await validateVideoFile(entry.file);
+
+          if (entry.lowResFile) {
+            await validateVideoFile(entry.lowResFile);
+          }
 
           const metadata = {
             key: validateOralHistoryKey(entry.key),
@@ -254,14 +340,38 @@ export default function OralHistoryUploadPage() {
             interviewee: validateRequiredField(entry.interviewee, 'Enter the interviewee name.'),
             category: validateRequiredField(entry.category, 'Choose a category for the oral history.'),
             description: String(entry.description || '').trim(),
+            profileIds: normalizeProfileIds(entry.profileIds),
           };
 
-          const createdOralHistory = normalizeOralHistory(await uploadOralHistory(entry.file, metadata, {
+          let createdOralHistory = normalizeOralHistory(await uploadOralHistory(entry.file, metadata, {
             onProgress: (nextProgress) => setUploadProgress({
               ...nextProgress,
               fileName: entry.file.name,
             }),
           }));
+
+          if (entry.lowResFile) {
+            setUploadProgress(null);
+            try {
+              createdOralHistory = normalizeOralHistory(await uploadOralHistoryLowRes(
+                createdOralHistory.oralHistoryId,
+                entry.lowResFile,
+                {
+                  onProgress: (nextProgress) => setUploadProgress({
+                    ...nextProgress,
+                    fileName: `${entry.lowResFile.name} (low-res)`,
+                  }),
+                },
+              ));
+            } catch (error) {
+              lowResFailedEntries.push({
+                title: createdOralHistory.title,
+                fileName: entry.lowResFile.name,
+                uploadError: error.message,
+              });
+            }
+          }
+
           createdEntries.push(createdOralHistory);
         } catch (error) {
           failedEntries.push({
@@ -283,12 +393,22 @@ export default function OralHistoryUploadPage() {
             ? `Uploaded ${formatEpisodeLabel(createdEntries[0])}: ${createdEntries[0].title}.`
             : `Uploaded ${createdEntries.length} oral history videos.`,
         );
+        if (lowResFailedEntries.length > 0) {
+          setStatusError(lowResFailedEntries.map((entry) =>
+            `${entry.title} low-res file ${entry.fileName}: ${entry.uploadError}`).join(' '));
+        }
         setFileInputKey((currentValue) => currentValue + 1);
       } else if (createdEntries.length > 0) {
         setStatusSummary(`Uploaded ${createdEntries.length} oral history videos. Fix the remaining entries and retry.`);
-        setStatusError(failedEntries.map((entry) => `${entry.file.name}: ${entry.uploadError}`).join(' '));
+        setStatusError([
+          ...failedEntries.map((entry) => `${entry.file.name}: ${entry.uploadError}`),
+          ...lowResFailedEntries.map((entry) => `${entry.title} low-res file ${entry.fileName}: ${entry.uploadError}`),
+        ].join(' '));
       } else {
-        setStatusError(failedEntries.map((entry) => `${entry.file.name}: ${entry.uploadError}`).join(' '));
+        setStatusError([
+          ...failedEntries.map((entry) => `${entry.file.name}: ${entry.uploadError}`),
+          ...lowResFailedEntries.map((entry) => `${entry.title} low-res file ${entry.fileName}: ${entry.uploadError}`),
+        ].join(' '));
       }
     } catch (error) {
       setStatusError(error.message);
@@ -324,6 +444,153 @@ export default function OralHistoryUploadPage() {
     }
   };
 
+  const handleEditEpisode = (episode) => {
+    setEditingOralHistoryId(episode.oralHistoryId);
+    setEditValues(buildEpisodeEditValues(episode));
+    setEditStatusError('');
+    setUploadProgress(null);
+    setStatusSummary('');
+  };
+
+  const handleCancelEdit = () => {
+    setEditingOralHistoryId('');
+    setEditValues(null);
+    setEditStatusError('');
+    setUploadProgress(null);
+    setStatusSummary('');
+  };
+
+  const handleEditFieldChange = (fieldName, value) => {
+    setEditValues((currentValues) => {
+      if (!currentValues) {
+        return currentValues;
+      }
+
+      const nextValues = {
+        ...currentValues,
+        [fieldName]: fieldName === 'isFullLength' ? Boolean(value) : value,
+      };
+
+      if (fieldName === 'isFullLength' && value) {
+        nextValues.episodeNumber = '';
+      }
+
+      return nextValues;
+    });
+    setEditStatusError('');
+    setStatusSummary('');
+  };
+
+  const handleEditProfileToggle = (profileId) => {
+    setEditValues((currentValues) => (
+      currentValues
+        ? { ...currentValues, profileIds: toggleProfileId(currentValues.profileIds, profileId) }
+        : currentValues
+    ));
+    setEditStatusError('');
+    setStatusSummary('');
+  };
+
+  const handleEditLowResFileChange = async (file) => {
+    setEditStatusError('');
+    setStatusSummary('');
+
+    if (!file) {
+      setEditValues((currentValues) => (
+        currentValues ? { ...currentValues, lowResFile: null } : currentValues
+      ));
+      return;
+    }
+
+    try {
+      await validateVideoFile(file);
+      setEditValues((currentValues) => (
+        currentValues ? { ...currentValues, lowResFile: file } : currentValues
+      ));
+    } catch (error) {
+      setEditStatusError(error.message);
+    }
+  };
+
+  const handleSaveEpisode = async (event) => {
+    event.preventDefault();
+
+    if (!editValues) {
+      return;
+    }
+
+    setSavingOralHistoryId(editValues.oralHistoryId);
+    setEditStatusError('');
+    setStatusSummary('');
+    setUploadProgress(null);
+
+    try {
+      validateEpisodeMetadata(editValues, storedEpisodes, editValues.oralHistoryId);
+
+      let updatedEpisode = normalizeOralHistory(await updateOralHistory(editValues.oralHistoryId, {
+        key: validateOralHistoryKey(editValues.key),
+        isFullLength: Boolean(editValues.isFullLength),
+        episodeNumber: editValues.isFullLength ? null : String(validateEpisodeNumber(editValues.episodeNumber)),
+        title: validateRequiredField(editValues.title, 'Enter an oral history title.'),
+        interviewee: validateRequiredField(editValues.interviewee, 'Enter the interviewee name.'),
+        category: validateRequiredField(editValues.category, 'Choose a category for the oral history.'),
+        description: String(editValues.description || '').trim(),
+        profileIds: normalizeProfileIds(editValues.profileIds),
+      }));
+
+      if (editValues.lowResFile) {
+        updatedEpisode = normalizeOralHistory(await uploadOralHistoryLowRes(
+          updatedEpisode.oralHistoryId,
+          editValues.lowResFile,
+          {
+            onProgress: (nextProgress) => setUploadProgress({
+              ...nextProgress,
+              fileName: `${editValues.lowResFile.name} (low-res)`,
+            }),
+          },
+        ));
+      }
+
+      setStoredEpisodes((currentEpisodes) => normalizeOralHistories(currentEpisodes.map((episode) => (
+        episode.oralHistoryId === updatedEpisode.oralHistoryId ? updatedEpisode : episode
+      ))));
+      setEditingOralHistoryId('');
+      setEditValues(null);
+      setStatusSummary(`Saved ${formatEpisodeLabel(updatedEpisode)}: ${updatedEpisode.title}.`);
+    } catch (error) {
+      setEditStatusError(error.message);
+    } finally {
+      setSavingOralHistoryId('');
+      setUploadProgress(null);
+    }
+  };
+
+  const isEpisodeEditModalOpen = Boolean(editingOralHistoryId && editValues);
+
+  useEffect(() => {
+    if (!isEpisodeEditModalOpen) {
+      return undefined;
+    }
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const handleWindowKeyDown = (event) => {
+      if (event.key === 'Escape' && !savingOralHistoryId) {
+        setEditingOralHistoryId('');
+        setEditValues(null);
+        setEditStatusError('');
+        setStatusSummary('');
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleWindowKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousBodyOverflow;
+      window.removeEventListener('keydown', handleWindowKeyDown);
+    };
+  }, [isEpisodeEditModalOpen, savingOralHistoryId]);
+
   const handleRemovePendingEntry = (entryId) => {
     setUploadEntries((currentEntries) => currentEntries.filter((entry) => entry.id !== entryId));
     setStatusError('');
@@ -353,9 +620,8 @@ export default function OralHistoryUploadPage() {
             <div>
               <h2 className="compositePanel__title">Prepare Oral History Uploads</h2>
               <p className="compositePanel__description">
-                Each selected file gets a default title from its filename, a generated key, and the
-                next available episode number. Choose the interviewee for this batch, then edit any
-                other metadata before upload.
+                Each selected file gets a generated key, the next available episode number, and an
+                editable title based on the interviewee, episode number, and category.
               </p>
             </div>
           </div>
@@ -534,6 +800,24 @@ export default function OralHistoryUploadPage() {
                       </label>
 
                       <label className="compositeField">
+                        <span className="compositeField__label">Low-Res Version (Optional)</span>
+                        <input
+                          className="compositeField__input compositeField__input--file"
+                          type="file"
+                          accept={acceptedVideoTypes}
+                          onChange={(event) => void handleEntryLowResFileChange(
+                            entry.id,
+                            event.target.files?.[0] || null,
+                          )}
+                        />
+                        <span className="compositeField__hint">
+                          {entry.lowResFile
+                            ? `${entry.lowResFile.name} (${formatFileSize(entry.lowResFile.size)})`
+                            : 'Upload a smaller copy for the public viewer quality toggle.'}
+                        </span>
+                      </label>
+
+                      <label className="compositeField">
                         <span className="compositeField__label">Episode Number</span>
                         <input
                           className="compositeField__input"
@@ -601,6 +885,15 @@ export default function OralHistoryUploadPage() {
                           onChange={(event) => handleEntryFieldChange(entry.id, 'description', event.target.value)}
                         />
                       </label>
+
+                      <div className="profileManagerGrid__fullWidth">
+                        <ProfileAssignmentPicker
+                          selectedProfileIds={entry.profileIds}
+                          profiles={profileOptions}
+                          profileMap={profileMap}
+                          onToggleProfile={(profileId) => handleEntryProfileToggle(entry.id, profileId)}
+                        />
+                      </div>
                     </div>
                   </article>
                 ))}
@@ -635,7 +928,7 @@ export default function OralHistoryUploadPage() {
               <p className="compositeMessage compositeMessage--success">{statusSummary}</p>
             ) : null}
             {isPreparing && uploadProgress ? (
-              <p className="compositeMessage">{formatUploadProgress(uploadProgress)}</p>
+              <UploadProgressIndicator uploadProgress={uploadProgress} />
             ) : null}
             {statusError ? <p className="compositeMessage compositeMessage--error">{statusError}</p> : null}
           </form>
@@ -663,8 +956,25 @@ export default function OralHistoryUploadPage() {
               </p>
             </div>
           ) : (
-            <div className="compositeCardGrid">
-              {storedEpisodes.map((episode) => (
+            <>
+              <div className="oralHistoryStoredToolbar">
+                <label className="compositeField oralHistoryStoredToolbar__search">
+                  <span className="compositeField__label">Search Stored Episodes</span>
+                  <input
+                    className="compositeField__input"
+                    type="search"
+                    value={storedEpisodeSearchQuery}
+                    placeholder="Search by interviewee, title, category, key, or profile"
+                    onChange={(event) => setStoredEpisodeSearchQuery(event.target.value)}
+                  />
+                </label>
+                <p className="oralHistoryStoredToolbar__count">
+                  {filteredStoredEpisodes.length} of {storedEpisodes.length} episode{storedEpisodes.length === 1 ? '' : 's'}
+                </p>
+              </div>
+
+              <div className="oralHistoryStoredList">
+              {filteredStoredEpisodes.map((episode) => (
                 <article key={episode.oralHistoryId} className="compositeCard">
                   <div className="compositeCard__body">
                     <div className="compositeCard__metaRow">
@@ -682,15 +992,33 @@ export default function OralHistoryUploadPage() {
                       Category: <strong>{episode.category}</strong>
                     </p>
                     <p className="compositeCard__sourceName">{episode.fileName}</p>
+                    {episode.lowResVideoUrl ? (
+                      <p className="compositeCard__meta">
+                        Low-res version: <strong>{episode.lowResOriginalFilename || 'Uploaded'}</strong>
+                      </p>
+                    ) : null}
                     <p className="compositeCard__meta">
                       Key: <strong>{episode.key}</strong>
                     </p>
+                    {episode.profileIds.length > 0 ? (
+                      <p className="compositeCard__meta">
+                        Member profiles: <strong>{formatProfileNames(episode.profileIds, profileMap)}</strong>
+                      </p>
+                    ) : null}
                     <p className="compositeCard__meta">{episode.description}</p>
                     <p className="compositeCard__meta">
                       Uploaded {formatDate(episode.preparedAt)}
                     </p>
 
-                    <div style={{ marginTop: '18px' }}>
+                    <div className="profileDirectoryCard__actions" style={{ marginTop: '18px' }}>
+                      <button
+                        type="button"
+                        className="button compositeButton"
+                        onClick={() => handleEditEpisode(episode)}
+                        disabled={Boolean(editingOralHistoryId) && editingOralHistoryId !== episode.oralHistoryId}
+                      >
+                        Edit Episode
+                      </button>
                       <button
                         type="button"
                         className="button compositeButton compositeButton--danger"
@@ -703,7 +1031,13 @@ export default function OralHistoryUploadPage() {
                   </div>
                 </article>
               ))}
-            </div>
+              {!isLoadingDrafts && filteredStoredEpisodes.length === 0 ? (
+                <div className="compositeEmptyState">
+                  <p className="compositeEmptyState__description">No stored oral history episodes match that search.</p>
+                </div>
+              ) : null}
+              </div>
+            </>
           )}
 
           {latestStoredEpisode ? (
@@ -714,7 +1048,317 @@ export default function OralHistoryUploadPage() {
           ) : null}
         </article>
       </div>
+
+      {isEpisodeEditModalOpen ? (
+        <div
+          className="oralHistoryEditModalBackdrop"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget && !savingOralHistoryId) {
+              handleCancelEdit();
+            }
+          }}
+        >
+          <article
+            className="compositePanel compositePanel--spacious oralHistoryEditModal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="oral-history-edit-modal-title"
+          >
+            <div className="oralHistoryEditModal__header">
+              <div>
+                <p className="compositePageHeader__eyebrow">Stored Oral History</p>
+                <h2 id="oral-history-edit-modal-title" className="compositePanel__title">
+                  Edit Episode
+                </h2>
+                <p className="compositePanel__description">
+                  {editingEpisode
+                    ? `${formatEpisodeLabel(editingEpisode)}: ${editingEpisode.title}`
+                    : 'Update this stored oral history episode.'}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                className="button compositeButton compositeButton--subtle"
+                onClick={handleCancelEdit}
+                disabled={Boolean(savingOralHistoryId)}
+              >
+                Close
+              </button>
+            </div>
+
+            <form className="oralHistoryEditModal__form" onSubmit={handleSaveEpisode}>
+              <EpisodeMetadataFields
+                values={editValues}
+                availableCategories={availableCategories}
+                onFieldChange={handleEditFieldChange}
+              />
+              <LowResVideoField
+                existingLowResFileName={editingEpisode?.lowResOriginalFilename || ''}
+                existingLowResFileSize={editingEpisode?.lowResFileSize || 0}
+                selectedLowResFile={editValues.lowResFile}
+                onFileChange={handleEditLowResFileChange}
+              />
+              <ProfileAssignmentPicker
+                selectedProfileIds={editValues.profileIds}
+                profiles={profileOptions}
+                profileMap={profileMap}
+                onToggleProfile={handleEditProfileToggle}
+              />
+
+              {editStatusError ? (
+                <p className="compositeMessage compositeMessage--error">{editStatusError}</p>
+              ) : null}
+              {savingOralHistoryId === editingOralHistoryId && uploadProgress ? (
+                <UploadProgressIndicator uploadProgress={uploadProgress} />
+              ) : null}
+
+              <div className="profileDirectoryCard__actions">
+                <button
+                  type="submit"
+                  className="button compositeButton compositeButton--filled"
+                  disabled={savingOralHistoryId === editingOralHistoryId}
+                >
+                  {savingOralHistoryId === editingOralHistoryId ? 'Saving...' : 'Save Episode'}
+                </button>
+                <button
+                  type="button"
+                  className="button compositeButton"
+                  onClick={handleCancelEdit}
+                  disabled={savingOralHistoryId === editingOralHistoryId}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </article>
+        </div>
+      ) : null}
     </section>
+  );
+}
+
+function EpisodeMetadataFields({
+  values,
+  availableCategories,
+  onFieldChange,
+}) {
+  return (
+    <div className="profileManagerGrid">
+      <label className="compositeCheckbox">
+        <input
+          type="checkbox"
+          checked={values.isFullLength}
+          onChange={(event) => onFieldChange('isFullLength', event.target.checked)}
+        />
+        Full-length interview
+      </label>
+
+      <label className="compositeField">
+        <span className="compositeField__label">Episode Number</span>
+        <input
+          className="compositeField__input"
+          type="text"
+          inputMode="numeric"
+          value={values.episodeNumber}
+          disabled={values.isFullLength}
+          placeholder={values.isFullLength ? 'No episode number' : ''}
+          onChange={(event) => onFieldChange('episodeNumber', event.target.value)}
+        />
+      </label>
+
+      <label className="compositeField">
+        <span className="compositeField__label">Key</span>
+        <input
+          className="compositeField__input"
+          type="text"
+          value={values.key}
+          onChange={(event) => onFieldChange('key', event.target.value)}
+        />
+      </label>
+
+      <label className="compositeField">
+        <span className="compositeField__label">Title</span>
+        <input
+          className="compositeField__input"
+          type="text"
+          value={values.title}
+          onChange={(event) => onFieldChange('title', event.target.value)}
+        />
+      </label>
+
+      <label className="compositeField">
+        <span className="compositeField__label">Interviewee</span>
+        <input
+          className="compositeField__input"
+          type="text"
+          value={values.interviewee}
+          onChange={(event) => onFieldChange('interviewee', event.target.value)}
+        />
+      </label>
+
+      <label className="compositeField">
+        <span className="compositeField__label">Category</span>
+        <select
+          className="compositeField__input"
+          value={values.category}
+          onChange={(event) => onFieldChange('category', event.target.value)}
+        >
+          <option value="">Choose a category</option>
+          {availableCategories.map((categoryName) => (
+            <option key={categoryName} value={categoryName}>
+              {categoryName}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="compositeField profileManagerGrid__fullWidth">
+        <span className="compositeField__label">Description</span>
+        <textarea
+          className="compositeField__input compositeField__textarea"
+          rows={4}
+          value={values.description}
+          onChange={(event) => onFieldChange('description', event.target.value)}
+        />
+      </label>
+    </div>
+  );
+}
+
+function LowResVideoField({
+  existingLowResFileName = '',
+  existingLowResFileSize = 0,
+  selectedLowResFile = null,
+  onFileChange,
+}) {
+  const hasExistingLowRes = Boolean(existingLowResFileName);
+  const helperText = selectedLowResFile
+    ? `${selectedLowResFile.name} (${formatFileSize(selectedLowResFile.size)})`
+    : hasExistingLowRes
+      ? `Current low-res file: ${existingLowResFileName} (${formatFileSize(existingLowResFileSize)})`
+      : 'Upload a smaller copy for the public viewer quality toggle.';
+
+  return (
+    <label className="compositeField">
+      <span className="compositeField__label">Low-Res Version (Optional)</span>
+      <input
+        className="compositeField__input compositeField__input--file"
+        type="file"
+        accept={acceptedVideoTypes}
+        onChange={(event) => void onFileChange(event.target.files?.[0] || null)}
+      />
+      <span className="compositeField__hint">{helperText}</span>
+    </label>
+  );
+}
+
+function UploadProgressIndicator({ uploadProgress }) {
+  const progressMetrics = getUploadProgressMetrics(uploadProgress);
+
+  return (
+    <div className="compositeUploadProgress" role="status" aria-live="polite">
+      <div className="compositeUploadProgress__header">
+        <span>{progressMetrics.fileName || 'Uploading video'}</span>
+        <strong>{progressMetrics.uploadPercent}%</strong>
+      </div>
+      <div
+        className="compositeUploadProgress__bar"
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow={progressMetrics.uploadPercent}
+        aria-label={progressMetrics.fileName ? `${progressMetrics.fileName} upload progress` : 'Upload progress'}
+      >
+        <span
+          className="compositeUploadProgress__barFill"
+          style={{ width: `${progressMetrics.uploadPercent}%` }}
+        />
+      </div>
+      <p className="compositeUploadProgress__meta">
+        {formatUploadProgress(uploadProgress)}
+      </p>
+    </div>
+  );
+}
+
+function ProfileAssignmentPicker({
+  selectedProfileIds,
+  profiles,
+  profileMap,
+  onToggleProfile,
+}) {
+  const [query, setQuery] = useState('');
+  const normalizedSelectedProfileIds = normalizeProfileIds(selectedProfileIds);
+  const selectedProfileIdSet = new Set(normalizedSelectedProfileIds);
+  const normalizedQuery = query.trim().toLowerCase();
+  const matchingProfiles = profiles
+    .filter((profile) => {
+      if (!normalizedQuery) {
+        return selectedProfileIdSet.has(profile.id);
+      }
+
+      return [
+        profile.label,
+        profile.meta,
+      ].some((value) => String(value || '').toLowerCase().includes(normalizedQuery));
+    })
+    .slice(0, normalizedQuery ? 12 : 8);
+
+  return (
+    <div className="oralHistoryProfilePicker">
+      <label className="compositeField">
+        <span className="compositeField__label">Assigned Member Profiles</span>
+        <input
+          className="compositeField__input"
+          type="search"
+          value={query}
+          placeholder="Search member profiles to assign"
+          onChange={(event) => setQuery(event.target.value)}
+        />
+      </label>
+
+      {normalizedSelectedProfileIds.length > 0 ? (
+        <div className="oralHistoryProfilePicker__chips" aria-label="Selected member profiles">
+          {normalizedSelectedProfileIds.map((profileId) => {
+            const profile = profileMap.get(profileId);
+
+            return (
+              <button
+                key={profileId}
+                type="button"
+                className="oralHistoryProfilePicker__chip"
+                onClick={() => onToggleProfile(profileId)}
+              >
+                {profile?.label || profileId}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="oralHistoryProfilePicker__hint">No member profiles assigned.</p>
+      )}
+
+      <div className="oralHistoryProfilePicker__results">
+        {matchingProfiles.map((profile) => (
+          <label key={profile.id} className="oralHistoryProfilePicker__option">
+            <input
+              type="checkbox"
+              checked={selectedProfileIdSet.has(profile.id)}
+              onChange={() => onToggleProfile(profile.id)}
+            />
+            <span>
+              <strong>{profile.label}</strong>
+              {profile.meta ? <small>{profile.meta}</small> : null}
+            </span>
+          </label>
+        ))}
+        {normalizedQuery && matchingProfiles.length === 0 ? (
+          <p className="oralHistoryProfilePicker__hint">No matching member profiles.</p>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -763,6 +1407,51 @@ function validateUploadEntries(uploadEntries, storedEpisodes) {
     usedEpisodeNumbers.add(normalizedEpisodeNumber);
     usedEpisodeNumbersByInterviewee.set(normalizedInterviewee.toLowerCase(), usedEpisodeNumbers);
   });
+}
+
+function validateEpisodeMetadata(entry, storedEpisodes, currentOralHistoryId = '') {
+  const comparableEpisodes = storedEpisodes.filter((episode) => episode.oralHistoryId !== currentOralHistoryId);
+
+  validateUploadEntries([entry], comparableEpisodes);
+}
+
+function buildEpisodeEditValues(episode) {
+  return {
+    oralHistoryId: episode.oralHistoryId,
+    key: episode.key,
+    title: episode.title,
+    interviewee: episode.interviewee,
+    category: episode.category,
+    description: episode.description,
+    isFullLength: Boolean(episode.isFullLength),
+    episodeNumber: episode.isFullLength ? '' : String(episode.episodeNumber || ''),
+    profileIds: normalizeProfileIds(episode.profileIds),
+    lowResFile: null,
+  };
+}
+
+function filterStoredEpisodes(storedEpisodes, query, profileMap) {
+  const normalizedQuery = String(query || '').trim().toLowerCase();
+
+  if (!normalizedQuery) {
+    return storedEpisodes;
+  }
+
+  return storedEpisodes.filter((episode) => [
+    episode.title,
+    episode.interviewee,
+    episode.category,
+    episode.key,
+    episode.description,
+    formatEpisodeLabel(episode),
+    ...normalizeProfileIds(episode.profileIds).map((profileId) => profileMap.get(profileId)?.label || profileId),
+  ].some((value) => String(value || '').toLowerCase().includes(normalizedQuery)));
+}
+
+function getLatestStoredEpisode(storedEpisodes) {
+  return [...storedEpisodes].sort((leftEpisode, rightEpisode) => (
+    new Date(rightEpisode.preparedAt || 0).getTime() - new Date(leftEpisode.preparedAt || 0).getTime()
+  ))[0] || null;
 }
 
 function buildIntervieweeOptions(defaultNames, storedEpisodes, customNames) {
@@ -877,6 +1566,26 @@ function normalizeOralHistories(oralHistories) {
     .sort(compareOralHistories);
 }
 
+function normalizeProfiles(profiles) {
+  return [...(Array.isArray(profiles) ? profiles : [])]
+    .map((profile) => ({
+      ...profile,
+      id: String(profile?.id || ''),
+      displayName: String(profile?.displayName || ''),
+      firstName: String(profile?.firstName || ''),
+      lastName: String(profile?.lastName || ''),
+      city: String(profile?.city || ''),
+      stateProvince: String(profile?.stateProvince || ''),
+      graduationYear: profile?.graduationYear || '',
+    }))
+    .filter((profile) => profile.id)
+    .sort((leftProfile, rightProfile) =>
+      String(leftProfile.displayName || '').localeCompare(String(rightProfile.displayName || ''), undefined, {
+        sensitivity: 'base',
+      }),
+    );
+}
+
 function normalizeOralHistory(oralHistory) {
   const isFullLength = Boolean(oralHistory?.isFullLength);
 
@@ -892,11 +1601,53 @@ function normalizeOralHistory(oralHistory) {
     episodeNumber: isFullLength ? null : Number(oralHistory?.episodeNumber || 0),
     fileName: String(oralHistory?.originalFilename || ''),
     fileSize: Number(oralHistory?.fileSize || 0),
+    profileIds: normalizeProfileIds(oralHistory?.profileIds),
+    lowResVideoUrl: String(oralHistory?.lowResVideoUrl || ''),
+    lowResOriginalFilename: String(oralHistory?.lowResOriginalFilename || ''),
+    lowResFileSize: Number(oralHistory?.lowResFileSize || 0),
+    lowResMimeType: String(oralHistory?.lowResMimeType || ''),
     preparedAt: oralHistory?.uploadTimestamp || new Date().toISOString(),
   };
 }
 
+function normalizeProfileIds(profileIds) {
+  return Array.from(new Set(
+    (Array.isArray(profileIds) ? profileIds : [])
+      .map((profileId) => String(profileId || '').trim())
+      .filter(Boolean),
+  ));
+}
+
+function toggleProfileId(profileIds, profileId) {
+  const normalizedProfileId = String(profileId || '').trim();
+  const currentProfileIds = normalizeProfileIds(profileIds);
+
+  if (!normalizedProfileId) {
+    return currentProfileIds;
+  }
+
+  return currentProfileIds.includes(normalizedProfileId)
+    ? currentProfileIds.filter((currentProfileId) => currentProfileId !== normalizedProfileId)
+    : [...currentProfileIds, normalizedProfileId];
+}
+
+function formatProfileNames(profileIds, profileMap) {
+  return normalizeProfileIds(profileIds)
+    .map((profileId) => profileMap.get(profileId)?.label || profileId)
+    .join(', ');
+}
+
 function compareOralHistories(leftEntry, rightEntry) {
+  const intervieweeComparison = String(leftEntry.interviewee || '').localeCompare(
+    String(rightEntry.interviewee || ''),
+    undefined,
+    { sensitivity: 'base' },
+  );
+
+  if (intervieweeComparison !== 0) {
+    return intervieweeComparison;
+  }
+
   if (Boolean(leftEntry.isFullLength) !== Boolean(rightEntry.isFullLength)) {
     return leftEntry.isFullLength ? -1 : 1;
   }
@@ -908,6 +1659,29 @@ function deriveTitleFromFilename(fileName) {
   return String(fileName || '')
     .replace(/\.[^.]+$/, '')
     .trim();
+}
+
+function buildGeneratedEpisodeTitle(entry) {
+  const interviewee = normalizeIntervieweeName(entry.interviewee);
+  const episodeLabel = entry.isFullLength
+    ? 'Full Interview'
+    : entry.episodeNumber
+      ? `E${entry.episodeNumber}`
+      : '';
+  const category = String(entry.category || '').trim();
+
+  return [interviewee, episodeLabel, category].filter(Boolean).join(' - ');
+}
+
+function syncGeneratedTitleForEntry(entry) {
+  if (entry.isTitleEdited) {
+    return entry;
+  }
+
+  return {
+    ...entry,
+    title: buildGeneratedEpisodeTitle(entry),
+  };
 }
 
 function slugifyFilename(value) {
@@ -1007,7 +1781,7 @@ function assignEpisodeNumbersForInterviewee(entries, storedEpisodes, interviewee
   const normalizedInterviewee = normalizeIntervieweeName(intervieweeName);
 
   if (!normalizedInterviewee) {
-    return entries;
+    return entries.map(syncGeneratedTitleForEntry);
   }
 
   const usedNumbers = new Set(
@@ -1021,20 +1795,20 @@ function assignEpisodeNumbersForInterviewee(entries, storedEpisodes, interviewee
 
   return entries.map((entry) => {
     if (normalizeIntervieweeName(entry.interviewee).toLowerCase() !== normalizedInterviewee.toLowerCase()) {
-      return entry;
+      return syncGeneratedTitleForEntry(entry);
     }
 
     if (entry.isFullLength) {
-      return {
+      return syncGeneratedTitleForEntry({
         ...entry,
         episodeNumber: '',
-      };
+      });
     }
 
-    return {
+    return syncGeneratedTitleForEntry({
       ...entry,
       episodeNumber: String(getNextSequentialNumber(usedNumbers)),
-    };
+    });
   });
 }
 
@@ -1097,15 +1871,28 @@ function formatFileSize(bytes) {
 }
 
 function formatUploadProgress(uploadProgress) {
+  const progressMetrics = getUploadProgressMetrics(uploadProgress);
+  const prefix = progressMetrics.fileName ? `${progressMetrics.fileName}: ` : '';
+
+  return `${prefix}Uploading ${formatFileSize(progressMetrics.uploadedBytes)} of ${formatFileSize(progressMetrics.totalBytes)} (${progressMetrics.uploadPercent}%, chunk ${progressMetrics.completedChunks} of ${progressMetrics.totalChunks}).`;
+}
+
+function getUploadProgressMetrics(uploadProgress) {
   const uploadedBytes = Number(uploadProgress?.uploadedBytes || 0);
   const totalBytes = Math.max(Number(uploadProgress?.totalBytes || 0), 1);
   const totalChunks = Math.max(Number(uploadProgress?.totalChunks || 0), 1);
   const completedChunks = Math.min(Math.max(Number(uploadProgress?.chunkIndex || -1) + 1, 0), totalChunks);
   const uploadPercent = Math.min(100, Math.round((uploadedBytes / totalBytes) * 100));
   const fileName = String(uploadProgress?.fileName || '').trim();
-  const prefix = fileName ? `${fileName}: ` : '';
 
-  return `${prefix}Uploading ${formatFileSize(uploadedBytes)} of ${formatFileSize(totalBytes)} (${uploadPercent}%, chunk ${completedChunks} of ${totalChunks}).`;
+  return {
+    completedChunks,
+    fileName,
+    totalBytes,
+    totalChunks,
+    uploadedBytes,
+    uploadPercent,
+  };
 }
 
 function formatEpisodeLabel(episode) {

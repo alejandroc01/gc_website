@@ -24,6 +24,7 @@ export default function AdminAuthGate({ children }) {
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [loginValues, setLoginValues] = useState({ username: '', password: '' });
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
 
   useEffect(() => {
@@ -76,6 +77,7 @@ export default function AdminAuthGate({ children }) {
       const payload = await loginAdmin(loginValues);
       setAdmin(payload.admin);
       setLoginValues({ username: '', password: '' });
+      setShowLoginPassword(false);
     } catch (error) {
       setLoginError(error.message);
     } finally {
@@ -125,13 +127,23 @@ export default function AdminAuthGate({ children }) {
 
           <label className="adminAuthDialog__field">
             <span>Password</span>
-            <input
-              name="password"
-              type="password"
-              autoComplete="current-password"
-              value={loginValues.password}
-              onChange={handleLoginFieldChange}
-            />
+            <span className="adminPasswordInput">
+              <input
+                name="password"
+                type={showLoginPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                value={loginValues.password}
+                onChange={handleLoginFieldChange}
+              />
+              <button
+                type="button"
+                className="adminPasswordInput__toggle"
+                onClick={() => setShowLoginPassword((currentValue) => !currentValue)}
+                aria-label={showLoginPassword ? 'Hide password' : 'Show password'}
+              >
+                <EyeIcon isVisible={showLoginPassword} />
+              </button>
+            </span>
           </label>
 
           <button className="button compositeButton compositeButton--filled" type="submit" disabled={isSigningIn}>
@@ -158,5 +170,32 @@ export default function AdminAuthGate({ children }) {
       </div>
       {children}
     </AdminSessionContext.Provider>
+  );
+}
+
+function EyeIcon({ isVisible }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M2.75 12S5.85 5.75 12 5.75 21.25 12 21.25 12 18.15 18.25 12 18.25 2.75 12 2.75 12Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 14.75A2.75 2.75 0 1 0 12 9.25a2.75 2.75 0 0 0 0 5.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      {!isVisible ? (
+        <path
+          d="M4.5 4.5 19.5 19.5"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+      ) : null}
+    </svg>
   );
 }

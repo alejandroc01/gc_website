@@ -7,6 +7,7 @@ const historyRoutes = require("./routes/histories");
 const homepageRoutes = require("./routes/homepage");
 const oralHistoryRoutes = require("./routes/oralHistories");
 const profileRoutes = require("./routes/profiles");
+const searchRoutes = require("./routes/search");
 const scrapbookRoutes = require("./routes/scrapbooks");
 const { requireAdminAuth } = require("./utils/adminAuth");
 const { ensureAdminStore } = require("./utils/adminStore");
@@ -16,6 +17,7 @@ const { ensureHomepageStore } = require("./utils/homepageStore");
 const { ensureOralHistoryStore } = require("./utils/oralHistoryStore");
 const { ensureProfileStore } = require("./utils/profileStore");
 const { ensureScrapbookStore } = require("./utils/scrapbookStore");
+const { clearSearchIndexCache } = require("./utils/searchIndexStore");
 const {
     ensureCompositeUploadsDirectory,
     scrapbookUploadsDirectory,
@@ -30,12 +32,14 @@ app.use("/uploads/scrapbooks", express.static(scrapbookUploadsDirectory));
 app.use("/api/uploads/scrapbooks", express.static(scrapbookUploadsDirectory));
 app.use("/uploads", express.static(uploadsRootDirectory));
 app.use("/api/uploads", express.static(uploadsRootDirectory));
+app.use(clearSearchIndexCacheAfterUnsafeRequests);
 
 app.get("/api/test", (_req, res) => {
     res.json({ message: "Hello from the composite archive server!" });
 });
 
 app.use("/api/admin", adminRoutes);
+app.use("/api/search", searchRoutes);
 app.use("/api/profiles", requireAdminForUnsafeRequests, profileRoutes);
 app.use("/api/composites", requireAdminForUnsafeRequests, compositeRoutes);
 app.use("/api/histories", requireAdminForUnsafeRequests, historyRoutes);
@@ -78,6 +82,20 @@ function isAdminOnlyReadRequest(req) {
     return req.method === "GET"
         && req.baseUrl === "/api/profiles"
         && req.path === "/export";
+}
+
+function clearSearchIndexCacheAfterUnsafeRequests(req, res, next) {
+    if (!req.path.startsWith("/api/") || ["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+        return next();
+    }
+
+    res.on("finish", () => {
+        if (res.statusCode < 400) {
+            clearSearchIndexCache();
+        }
+    });
+
+    return next();
 }
 
 Promise.all([

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useAdminSession } from '../components/AdminAuth/AdminAuthGate.jsx';
@@ -14,6 +14,7 @@ const adminRoles = ['Owner', 'Administrator'];
 const initialCreateValues = {
   username: '',
   password: '',
+  confirmPassword: '',
   role: 'Administrator',
 };
 
@@ -21,12 +22,32 @@ export default function AdminAccountsPage() {
   const { admin, setAdmin } = useAdminSession();
   const [accounts, setAccounts] = useState([]);
   const [createValues, setCreateValues] = useState(initialCreateValues);
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [createPasswordSubmitError, setCreatePasswordSubmitError] = useState('');
+  const [accountSearchQuery, setAccountSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
   const [statusError, setStatusError] = useState('');
 
   const isOwner = admin?.role === 'Owner';
+  const filteredAccounts = useMemo(() => {
+    const normalizedQuery = accountSearchQuery.trim().toLowerCase();
+
+    if (!isOwner || !normalizedQuery) {
+      return accounts;
+    }
+
+    return accounts.filter((account) => [
+      account.username,
+      account.role,
+    ].some((value) => String(value || '').toLowerCase().includes(normalizedQuery)));
+  }, [accountSearchQuery, accounts, isOwner]);
+  const createPasswordError = getPasswordConfirmationError(
+    createValues.password,
+    createValues.confirmPassword,
+    createPasswordSubmitError,
+  );
 
   useEffect(() => {
     let isActive = true;
@@ -68,6 +89,7 @@ export default function AdminAccountsPage() {
     }));
     setStatusError('');
     setStatusMessage('');
+    setCreatePasswordSubmitError('');
   };
 
   const handleCreateSubmit = async (event) => {
@@ -75,14 +97,26 @@ export default function AdminAccountsPage() {
     setIsCreating(true);
     setStatusError('');
     setStatusMessage('');
+    setCreatePasswordSubmitError('');
 
     try {
-      const payload = await createAdminAccount(createValues);
+      assertPasswordsMatch(createValues.password, createValues.confirmPassword);
+
+      const payload = await createAdminAccount({
+        username: createValues.username,
+        password: createValues.password,
+        role: createValues.role,
+      });
       setAccounts((currentAccounts) => [...currentAccounts, payload.account]);
       setCreateValues(initialCreateValues);
+      setShowCreatePassword(false);
       setStatusMessage(`Created admin account ${payload.account.username}.`);
     } catch (error) {
-      setStatusError(error.message);
+      if (isPasswordValidationError(error)) {
+        setCreatePasswordSubmitError(error.message);
+      } else {
+        setStatusError(error.message);
+      }
     } finally {
       setIsCreating(false);
     }
@@ -142,13 +176,26 @@ export default function AdminAccountsPage() {
 
               <label className="compositeField">
                 <span className="compositeField__label">Password</span>
-                <input
-                  className="compositeField__input"
+                <PasswordInput
                   name="password"
-                  type="password"
                   autoComplete="new-password"
                   value={createValues.password}
+                  isVisible={showCreatePassword}
+                  onToggleVisibility={() => setShowCreatePassword((currentValue) => !currentValue)}
                   onChange={handleCreateChange}
+                />
+              </label>
+
+              <label className="compositeField">
+                <span className="compositeField__label">Confirm Password</span>
+                <PasswordInput
+                  name="confirmPassword"
+                  autoComplete="new-password"
+                  value={createValues.confirmPassword}
+                  isVisible={showCreatePassword}
+                  onToggleVisibility={() => setShowCreatePassword((currentValue) => !currentValue)}
+                  onChange={handleCreateChange}
+                  error={createPasswordError}
                 />
               </label>
 
@@ -195,8 +242,26 @@ export default function AdminAccountsPage() {
           {statusMessage ? <p className="compositeMessage compositeMessage--success">{statusMessage}</p> : null}
           {statusError ? <p className="compositeMessage compositeMessage--error">{statusError}</p> : null}
 
+          {isOwner ? (
+            <div className="adminAccountToolbar">
+              <label className="compositeField adminAccountToolbar__search">
+                <span className="compositeField__label">Search Accounts</span>
+                <input
+                  className="compositeField__input"
+                  type="search"
+                  value={accountSearchQuery}
+                  onChange={(event) => setAccountSearchQuery(event.target.value)}
+                  placeholder="Search by username or role"
+                />
+              </label>
+              <p className="adminAccountToolbar__count">
+                {filteredAccounts.length} of {accounts.length} account{accounts.length === 1 ? '' : 's'}
+              </p>
+            </div>
+          ) : null}
+
           <div className="adminAccountList">
-            {accounts.map((account) => (
+            {filteredAccounts.map((account) => (
               <AdminAccountRow
                 key={account.id}
                 account={account}
@@ -206,6 +271,9 @@ export default function AdminAccountsPage() {
                 onDeleted={handleAccountDeleted}
               />
             ))}
+            {!isLoading && filteredAccounts.length === 0 ? (
+              <p className="compositeMessage">No admin accounts match that search.</p>
+            ) : null}
           </div>
         </article>
       </div>
@@ -221,12 +289,19 @@ function AdminAccountRow({
   onDeleted,
 }) {
   const [values, setValues] = useState(() => buildRowValues(account));
+  const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [rowMessage, setRowMessage] = useState('');
   const [rowError, setRowError] = useState('');
+  const [passwordSubmitError, setPasswordSubmitError] = useState('');
 
   const isSelf = account.id === currentAdmin.id;
+  const passwordError = getPasswordConfirmationError(
+    values.password,
+    values.confirmPassword,
+    passwordSubmitError,
+  );
 
   useEffect(() => {
     setValues(buildRowValues(account));
@@ -241,6 +316,7 @@ function AdminAccountRow({
     }));
     setRowMessage('');
     setRowError('');
+    setPasswordSubmitError('');
   };
 
   const handleSave = async (event) => {
@@ -248,8 +324,19 @@ function AdminAccountRow({
     setIsSaving(true);
     setRowMessage('');
     setRowError('');
+    setPasswordSubmitError('');
 
     try {
+      const isChangingPassword = Boolean(values.password || values.confirmPassword);
+
+      if (isChangingPassword) {
+        assertPasswordsMatch(values.password, values.confirmPassword);
+      }
+
+      if (!isOwner && !values.password) {
+        throw new Error('Enter a new password before saving.');
+      }
+
       const updates = isOwner
         ? {
           username: values.username,
@@ -258,16 +345,17 @@ function AdminAccountRow({
         }
         : { password: values.password };
 
-      if (!isOwner && !values.password) {
-        throw new Error('Enter a new password before saving.');
-      }
-
       const payload = await updateAdminAccount(account.id, updates);
       onSaved(payload.account);
-      setValues((currentValues) => ({ ...currentValues, password: '' }));
+      setValues((currentValues) => ({ ...currentValues, password: '', confirmPassword: '' }));
+      setShowPassword(false);
       setRowMessage(`Saved ${payload.account.username}.`);
     } catch (error) {
-      setRowError(error.message);
+      if (isPasswordValidationError(error)) {
+        setPasswordSubmitError(error.message);
+      } else {
+        setRowError(error.message);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -329,14 +417,28 @@ function AdminAccountRow({
 
         <label className="compositeField">
           <span className="compositeField__label">New Password</span>
-          <input
-            className="compositeField__input"
+          <PasswordInput
             name="password"
-            type="password"
             autoComplete="new-password"
             value={values.password}
             onChange={handleValueChange}
             placeholder="Leave blank to keep current password"
+            isVisible={showPassword}
+            onToggleVisibility={() => setShowPassword((currentValue) => !currentValue)}
+          />
+        </label>
+
+        <label className="compositeField">
+          <span className="compositeField__label">Confirm Password</span>
+          <PasswordInput
+            name="confirmPassword"
+            autoComplete="new-password"
+            value={values.confirmPassword}
+            onChange={handleValueChange}
+            placeholder="Re-enter new password"
+            isVisible={showPassword}
+            onToggleVisibility={() => setShowPassword((currentValue) => !currentValue)}
+            error={passwordError}
           />
         </label>
       </div>
@@ -368,5 +470,98 @@ function buildRowValues(account) {
     username: account.username,
     role: account.role,
     password: '',
+    confirmPassword: '',
   };
+}
+
+function assertPasswordsMatch(password, confirmPassword) {
+  if (!password || !confirmPassword) {
+    throw buildPasswordValidationError('Enter and confirm the new password.');
+  }
+
+  if (password !== confirmPassword) {
+    throw buildPasswordValidationError('The password does not match.');
+  }
+}
+
+function buildPasswordValidationError(message) {
+  const error = new Error(message);
+  error.isPasswordValidationError = true;
+  return error;
+}
+
+function isPasswordValidationError(error) {
+  return Boolean(error?.isPasswordValidationError);
+}
+
+function getPasswordConfirmationError(password, confirmPassword, submitError = '') {
+  if (password && confirmPassword && password !== confirmPassword) {
+    return 'The password does not match.';
+  }
+
+  return submitError;
+}
+
+function PasswordInput({
+  name,
+  value,
+  onChange,
+  isVisible,
+  onToggleVisibility,
+  autoComplete = 'new-password',
+  placeholder = '',
+  error = '',
+}) {
+  return (
+    <span className="adminPasswordInputGroup">
+      <span className="adminPasswordInput">
+        <input
+          className="compositeField__input"
+          name={name}
+          type={isVisible ? 'text' : 'password'}
+          autoComplete={autoComplete}
+          value={value}
+          onChange={onChange}
+          placeholder={placeholder}
+          aria-invalid={error ? 'true' : 'false'}
+        />
+        <button
+          type="button"
+          className="adminPasswordInput__toggle"
+          onClick={onToggleVisibility}
+          aria-label={isVisible ? 'Hide password' : 'Show password'}
+        >
+          <EyeIcon isVisible={isVisible} />
+        </button>
+      </span>
+      {error ? <span className="adminPasswordInput__error" role="alert">{error}</span> : null}
+    </span>
+  );
+}
+
+function EyeIcon({ isVisible }) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M2.75 12S5.85 5.75 12 5.75 21.25 12 21.25 12 18.15 18.25 12 18.25 2.75 12 2.75 12Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M12 14.75A2.75 2.75 0 1 0 12 9.25a2.75 2.75 0 0 0 0 5.5Z"
+        stroke="currentColor"
+        strokeWidth="1.7"
+      />
+      {!isVisible ? (
+        <path
+          d="M4.5 4.5 19.5 19.5"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+        />
+      ) : null}
+    </svg>
+  );
 }

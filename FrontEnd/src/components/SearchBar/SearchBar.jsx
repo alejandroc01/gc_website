@@ -1,31 +1,27 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import {
-  getComposites,
-  getHistories,
-  getOralHistories,
-  getProfile,
-  getProfiles,
-  getScrapbooks,
-  getScrapbookMetadataReview,
-} from '../../api/composites.js';
+import { getSearchIndex } from '../../api/composites.js';
 import scrapbookBookIcon from '../../assets/icons/scrapbook-book.svg';
+import {
+  ALL_FILTER_IDS,
+  SEARCH_FILTER_OPTIONS,
+  flattenSearchSections,
+  getFilteredSearchSections,
+} from '../../utils/archiveSearch.js';
 import ScrapbookPageModal from '../Scrapbook/ScrapbookPageModal.jsx';
 import videoCameraIcon from '../../assets/icons/video-camera.svg';
 import './SearchBar.css';
 
-const SEARCH_FILTER_OPTIONS = [
-  { id: 'member', label: 'Members' },
-  { id: 'composite', label: 'Composites' },
-  { id: 'scrapbook', label: 'Scrapbooks' },
-  { id: 'scrapbookPage', label: 'Scrapbook Pages' },
-  { id: 'oralHistory', label: 'Oral History' },
-  { id: 'oralHistoryEpisode', label: 'Oral History Episodes' },
-  { id: 'clubHistory', label: 'Club History' },
+const HOMEPAGE_RESULT_ORDER = [
+  'composite',
+  'scrapbook',
+  'oralHistory',
+  'clubHistory',
+  'member',
+  'scrapbookPage',
+  'oralHistoryEpisode',
 ];
-
-const ALL_FILTER_IDS = SEARCH_FILTER_OPTIONS.map((option) => option.id);
 
 export default function SearchBar({
   className = '',
@@ -36,14 +32,7 @@ export default function SearchBar({
   const [open, setOpen] = useState(false);
   const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
   const [isSearchDataLoading, setIsSearchDataLoading] = useState(true);
-  const [isMemberScrapbookLoading, setIsMemberScrapbookLoading] = useState(false);
-  const [profiles, setProfiles] = useState([]);
-  const [composites, setComposites] = useState([]);
-  const [scrapbooks, setScrapbooks] = useState([]);
-  const [clubHistories, setClubHistories] = useState([]);
-  const [oralHistories, setOralHistories] = useState([]);
-  const [scrapbookMetadataRows, setScrapbookMetadataRows] = useState([]);
-  const [memberScrapbookItems, setMemberScrapbookItems] = useState([]);
+  const [searchIndex, setSearchIndex] = useState(null);
   const [selectedFilterIds, setSelectedFilterIds] = useState(ALL_FILTER_IDS);
   const [loadError, setLoadError] = useState('');
   const [activeScrapbookIdentifier, setActiveScrapbookIdentifier] = useState('');
@@ -56,63 +45,20 @@ export default function SearchBar({
 
     const loadSearchData = async () => {
       setIsSearchDataLoading(true);
+      setLoadError('');
 
       try {
-        const [
-          profilesResult,
-          compositesResult,
-          scrapbooksResult,
-          clubHistoriesResult,
-          oralHistoriesResult,
-          scrapbookMetadataResult,
-        ] = await Promise.allSettled([
-            getProfiles(),
-            getComposites(),
-            getScrapbooks(),
-            getHistories(),
-            getOralHistories(),
-            getScrapbookMetadataReview(),
-          ]);
+        const nextSearchIndex = await getSearchIndex();
 
         if (!isActive) {
           return;
         }
 
-        if (profilesResult.status === 'fulfilled') {
-          setProfiles(Array.isArray(profilesResult.value) ? profilesResult.value : []);
-        }
-
-        if (compositesResult.status === 'fulfilled') {
-          setComposites(Array.isArray(compositesResult.value) ? compositesResult.value : []);
-        }
-
-        if (scrapbooksResult.status === 'fulfilled') {
-          setScrapbooks(Array.isArray(scrapbooksResult.value) ? scrapbooksResult.value : []);
-        }
-
-        if (clubHistoriesResult.status === 'fulfilled') {
-          setClubHistories(Array.isArray(clubHistoriesResult.value) ? clubHistoriesResult.value : []);
-        }
-
-        if (oralHistoriesResult.status === 'fulfilled') {
-          setOralHistories(Array.isArray(oralHistoriesResult.value) ? oralHistoriesResult.value : []);
-        }
-
-        if (scrapbookMetadataResult.status === 'fulfilled') {
-          setScrapbookMetadataRows(
-            Array.isArray(scrapbookMetadataResult.value?.rows) ? scrapbookMetadataResult.value.rows : [],
-          );
-        }
-
-        if (
-          profilesResult.status === 'rejected'
-          && compositesResult.status === 'rejected'
-          && scrapbooksResult.status === 'rejected'
-          && clubHistoriesResult.status === 'rejected'
-          && oralHistoriesResult.status === 'rejected'
-          && scrapbookMetadataResult.status === 'rejected'
-        ) {
+        setSearchIndex(nextSearchIndex);
+      } catch {
+        if (isActive) {
           setLoadError('Search results could not be loaded.');
+          setSearchIndex(null);
         }
       } finally {
         if (isActive) {
@@ -129,62 +75,6 @@ export default function SearchBar({
   }, []);
 
   useEffect(() => {
-    let isActive = true;
-    const value = query.trim().toLowerCase();
-
-    if (!value || profiles.length === 0) {
-      setMemberScrapbookItems([]);
-      setIsMemberScrapbookLoading(false);
-      return () => {
-        isActive = false;
-      };
-    }
-
-    const matchingProfiles = profiles
-      .map((profile) => buildMemberSearchItem(profile, value))
-      .filter(Boolean)
-      .slice(0, 5);
-
-    if (matchingProfiles.length === 0) {
-      setMemberScrapbookItems([]);
-      setIsMemberScrapbookLoading(false);
-      return () => {
-        isActive = false;
-      };
-    }
-
-    const loadMemberScrapbookItems = async () => {
-      setIsMemberScrapbookLoading(true);
-
-      try {
-        const detailedProfiles = await Promise.all(
-          matchingProfiles.map((item) => getProfile(item.profileId)),
-        );
-
-        if (!isActive) {
-          return;
-        }
-
-        setMemberScrapbookItems(buildMemberScrapbookSearchItems(detailedProfiles, value));
-      } catch {
-        if (isActive) {
-          setMemberScrapbookItems([]);
-        }
-      } finally {
-        if (isActive) {
-          setIsMemberScrapbookLoading(false);
-        }
-      }
-    };
-
-    loadMemberScrapbookItems();
-
-    return () => {
-      isActive = false;
-    };
-  }, [profiles, query]);
-
-  useEffect(() => {
     const handlePointerDown = (event) => {
       if (searchRef.current?.contains(event.target)) {
         return;
@@ -198,92 +88,23 @@ export default function SearchBar({
     return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, []);
 
-  const activeFilterIds = useMemo(
-    () => new Set(selectedFilterIds),
-    [selectedFilterIds],
-  );
   const allFiltersSelected = selectedFilterIds.length === SEARCH_FILTER_OPTIONS.length;
   const noFiltersSelected = selectedFilterIds.length === 0;
 
   const results = useMemo(() => {
-    const value = query.trim().toLowerCase();
+    const value = query.trim();
 
     if (!value || noFiltersSelected) {
       return [];
     }
 
-    const memberResults = activeFilterIds.has('member')
-      ? profiles
-        .map((profile) => buildMemberSearchItem(profile, value))
-        .filter(Boolean)
-      : [];
-    const compositeResults = activeFilterIds.has('composite')
-      ? composites
-        .map((composite) => buildCompositeSearchItem(composite, value))
-        .filter(Boolean)
-      : [];
-    const scrapbookResults = activeFilterIds.has('scrapbook')
-      ? scrapbooks
-        .map((scrapbook) => buildScrapbookSearchItem(scrapbook, value))
-        .filter(Boolean)
-      : [];
-    const clubHistoryResults = activeFilterIds.has('clubHistory')
-      ? clubHistories
-        .map((history) => buildClubHistorySearchItem(history, value))
-        .filter(Boolean)
-      : [];
-    const oralHistoryResults = activeFilterIds.has('oralHistory')
-      ? buildOralHistorySearchItems(oralHistories, value)
-      : [];
-    const oralHistoryEpisodeResults = activeFilterIds.has('oralHistoryEpisode')
-      ? oralHistories
-        .map((episode) => buildOralHistoryEpisodeSearchItem(episode, value))
-        .filter(Boolean)
-      : [];
-    const uploadedScrapbookPageResults = activeFilterIds.has('scrapbookPage')
-      ? buildUploadedScrapbookPageSearchItems(scrapbooks, value)
-      : [];
-    const memberScrapbookResults = activeFilterIds.has('scrapbookPage')
-      ? memberScrapbookItems
-      : [];
-    const metadataScrapbookPageResults = activeFilterIds.has('scrapbookPage')
-      ? buildMetadataScrapbookPageSearchItems(scrapbookMetadataRows, value)
-      : [];
-    const taggedScrapbookResults = activeFilterIds.has('scrapbookPage')
-      ? buildTaggedScrapbookSearchItems(scrapbookMetadataRows, value, memberScrapbookResults)
-      : [];
-    const scrapbookPageResults = dedupeSearchItems([
-      ...uploadedScrapbookPageResults,
-      ...memberScrapbookResults,
-      ...metadataScrapbookPageResults,
-      ...taggedScrapbookResults,
-    ]);
-
-    return [
-      ...compositeResults.sort(compareSearchItems),
-      ...scrapbookResults.sort(compareSearchItems),
-      ...oralHistoryResults.sort(compareSearchItems),
-      ...clubHistoryResults.sort(compareSearchItems),
-      ...memberResults.sort(compareSearchItems),
-      ...scrapbookPageResults.sort(compareSearchItems),
-      ...oralHistoryEpisodeResults.sort(compareSearchItems),
-    ];
-  }, [
-    activeFilterIds,
-    clubHistories,
-    composites,
-    memberScrapbookItems,
-    noFiltersSelected,
-    oralHistories,
-    profiles,
-    query,
-    scrapbookMetadataRows,
-    scrapbooks,
-  ]);
+    const resultsByFilterId = getFilteredSearchSections(searchIndex, selectedFilterIds, query);
+    return flattenSearchSections(resultsByFilterId, HOMEPAGE_RESULT_ORDER);
+  }, [noFiltersSelected, query, searchIndex, selectedFilterIds]);
   const showLoadingResults = query.trim().length > 0
     && !loadError
     && !noFiltersSelected
-    && (isSearchDataLoading || (activeFilterIds.has('scrapbookPage') && isMemberScrapbookLoading && results.length === 0));
+    && isSearchDataLoading;
 
   const handleInputFocus = () => {
     setIsFilterMenuOpen(false);

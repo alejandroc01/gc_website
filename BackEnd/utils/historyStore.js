@@ -54,6 +54,7 @@ function buildPdfUrl(storedFilePath) {
 function toHistoryResponse(history) {
     return {
         ...history,
+        profileIds: normalizeProfileIds(history.profileIds),
         pdfUrl: buildPdfUrl(history.storedFilePath),
     };
 }
@@ -83,6 +84,7 @@ async function createHistory(historyInput) {
         fileSize: Number(historyInput?.fileSize || 0),
         mimeType: String(historyInput?.mimeType || "").trim().toLowerCase(),
         storedFilePath: String(historyInput?.storedFilePath || "").trim(),
+        profileIds: normalizeProfileIds(historyInput?.profileIds),
         uploadTimestamp: now,
         updatedAt: now,
     };
@@ -108,6 +110,7 @@ async function updateHistory(historyId, historyInput) {
         ...currentHistory,
         title: String(historyInput?.title || "").trim(),
         description: String(historyInput?.description || "").trim(),
+        profileIds: normalizeProfileIds(historyInput?.profileIds),
         updatedAt: new Date().toISOString(),
     };
 
@@ -133,11 +136,36 @@ async function deleteHistory(historyId) {
     return deletedHistory;
 }
 
+async function listProfileHistoryReferences(profileId) {
+    const normalizedProfileId = String(profileId || "").trim();
+
+    if (!normalizedProfileId) {
+        return [];
+    }
+
+    const store = await readStore();
+
+    return store.histories
+        .filter((entry) => normalizeProfileIds(entry.profileIds).includes(normalizedProfileId))
+        .map((history) => toHistoryResponse(history));
+}
+
+function normalizeProfileIds(profileIds) {
+    return Array.from(
+        new Set(
+            (Array.isArray(profileIds) ? profileIds : [])
+                .map((profileId) => String(profileId || "").trim())
+                .filter(Boolean),
+        ),
+    );
+}
+
 module.exports = {
     createHistory,
     deleteHistory,
     ensureHistoryStore,
     historyStorePath,
+    listProfileHistoryReferences,
     listHistories,
     updateHistory
 };

@@ -106,16 +106,16 @@
 }
 
 .oralHistories__panelHeader {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(456px, max-content);
+  align-items: start;
   gap: 24px;
   margin-bottom: 22px;
 }
 
 .oralHistories__panelControls {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: end;
   justify-content: flex-end;
   gap: 16px;
@@ -123,9 +123,15 @@
 
 .oralHistories__sectionTitle {
   margin: 0;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-display);
   font-weight: 500;
-  font-size: clamp(2rem, 3vw, 2.75rem);
+  font-size: var(--oral-history-title-size, clamp(2rem, 3vw, 2.75rem));
+  line-height: 1.08;
   color: #17111f;
 }
 
@@ -170,6 +176,49 @@
   width: 100%;
   aspect-ratio: 16 / 9;
   background: #120d18;
+}
+
+.oralHistories__qualitySwitch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  background: #120d18;
+  color: #fff;
+}
+
+.oralHistories__qualityLabel {
+  font-family: var(--font-smallcaps);
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.oralHistories__qualityButtons {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.oralHistories__qualityButton {
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  font: inherit;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.oralHistories__qualityButton--active,
+.oralHistories__qualityButton:hover,
+.oralHistories__qualityButton:focus-visible {
+  border-color: var(--gold);
+  background: rgba(235, 215, 155, 0.18);
+  color: #fff;
 }
 
 .oralHistories__playlist {
@@ -936,12 +985,12 @@
   }
 
   .oralHistories__panelHeader {
-    flex-direction: column;
-    align-items: start;
+    grid-template-columns: 1fr;
   }
 
   .oralHistories__panelControls {
     width: 100%;
+    flex-wrap: wrap;
     justify-content: start;
   }
 
@@ -967,6 +1016,11 @@
     grid-template-columns: 44px 1fr;
     gap: 12px;
     padding: 14px 16px;
+  }
+
+  .oralHistories__qualitySwitch {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .oralHistories__playlistNumber {
