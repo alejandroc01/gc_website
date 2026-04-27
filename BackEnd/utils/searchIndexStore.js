@@ -63,7 +63,7 @@ async function buildSearchIndex() {
             member: profiles.map(buildMemberSearchItem).filter(Boolean),
             composite: composites.map(buildCompositeSearchItem).filter(Boolean),
             scrapbook: scrapbooks.map(buildScrapbookSearchItem).filter(Boolean),
-            scrapbookPage: buildScrapbookPageSearchItems(scrapbooks, scrapbookMetadataRows),
+            scrapbookPage: buildScrapbookPageSearchItems(scrapbooks, scrapbookMetadataRows, profiles),
             oralHistory: buildOralHistorySearchItems(oralHistories),
             oralHistoryEpisode: oralHistories.map(buildOralHistoryEpisodeSearchItem).filter(Boolean),
             clubHistory: clubHistories.map(buildClubHistorySearchItem).filter(Boolean),
@@ -265,11 +265,11 @@ function buildOralHistoryEpisodeSearchItem(episode) {
     });
 }
 
-function buildScrapbookPageSearchItems(scrapbooks, metadataRows) {
+function buildScrapbookPageSearchItems(scrapbooks, metadataRows, profiles) {
     return dedupeSearchItems([
         ...buildUploadedScrapbookPageSearchItems(scrapbooks),
         ...buildMetadataScrapbookPageSearchItems(scrapbooks, metadataRows),
-        ...buildTaggedScrapbookSearchItems(scrapbooks, metadataRows),
+        ...buildTaggedScrapbookSearchItems(scrapbooks, metadataRows, profiles),
     ]);
 }
 
@@ -345,6 +345,7 @@ function buildMetadataScrapbookPageSearchItems(scrapbooks, metadataRows) {
             pageIndex: normalizeZeroBasedInteger(linkedUploadedPage?.pageIndex),
             pageNumber,
             to: buildScrapbookLink(year, linkedUploadedPage?.pageIndex, pageNumber),
+            modalIdentifier: row?.identifier || "",
             searchFields: [
                 label,
                 year,
@@ -356,7 +357,6 @@ function buildMetadataScrapbookPageSearchItems(scrapbooks, metadataRows) {
                 pageNumber ? `page ${pageNumber}` : "",
                 pageNumber ? String(pageNumber) : "",
                 "scrapbook page",
-                ...(Array.isArray(row?.tags) ? row.tags : []),
             ],
             exactValues: [year],
             exactBoost: 26,
@@ -364,8 +364,9 @@ function buildMetadataScrapbookPageSearchItems(scrapbooks, metadataRows) {
     });
 }
 
-function buildTaggedScrapbookSearchItems(scrapbooks, metadataRows) {
+function buildTaggedScrapbookSearchItems(scrapbooks, metadataRows, profiles) {
     const uploadedPagesByIdentifier = buildUploadedPagesByIdentifier(scrapbooks);
+    const profilesByTagName = buildProfilesByTagName(profiles);
     const items = [];
 
     (Array.isArray(metadataRows) ? metadataRows : []).forEach((row) => {
@@ -380,11 +381,15 @@ function buildTaggedScrapbookSearchItems(scrapbooks, metadataRows) {
                 return;
             }
 
+            const matchedProfile = profilesByTagName.get(normalizeNameForProfileMatch(normalizedName));
+            const displayName = matchedProfile?.displayName || normalizedName;
+
             items.push(createSearchItem({
                 key: `tagged-scrapbook-${normalizeSearchKey(normalizedName)}-${normalizeSearchKey(row?.identifier || row?.title || normalizedName)}`,
                 kind: "scrapbookPage",
-                label: `${normalizedName} in ${row?.title || "scrapbook page"}`,
+                label: buildFeaturedScrapbookPageLabel(displayName, { title: row?.title, pageNumber }),
                 meta: buildTaggedScrapbookMeta({ year, pageNumber, category: row?.category }),
+                profileId: matchedProfile?.id || "",
                 year,
                 pageIndex: normalizeZeroBasedInteger(linkedUploadedPage?.pageIndex),
                 pageNumber,
@@ -392,6 +397,7 @@ function buildTaggedScrapbookSearchItems(scrapbooks, metadataRows) {
                 modalIdentifier: row?.identifier || "",
                 searchFields: [
                     normalizedName,
+                    displayName,
                     row?.title,
                     year,
                     row?.identifier,
@@ -400,8 +406,8 @@ function buildTaggedScrapbookSearchItems(scrapbooks, metadataRows) {
                     pageNumber ? String(pageNumber) : "",
                     "scrapbook page",
                 ],
-                exactValues: [normalizedName, year],
-                exactBoost: 16,
+                exactValues: [normalizedName, displayName, year],
+                exactBoost: 20,
             }));
         });
     });
@@ -484,6 +490,36 @@ function buildUploadedPagesByIdentifier(scrapbooks) {
     });
 
     return uploadedPagesByIdentifier;
+}
+
+function buildProfilesByTagName(profiles) {
+    const profilesByTagName = new Map();
+
+    (Array.isArray(profiles) ? profiles : []).forEach((profile) => {
+        const names = [
+            profile?.displayName,
+            [profile?.firstName, profile?.lastName].filter(Boolean).join(" "),
+            [profile?.preferredName, profile?.lastName].filter(Boolean).join(" "),
+        ];
+
+        names.forEach((name) => {
+            const key = normalizeNameForProfileMatch(name);
+
+            if (key && !profilesByTagName.has(key)) {
+                profilesByTagName.set(key, profile);
+            }
+        });
+    });
+
+    return profilesByTagName;
+}
+
+function normalizeNameForProfileMatch(name) {
+    return String(name || "")
+        .toLowerCase()
+        .replace(/["']/g, "")
+        .replace(/[^a-z0-9]+/g, " ")
+        .trim();
 }
 
 function findLinkedUploadedPage(row, uploadedPagesByIdentifier) {
@@ -587,6 +623,15 @@ function buildUploadedScrapbookPageMeta({ year, pageNumber }) {
     ].filter(Boolean);
 
     return noteParts.join(" | ");
+}
+
+function buildFeaturedScrapbookPageLabel(memberName, page) {
+    const normalizedName = String(memberName || "").trim() || "Member";
+    const title = String(page?.title || "").trim() || "scrapbook page";
+    const pageNumber = normalizePositiveInteger(page?.pageNumber);
+    const pageLabel = pageNumber ? ` Page ${pageNumber}` : "";
+
+    return `${normalizedName} featured in ${title}${pageLabel}`;
 }
 
 function buildTaggedScrapbookMeta(row) {
