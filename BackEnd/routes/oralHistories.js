@@ -7,8 +7,10 @@ const multer = require("multer");
 const {
     createOralHistory,
     deleteOralHistory,
+    getOralHistoryById,
     listOralHistories,
     updateOralHistory,
+    updateOralHistoryLowResVideo,
 } = require("../utils/oralHistoryStore");
 const {
     buildOralHistoryStoredFilePath,
@@ -285,6 +287,185 @@ router.delete("/upload-sessions/:uploadId", async (req, res, next) => {
     }
 });
 
+router.post("/:oralHistoryId/low-res/upload-sessions", async (req, res, next) => {
+    try {
+        const existingOralHistory = await getOralHistoryById(req.params.oralHistoryId);
+
+        if (!existingOralHistory) {
+            return res.status(404).json({ error: "Oral history not found." });
+        }
+
+        const originalFilename = sanitizeOriginalFilename(req.body?.originalFilename);
+        const mimeType = sanitizeOptionalMimeType(req.body?.mimeType);
+        const totalSize = sanitizeOralHistoryUploadSize(req.body?.totalSize);
+        const totalChunks = sanitizeOralHistoryUploadChunkCount(req.body?.totalChunks, totalSize);
+
+        assertAllowedOralHistoryUploadFile({
+            originalname: originalFilename,
+            mimetype: mimeType,
+        });
+
+        const uploadSession = createLowResOralHistoryUploadSessionRecord({
+            oralHistoryId: existingOralHistory.oralHistoryId,
+            originalFilename,
+            mimeType,
+            totalSize,
+            totalChunks,
+        });
+
+        await writeLowResOralHistoryUploadSession(uploadSession);
+
+        return res.status(201).json({
+            uploadId: uploadSession.uploadId,
+            chunkSize: uploadSession.chunkSize,
+            totalChunks: uploadSession.totalChunks,
+            totalSize: uploadSession.totalSize,
+        });
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.post("/low-res-upload-sessions/:uploadId/chunks", chunkUpload.single("chunk"), async (req, res, next) => {
+    try {
+        if (!req.file?.buffer) {
+            return res.status(400).json({ error: "Attach a video chunk to continue uploading." });
+        }
+
+        const uploadSession = await readLowResOralHistoryUploadSession(req.params.uploadId);
+
+        if (!uploadSession) {
+            return res.status(404).json({ error: "Upload session not found." });
+        }
+
+        const chunkIndex = sanitizeOralHistoryUploadChunkIndex(req.body?.chunkIndex, uploadSession.totalChunks);
+        const expectedMaxChunkSize = calculateExpectedChunkByteLength(uploadSession, chunkIndex);
+
+        if (req.file.buffer.length > expectedMaxChunkSize) {
+            const error = new Error("Uploaded chunk is larger than expected for this low-res oral history video.");
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const nextChunkPath = buildOralHistoryUploadChunkPath(uploadSession.uploadId, chunkIndex);
+        await fs.writeFile(nextChunkPath, req.file.buffer);
+
+        uploadSession.receivedChunkIndices = Array.from(
+            new Set([...(uploadSession.receivedChunkIndices || []), chunkIndex]),
+        ).sort((leftValue, rightValue) => leftValue - rightValue);
+        uploadSession.chunkSizes = {
+            ...(uploadSession.chunkSizes || {}),
+            [chunkIndex]: req.file.buffer.length,
+        };
+        uploadSession.updatedAt = new Date().toISOString();
+        await writeLowResOralHistoryUploadSession(uploadSession);
+
+        const uploadSummary = summarizeOralHistoryUploadSession(uploadSession);
+
+        return res.status(201).json({
+            ...uploadSummary,
+            chunkIndex,
+        });
+    } catch (error) {
+        return next(error);
+    }
+});
+
+router.post("/low-res-upload-sessions/:uploadId/complete", async (req, res, next) => {
+    let assembledVideoPath = null;
+
+    try {
+        const uploadSession = await readLowResOralHistoryUploadSession(req.params.uploadId);
+
+        if (!uploadSession) {
+            return res.status(404).json({ error: "Upload session not found." });
+        }
+
+        const uploadSummary = summarizeOralHistoryUploadSession(uploadSession);
+
+        if (!uploadSummary.isComplete) {
+            const error = new Error("Upload is still in progress. Finish uploading all chunks first.");
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const existingOralHistory = await getOralHistoryById(uploadSession.oralHistoryId);
+
+        if (!existingOralHistory) {
+            return res.status(404).json({ error: "Oral history not found." });
+        }
+
+        assembledVideoPath = buildOralHistoryUploadAssembledPath(uploadSession.uploadId, uploadSession.extension);
+        await fs.writeFile(assembledVideoPath, "");
+
+        for (let chunkIndex = 0; chunkIndex < uploadSession.totalChunks; chunkIndex += 1) {
+            const chunkPath = buildOralHistoryUploadChunkPath(uploadSession.uploadId, chunkIndex);
+            const chunkBuffer = await fs.readFile(chunkPath);
+            await fs.appendFile(assembledVideoPath, chunkBuffer);
+        }
+
+        const assembledFileStats = await fs.stat(assembledVideoPath);
+
+        if (assembledFileStats.size !== uploadSession.totalSize) {
+            const error = new Error("The uploaded chunks did not reassemble into the expected file size.");
+            error.statusCode = 400;
+            throw error;
+        }
+
+        const namedFilename = buildLowResOralHistoryFilename(existingOralHistory.key, uploadSession.extension);
+        const finalAbsolutePath = path.join(oralHistoryUploadsDirectory, namedFilename);
+
+        if (existingOralHistory.lowResStoredFilePath) {
+            await removeStoredFileIfPresent(existingOralHistory.lowResStoredFilePath);
+        }
+
+        await moveFileSafely(assembledVideoPath, finalAbsolutePath);
+        assembledVideoPath = finalAbsolutePath;
+
+        const updatedEntry = await updateOralHistoryLowResVideo(uploadSession.oralHistoryId, {
+            originalFilename: uploadSession.originalFilename,
+            fileSize: uploadSession.totalSize,
+            mimeType: uploadSession.mimeType,
+            storedFilePath: buildOralHistoryStoredFilePath(namedFilename),
+        });
+
+        try {
+            await deleteOralHistoryUploadSession(uploadSession.uploadId);
+        } catch (cleanupError) {
+            console.error("Failed to remove completed low-res oral history upload session:", cleanupError);
+        }
+
+        return res.json(updatedEntry);
+    } catch (error) {
+        if (assembledVideoPath) {
+            await fs.rm(assembledVideoPath, { force: true });
+        }
+
+        try {
+            await deleteOralHistoryUploadSession(req.params.uploadId);
+        } catch (cleanupError) {
+            if (cleanupError.statusCode !== 400) {
+                console.error("Failed to remove failed low-res oral history upload session:", cleanupError);
+            }
+        }
+
+        return next(error);
+    }
+});
+
+router.delete("/low-res-upload-sessions/:uploadId", async (req, res, next) => {
+    try {
+        await deleteOralHistoryUploadSession(req.params.uploadId);
+
+        return res.json({
+            success: true,
+            uploadId: String(req.params.uploadId || ""),
+        });
+    } catch (error) {
+        return next(error);
+    }
+});
+
 router.post("/", upload.single("video"), async (req, res, next) => {
     let currentUploadedPath = req.file?.path || null;
 
@@ -354,6 +535,61 @@ router.post("/", upload.single("video"), async (req, res, next) => {
     }
 });
 
+router.post("/:oralHistoryId/low-res", upload.single("lowResVideo"), async (req, res, next) => {
+    let currentUploadedPath = req.file?.path || null;
+
+    const cleanupUploadedFile = async () => {
+        if (!currentUploadedPath) {
+            return;
+        }
+
+        try {
+            await fs.unlink(currentUploadedPath);
+        } catch (cleanupError) {
+            if (cleanupError.code !== "ENOENT") {
+                console.error("Failed to clean up rejected low-res oral history upload:", cleanupError);
+            }
+        }
+    };
+
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: "Please upload a low-res oral history video." });
+        }
+
+        const existingOralHistory = await getOralHistoryById(req.params.oralHistoryId);
+
+        if (!existingOralHistory) {
+            return res.status(404).json({ error: "Oral history not found." });
+        }
+
+        const extension = path.extname(req.file.filename);
+        const namedFilename = buildLowResOralHistoryFilename(existingOralHistory.key, extension);
+        const finalAbsolutePath = path.join(oralHistoryUploadsDirectory, namedFilename);
+
+        if (existingOralHistory.lowResStoredFilePath) {
+            await removeStoredFileIfPresent(existingOralHistory.lowResStoredFilePath);
+        }
+
+        if (req.file.path !== finalAbsolutePath) {
+            await moveFileSafely(req.file.path, finalAbsolutePath);
+            currentUploadedPath = finalAbsolutePath;
+        }
+
+        const updatedEntry = await updateOralHistoryLowResVideo(req.params.oralHistoryId, {
+            originalFilename: req.file.originalname,
+            fileSize: req.file.size,
+            mimeType: req.file.mimetype,
+            storedFilePath: buildOralHistoryStoredFilePath(namedFilename),
+        });
+
+        return res.json(updatedEntry);
+    } catch (error) {
+        await cleanupUploadedFile();
+        return next(error);
+    }
+});
+
 router.put("/:oralHistoryId", async (req, res, next) => {
     try {
         const isFullLength = sanitizeBoolean(req.body?.isFullLength);
@@ -389,12 +625,10 @@ router.delete("/:oralHistoryId", async (req, res, next) => {
 
         const absoluteStoredPath = resolveStoredFileAbsolutePath(deletedOralHistory.storedFilePath);
 
-        try {
-            await fs.unlink(absoluteStoredPath);
-        } catch (error) {
-            if (error.code !== "ENOENT") {
-                throw error;
-            }
+        await removeAbsoluteFileIfPresent(absoluteStoredPath);
+
+        if (deletedOralHistory.lowResStoredFilePath) {
+            await removeStoredFileIfPresent(deletedOralHistory.lowResStoredFilePath);
         }
 
         return res.json({
@@ -584,6 +818,11 @@ function buildOralHistoryFilename(isFullLength, episodeNumber, key, extension) {
     return `episode-${String(episodeNumber).padStart(2, "0")}-${key}${normalizedExtension}`;
 }
 
+function buildLowResOralHistoryFilename(key, extension) {
+    const normalizedExtension = extension || ".mp4";
+    return `low-res-${key}${normalizedExtension}`;
+}
+
 function createOralHistoryUploadSessionRecord({
     key,
     title,
@@ -631,10 +870,55 @@ function createOralHistoryUploadSessionRecord({
     };
 }
 
+function createLowResOralHistoryUploadSessionRecord({
+    oralHistoryId,
+    originalFilename,
+    mimeType,
+    totalSize,
+    totalChunks,
+}) {
+    const uploadId = crypto.randomUUID();
+    const extension = sanitizeOralHistoryUploadExtension(
+        resolveExtensionFromOralHistoryUpload({
+            originalname: originalFilename,
+            mimetype: mimeType,
+        }),
+    );
+    const now = new Date().toISOString();
+
+    return {
+        uploadId,
+        oralHistoryId: String(oralHistoryId || ""),
+        originalFilename,
+        mimeType,
+        extension,
+        totalSize,
+        totalChunks,
+        chunkSize: oralHistoryUploadChunkSizeBytes,
+        receivedChunkIndices: [],
+        chunkSizes: {},
+        createdAt: now,
+        updatedAt: now,
+    };
+}
+
 async function readOralHistoryUploadSession(uploadId) {
     try {
         const manifestContents = await fs.readFile(buildOralHistoryUploadManifestPath(uploadId), "utf8");
         return normalizeOralHistoryUploadSession(JSON.parse(manifestContents));
+    } catch (error) {
+        if (error.code === "ENOENT") {
+            return null;
+        }
+
+        throw error;
+    }
+}
+
+async function readLowResOralHistoryUploadSession(uploadId) {
+    try {
+        const manifestContents = await fs.readFile(buildOralHistoryUploadManifestPath(uploadId), "utf8");
+        return normalizeLowResOralHistoryUploadSession(JSON.parse(manifestContents));
     } catch (error) {
         if (error.code === "ENOENT") {
             return null;
@@ -655,9 +939,40 @@ async function writeOralHistoryUploadSession(uploadSession) {
     );
 }
 
+async function writeLowResOralHistoryUploadSession(uploadSession) {
+    const normalizedSession = normalizeLowResOralHistoryUploadSession(uploadSession);
+    const uploadSessionDirectory = buildOralHistoryUploadSessionDirectory(normalizedSession.uploadId);
+
+    await fs.mkdir(uploadSessionDirectory, { recursive: true });
+    await fs.writeFile(
+        buildOralHistoryUploadManifestPath(normalizedSession.uploadId),
+        JSON.stringify(normalizedSession, null, 2),
+    );
+}
+
 async function deleteOralHistoryUploadSession(uploadId) {
     const uploadSessionDirectory = buildOralHistoryUploadSessionDirectory(uploadId);
     await fs.rm(uploadSessionDirectory, { recursive: true, force: true });
+}
+
+function normalizeLowResOralHistoryUploadSession(uploadSession) {
+    return {
+        uploadId: sanitizeOralHistoryUploadSessionId(uploadSession?.uploadId),
+        oralHistoryId: String(uploadSession?.oralHistoryId || ""),
+        originalFilename: sanitizeOriginalFilename(uploadSession?.originalFilename),
+        mimeType: sanitizeOptionalMimeType(uploadSession?.mimeType),
+        extension: sanitizeOralHistoryUploadExtension(uploadSession?.extension),
+        totalSize: sanitizeOralHistoryUploadSize(uploadSession?.totalSize),
+        totalChunks: sanitizeOralHistoryUploadChunkCount(
+            uploadSession?.totalChunks,
+            sanitizeOralHistoryUploadSize(uploadSession?.totalSize),
+        ),
+        chunkSize: oralHistoryUploadChunkSizeBytes,
+        receivedChunkIndices: normalizeOralHistoryUploadChunkIndices(uploadSession?.receivedChunkIndices),
+        chunkSizes: normalizeOralHistoryUploadChunkSizes(uploadSession?.chunkSizes),
+        createdAt: uploadSession?.createdAt || new Date().toISOString(),
+        updatedAt: uploadSession?.updatedAt || new Date().toISOString(),
+    };
 }
 
 function normalizeOralHistoryUploadSession(uploadSession) {
@@ -821,6 +1136,14 @@ async function moveFileSafely(sourcePath, destinationPath) {
     await fs.mkdir(path.dirname(destinationPath), { recursive: true });
 
     try {
+        await fs.rm(destinationPath, { force: true });
+    } catch (error) {
+        if (error.code !== "ENOENT") {
+            throw error;
+        }
+    }
+
+    try {
         await fs.rename(sourcePath, destinationPath);
     } catch (error) {
         if (error.code !== "EXDEV") {
@@ -835,6 +1158,21 @@ async function moveFileSafely(sourcePath, destinationPath) {
             if (unlinkError.code !== "ENOENT") {
                 console.warn("Copied oral history file across devices but could not remove the temp source:", unlinkError);
             }
+        }
+    }
+}
+
+async function removeStoredFileIfPresent(storedFilePath) {
+    const absoluteStoredPath = resolveStoredFileAbsolutePath(storedFilePath);
+    await removeAbsoluteFileIfPresent(absoluteStoredPath);
+}
+
+async function removeAbsoluteFileIfPresent(absoluteFilePath) {
+    try {
+        await fs.unlink(absoluteFilePath);
+    } catch (error) {
+        if (error.code !== "ENOENT") {
+            throw error;
         }
     }
 }

@@ -53,6 +53,7 @@ function buildVideoUrl(storedFilePath) {
 
 function toOralHistoryResponse(oralHistory) {
     const isFullLength = Boolean(oralHistory.isFullLength);
+    const lowResStoredFilePath = String(oralHistory.lowResStoredFilePath || "").trim();
 
     return {
         ...oralHistory,
@@ -60,6 +61,7 @@ function toOralHistoryResponse(oralHistory) {
         episodeNumber: isFullLength ? null : Number(oralHistory.episodeNumber),
         profileIds: normalizeProfileIds(oralHistory.profileIds),
         videoUrl: buildVideoUrl(oralHistory.storedFilePath),
+        lowResVideoUrl: lowResStoredFilePath ? buildVideoUrl(lowResStoredFilePath) : "",
     };
 }
 
@@ -101,6 +103,11 @@ async function createOralHistory(oralHistoryInput) {
         mimeType: String(oralHistoryInput?.mimeType || "").trim().toLowerCase(),
         storedFilePath: String(oralHistoryInput?.storedFilePath || "").trim(),
         profileIds: normalizeProfileIds(oralHistoryInput?.profileIds),
+        lowResOriginalFilename: String(oralHistoryInput?.lowResOriginalFilename || "").trim(),
+        lowResFileSize: Number(oralHistoryInput?.lowResFileSize || 0),
+        lowResMimeType: String(oralHistoryInput?.lowResMimeType || "").trim().toLowerCase(),
+        lowResStoredFilePath: String(oralHistoryInput?.lowResStoredFilePath || "").trim(),
+        lowResUploadedAt: oralHistoryInput?.lowResStoredFilePath ? now : "",
         uploadTimestamp: now,
         updatedAt: now,
     };
@@ -146,7 +153,49 @@ async function updateOralHistory(oralHistoryId, oralHistoryInput) {
         isFullLength,
         episodeNumber: normalizedEpisodeNumber,
         profileIds: normalizeProfileIds(oralHistoryInput?.profileIds),
+        lowResOriginalFilename: String(existingOralHistory.lowResOriginalFilename || "").trim(),
+        lowResFileSize: Number(existingOralHistory.lowResFileSize || 0),
+        lowResMimeType: String(existingOralHistory.lowResMimeType || "").trim().toLowerCase(),
+        lowResStoredFilePath: String(existingOralHistory.lowResStoredFilePath || "").trim(),
+        lowResUploadedAt: String(existingOralHistory.lowResUploadedAt || ""),
         updatedAt: new Date().toISOString(),
+    };
+
+    store.oralHistories[oralHistoryIndex] = updatedOralHistory;
+    await writeStore(store);
+
+    return toOralHistoryResponse(updatedOralHistory);
+}
+
+async function getOralHistoryById(oralHistoryId) {
+    const store = await readStore();
+    const oralHistory = store.oralHistories.find(
+        (entry) => String(entry.oralHistoryId) === String(oralHistoryId),
+    );
+
+    return oralHistory ? toOralHistoryResponse(oralHistory) : null;
+}
+
+async function updateOralHistoryLowResVideo(oralHistoryId, lowResInput) {
+    const store = await readStore();
+    const oralHistoryIndex = store.oralHistories.findIndex(
+        (entry) => String(entry.oralHistoryId) === String(oralHistoryId),
+    );
+
+    if (oralHistoryIndex === -1) {
+        return null;
+    }
+
+    const currentOralHistory = store.oralHistories[oralHistoryIndex];
+    const now = new Date().toISOString();
+    const updatedOralHistory = {
+        ...currentOralHistory,
+        lowResOriginalFilename: String(lowResInput?.originalFilename || "").trim(),
+        lowResFileSize: Number(lowResInput?.fileSize || 0),
+        lowResMimeType: String(lowResInput?.mimeType || "").trim().toLowerCase(),
+        lowResStoredFilePath: String(lowResInput?.storedFilePath || "").trim(),
+        lowResUploadedAt: now,
+        updatedAt: now,
     };
 
     store.oralHistories[oralHistoryIndex] = updatedOralHistory;
@@ -264,8 +313,10 @@ module.exports = {
     createOralHistory,
     deleteOralHistory,
     ensureOralHistoryStore,
+    getOralHistoryById,
     listProfileOralHistoryReferences,
     listOralHistories,
     oralHistoryStorePath,
     updateOralHistory,
+    updateOralHistoryLowResVideo,
 };

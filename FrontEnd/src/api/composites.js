@@ -569,6 +569,21 @@ async function createOralHistoryUploadSession(file, metadata, totalChunks) {
   });
 }
 
+async function createOralHistoryLowResUploadSession(oralHistoryId, file, totalChunks) {
+  return requestJson(`/api/oral-histories/${encodeURIComponent(oralHistoryId)}/low-res/upload-sessions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      originalFilename: file.name,
+      mimeType: file.type || '',
+      totalSize: file.size,
+      totalChunks,
+    }),
+  });
+}
+
 async function createHistoryUploadSession(file, metadata, totalChunks) {
   return requestJson('/api/histories/upload-sessions', {
     method: 'POST',
@@ -619,14 +634,37 @@ async function uploadOralHistoryChunk(uploadId, file, chunk, chunkIndex) {
   });
 }
 
+async function uploadOralHistoryLowResChunk(uploadId, file, chunk, chunkIndex) {
+  const payload = new FormData();
+  payload.append('chunkIndex', String(chunkIndex));
+  payload.append('chunk', chunk, file.name);
+
+  return requestJson(`/api/oral-histories/low-res-upload-sessions/${uploadId}/chunks`, {
+    method: 'POST',
+    body: payload,
+  });
+}
+
 async function completeOralHistoryUploadSession(uploadId) {
   return requestJson(`/api/oral-histories/upload-sessions/${uploadId}/complete`, {
     method: 'POST',
   });
 }
 
+async function completeOralHistoryLowResUploadSession(uploadId) {
+  return requestJson(`/api/oral-histories/low-res-upload-sessions/${uploadId}/complete`, {
+    method: 'POST',
+  });
+}
+
 async function abortOralHistoryUploadSession(uploadId) {
   return requestJson(`/api/oral-histories/upload-sessions/${uploadId}`, {
+    method: 'DELETE',
+  });
+}
+
+async function abortOralHistoryLowResUploadSession(uploadId) {
+  return requestJson(`/api/oral-histories/low-res-upload-sessions/${uploadId}`, {
     method: 'DELETE',
   });
 }
@@ -1006,12 +1044,18 @@ export async function uploadHistory(file, metadata, options = {}) {
   }
 }
 
-async function uploadOralHistoryChunkWithRetry(uploadId, file, chunk, chunkIndex) {
+async function uploadOralHistoryChunkWithRetry(
+  uploadId,
+  file,
+  chunk,
+  chunkIndex,
+  uploadChunk = uploadOralHistoryChunk,
+) {
   let lastError = null;
 
   for (let attempt = 1; attempt <= oralHistoryUploadChunkRetryCount; attempt += 1) {
     try {
-      return await uploadOralHistoryChunk(uploadId, file, chunk, chunkIndex);
+      return await uploadChunk(uploadId, file, chunk, chunkIndex);
     } catch (error) {
       lastError = error;
 
@@ -1093,6 +1137,84 @@ export function updateOralHistory(oralHistoryId, metadata) {
     },
     body: JSON.stringify(metadata),
   });
+}
+
+export async function uploadOralHistoryLowRes(oralHistoryId, file, options = {}) {
+  const totalChunks = Math.max(1, Math.ceil(file.size / oralHistoryUploadChunkSizeBytes));
+  const onProgress = typeof options?.onProgress === 'function' ? options.onProgress : null;
+  let uploadId = '';
+
+  try {
+    const uploadSession = await createOralHistoryLowResUploadSession(oralHistoryId, file, totalChunks);
+
+    uploadId = String(uploadSession?.uploadId || '');
+
+    if (!uploadId) {
+      throw new Error('The server did not return a valid low-res upload session.');
+    }
+
+    const chunkSize = Number(uploadSession?.chunkSize) > 0
+      ? Number(uploadSession.chunkSize)
+      : oralHistoryUploadChunkSizeBytes;
+    const serverTotalChunks = Number(uploadSession?.totalChunks) > 0
+      ? Number(uploadSession.totalChunks)
+      : totalChunks;
+
+    if (onProgress) {
+      onProgress({
+        uploadedBytes: 0,
+        totalBytes: file.size,
+        chunkIndex: -1,
+        totalChunks: serverTotalChunks,
+      });
+    }
+
+    for (let chunkIndex = 0; chunkIndex < serverTotalChunks; chunkIndex += 1) {
+      const start = chunkIndex * chunkSize;
+      const end = Math.min(start + chunkSize, file.size);
+      const chunk = file.slice(start, end, file.type || undefined);
+      const chunkUploadSummary = await uploadOralHistoryChunkWithRetry(
+        uploadId,
+        file,
+        chunk,
+        chunkIndex,
+        uploadOralHistoryLowResChunk,
+      );
+      const uploadedBytes = Number(chunkUploadSummary?.uploadedBytes);
+
+      if (onProgress) {
+        onProgress({
+          uploadedBytes: Number.isFinite(uploadedBytes) ? uploadedBytes : end,
+          totalBytes: file.size,
+          chunkIndex,
+          totalChunks: serverTotalChunks,
+        });
+      }
+    }
+
+    const updatedOralHistory = await completeOralHistoryLowResUploadSession(uploadId);
+
+    if (onProgress) {
+      onProgress({
+        uploadedBytes: file.size,
+        totalBytes: file.size,
+        chunkIndex: serverTotalChunks - 1,
+        totalChunks: serverTotalChunks,
+      });
+    }
+
+    return updatedOralHistory;
+  } catch (error) {
+    if (uploadId) {
+      try {
+        await abortOralHistoryLowResUploadSession(uploadId);
+      } catch {
+        // Best-effort cleanup only; preserve the original upload error.
+      }
+    }
+
+    throw error;
+  }
 }
 
 export function deleteOralHistory(oralHistoryId) {

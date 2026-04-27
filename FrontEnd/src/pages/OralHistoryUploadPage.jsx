@@ -7,6 +7,7 @@ import {
   getProfiles,
   updateOralHistory,
   uploadOralHistory,
+  uploadOralHistoryLowRes,
 } from '../api/composites.js';
 import '../styles/composites.css';
 
@@ -167,6 +168,27 @@ export default function OralHistoryUploadPage() {
     setStatusSummary('');
   };
 
+  const handleEntryLowResFileChange = async (entryId, file) => {
+    setStatusError('');
+    setStatusSummary('');
+
+    if (!file) {
+      setUploadEntries((currentEntries) => currentEntries.map((entry) => (
+        entry.id === entryId ? { ...entry, lowResFile: null } : entry
+      )));
+      return;
+    }
+
+    try {
+      await validateVideoFile(file);
+      setUploadEntries((currentEntries) => currentEntries.map((entry) => (
+        entry.id === entryId ? { ...entry, lowResFile: file } : entry
+      )));
+    } catch (error) {
+      setStatusError(error.message);
+    }
+  };
+
   const applyIntervieweeToEntries = (intervieweeName) => {
     setUploadEntries((currentEntries) => (
       assignEpisodeNumbersForInterviewee(
@@ -267,6 +289,7 @@ export default function OralHistoryUploadPage() {
           category: getCategoryForTitle(filenameTitle),
           description: '',
           profileIds: [],
+          lowResFile: null,
         };
       });
 
@@ -299,10 +322,15 @@ export default function OralHistoryUploadPage() {
 
       const createdEntries = [];
       const failedEntries = [];
+      const lowResFailedEntries = [];
 
       for (const entry of uploadEntries) {
         try {
           await validateVideoFile(entry.file);
+
+          if (entry.lowResFile) {
+            await validateVideoFile(entry.lowResFile);
+          }
 
           const metadata = {
             key: validateOralHistoryKey(entry.key),
@@ -315,12 +343,35 @@ export default function OralHistoryUploadPage() {
             profileIds: normalizeProfileIds(entry.profileIds),
           };
 
-          const createdOralHistory = normalizeOralHistory(await uploadOralHistory(entry.file, metadata, {
+          let createdOralHistory = normalizeOralHistory(await uploadOralHistory(entry.file, metadata, {
             onProgress: (nextProgress) => setUploadProgress({
               ...nextProgress,
               fileName: entry.file.name,
             }),
           }));
+
+          if (entry.lowResFile) {
+            setUploadProgress(null);
+            try {
+              createdOralHistory = normalizeOralHistory(await uploadOralHistoryLowRes(
+                createdOralHistory.oralHistoryId,
+                entry.lowResFile,
+                {
+                  onProgress: (nextProgress) => setUploadProgress({
+                    ...nextProgress,
+                    fileName: `${entry.lowResFile.name} (low-res)`,
+                  }),
+                },
+              ));
+            } catch (error) {
+              lowResFailedEntries.push({
+                title: createdOralHistory.title,
+                fileName: entry.lowResFile.name,
+                uploadError: error.message,
+              });
+            }
+          }
+
           createdEntries.push(createdOralHistory);
         } catch (error) {
           failedEntries.push({
@@ -342,12 +393,22 @@ export default function OralHistoryUploadPage() {
             ? `Uploaded ${formatEpisodeLabel(createdEntries[0])}: ${createdEntries[0].title}.`
             : `Uploaded ${createdEntries.length} oral history videos.`,
         );
+        if (lowResFailedEntries.length > 0) {
+          setStatusError(lowResFailedEntries.map((entry) =>
+            `${entry.title} low-res file ${entry.fileName}: ${entry.uploadError}`).join(' '));
+        }
         setFileInputKey((currentValue) => currentValue + 1);
       } else if (createdEntries.length > 0) {
         setStatusSummary(`Uploaded ${createdEntries.length} oral history videos. Fix the remaining entries and retry.`);
-        setStatusError(failedEntries.map((entry) => `${entry.file.name}: ${entry.uploadError}`).join(' '));
+        setStatusError([
+          ...failedEntries.map((entry) => `${entry.file.name}: ${entry.uploadError}`),
+          ...lowResFailedEntries.map((entry) => `${entry.title} low-res file ${entry.fileName}: ${entry.uploadError}`),
+        ].join(' '));
       } else {
-        setStatusError(failedEntries.map((entry) => `${entry.file.name}: ${entry.uploadError}`).join(' '));
+        setStatusError([
+          ...failedEntries.map((entry) => `${entry.file.name}: ${entry.uploadError}`),
+          ...lowResFailedEntries.map((entry) => `${entry.title} low-res file ${entry.fileName}: ${entry.uploadError}`),
+        ].join(' '));
       }
     } catch (error) {
       setStatusError(error.message);
@@ -387,6 +448,7 @@ export default function OralHistoryUploadPage() {
     setEditingOralHistoryId(episode.oralHistoryId);
     setEditValues(buildEpisodeEditValues(episode));
     setEditStatusError('');
+    setUploadProgress(null);
     setStatusSummary('');
   };
 
@@ -394,6 +456,7 @@ export default function OralHistoryUploadPage() {
     setEditingOralHistoryId('');
     setEditValues(null);
     setEditStatusError('');
+    setUploadProgress(null);
     setStatusSummary('');
   };
 
@@ -428,6 +491,27 @@ export default function OralHistoryUploadPage() {
     setStatusSummary('');
   };
 
+  const handleEditLowResFileChange = async (file) => {
+    setEditStatusError('');
+    setStatusSummary('');
+
+    if (!file) {
+      setEditValues((currentValues) => (
+        currentValues ? { ...currentValues, lowResFile: null } : currentValues
+      ));
+      return;
+    }
+
+    try {
+      await validateVideoFile(file);
+      setEditValues((currentValues) => (
+        currentValues ? { ...currentValues, lowResFile: file } : currentValues
+      ));
+    } catch (error) {
+      setEditStatusError(error.message);
+    }
+  };
+
   const handleSaveEpisode = async (event) => {
     event.preventDefault();
 
@@ -438,11 +522,12 @@ export default function OralHistoryUploadPage() {
     setSavingOralHistoryId(editValues.oralHistoryId);
     setEditStatusError('');
     setStatusSummary('');
+    setUploadProgress(null);
 
     try {
       validateEpisodeMetadata(editValues, storedEpisodes, editValues.oralHistoryId);
 
-      const updatedEpisode = normalizeOralHistory(await updateOralHistory(editValues.oralHistoryId, {
+      let updatedEpisode = normalizeOralHistory(await updateOralHistory(editValues.oralHistoryId, {
         key: validateOralHistoryKey(editValues.key),
         isFullLength: Boolean(editValues.isFullLength),
         episodeNumber: editValues.isFullLength ? null : String(validateEpisodeNumber(editValues.episodeNumber)),
@@ -452,6 +537,19 @@ export default function OralHistoryUploadPage() {
         description: String(editValues.description || '').trim(),
         profileIds: normalizeProfileIds(editValues.profileIds),
       }));
+
+      if (editValues.lowResFile) {
+        updatedEpisode = normalizeOralHistory(await uploadOralHistoryLowRes(
+          updatedEpisode.oralHistoryId,
+          editValues.lowResFile,
+          {
+            onProgress: (nextProgress) => setUploadProgress({
+              ...nextProgress,
+              fileName: `${editValues.lowResFile.name} (low-res)`,
+            }),
+          },
+        ));
+      }
 
       setStoredEpisodes((currentEpisodes) => normalizeOralHistories(currentEpisodes.map((episode) => (
         episode.oralHistoryId === updatedEpisode.oralHistoryId ? updatedEpisode : episode
@@ -463,6 +561,7 @@ export default function OralHistoryUploadPage() {
       setEditStatusError(error.message);
     } finally {
       setSavingOralHistoryId('');
+      setUploadProgress(null);
     }
   };
 
@@ -701,6 +800,24 @@ export default function OralHistoryUploadPage() {
                       </label>
 
                       <label className="compositeField">
+                        <span className="compositeField__label">Low-Res Version (Optional)</span>
+                        <input
+                          className="compositeField__input compositeField__input--file"
+                          type="file"
+                          accept={acceptedVideoTypes}
+                          onChange={(event) => void handleEntryLowResFileChange(
+                            entry.id,
+                            event.target.files?.[0] || null,
+                          )}
+                        />
+                        <span className="compositeField__hint">
+                          {entry.lowResFile
+                            ? `${entry.lowResFile.name} (${formatFileSize(entry.lowResFile.size)})`
+                            : 'Upload a smaller copy for the public viewer quality toggle.'}
+                        </span>
+                      </label>
+
+                      <label className="compositeField">
                         <span className="compositeField__label">Episode Number</span>
                         <input
                           className="compositeField__input"
@@ -811,7 +928,7 @@ export default function OralHistoryUploadPage() {
               <p className="compositeMessage compositeMessage--success">{statusSummary}</p>
             ) : null}
             {isPreparing && uploadProgress ? (
-              <p className="compositeMessage">{formatUploadProgress(uploadProgress)}</p>
+              <UploadProgressIndicator uploadProgress={uploadProgress} />
             ) : null}
             {statusError ? <p className="compositeMessage compositeMessage--error">{statusError}</p> : null}
           </form>
@@ -875,6 +992,11 @@ export default function OralHistoryUploadPage() {
                       Category: <strong>{episode.category}</strong>
                     </p>
                     <p className="compositeCard__sourceName">{episode.fileName}</p>
+                    {episode.lowResVideoUrl ? (
+                      <p className="compositeCard__meta">
+                        Low-res version: <strong>{episode.lowResOriginalFilename || 'Uploaded'}</strong>
+                      </p>
+                    ) : null}
                     <p className="compositeCard__meta">
                       Key: <strong>{episode.key}</strong>
                     </p>
@@ -972,6 +1094,12 @@ export default function OralHistoryUploadPage() {
                 availableCategories={availableCategories}
                 onFieldChange={handleEditFieldChange}
               />
+              <LowResVideoField
+                existingLowResFileName={editingEpisode?.lowResOriginalFilename || ''}
+                existingLowResFileSize={editingEpisode?.lowResFileSize || 0}
+                selectedLowResFile={editValues.lowResFile}
+                onFileChange={handleEditLowResFileChange}
+              />
               <ProfileAssignmentPicker
                 selectedProfileIds={editValues.profileIds}
                 profiles={profileOptions}
@@ -981,6 +1109,9 @@ export default function OralHistoryUploadPage() {
 
               {editStatusError ? (
                 <p className="compositeMessage compositeMessage--error">{editStatusError}</p>
+              ) : null}
+              {savingOralHistoryId === editingOralHistoryId && uploadProgress ? (
+                <UploadProgressIndicator uploadProgress={uploadProgress} />
               ) : null}
 
               <div className="profileDirectoryCard__actions">
@@ -1092,6 +1223,62 @@ function EpisodeMetadataFields({
           onChange={(event) => onFieldChange('description', event.target.value)}
         />
       </label>
+    </div>
+  );
+}
+
+function LowResVideoField({
+  existingLowResFileName = '',
+  existingLowResFileSize = 0,
+  selectedLowResFile = null,
+  onFileChange,
+}) {
+  const hasExistingLowRes = Boolean(existingLowResFileName);
+  const helperText = selectedLowResFile
+    ? `${selectedLowResFile.name} (${formatFileSize(selectedLowResFile.size)})`
+    : hasExistingLowRes
+      ? `Current low-res file: ${existingLowResFileName} (${formatFileSize(existingLowResFileSize)})`
+      : 'Upload a smaller copy for the public viewer quality toggle.';
+
+  return (
+    <label className="compositeField">
+      <span className="compositeField__label">Low-Res Version (Optional)</span>
+      <input
+        className="compositeField__input compositeField__input--file"
+        type="file"
+        accept={acceptedVideoTypes}
+        onChange={(event) => void onFileChange(event.target.files?.[0] || null)}
+      />
+      <span className="compositeField__hint">{helperText}</span>
+    </label>
+  );
+}
+
+function UploadProgressIndicator({ uploadProgress }) {
+  const progressMetrics = getUploadProgressMetrics(uploadProgress);
+
+  return (
+    <div className="compositeUploadProgress" role="status" aria-live="polite">
+      <div className="compositeUploadProgress__header">
+        <span>{progressMetrics.fileName || 'Uploading video'}</span>
+        <strong>{progressMetrics.uploadPercent}%</strong>
+      </div>
+      <div
+        className="compositeUploadProgress__bar"
+        role="progressbar"
+        aria-valuemin="0"
+        aria-valuemax="100"
+        aria-valuenow={progressMetrics.uploadPercent}
+        aria-label={progressMetrics.fileName ? `${progressMetrics.fileName} upload progress` : 'Upload progress'}
+      >
+        <span
+          className="compositeUploadProgress__barFill"
+          style={{ width: `${progressMetrics.uploadPercent}%` }}
+        />
+      </div>
+      <p className="compositeUploadProgress__meta">
+        {formatUploadProgress(uploadProgress)}
+      </p>
     </div>
   );
 }
@@ -1239,6 +1426,7 @@ function buildEpisodeEditValues(episode) {
     isFullLength: Boolean(episode.isFullLength),
     episodeNumber: episode.isFullLength ? '' : String(episode.episodeNumber || ''),
     profileIds: normalizeProfileIds(episode.profileIds),
+    lowResFile: null,
   };
 }
 
@@ -1414,6 +1602,10 @@ function normalizeOralHistory(oralHistory) {
     fileName: String(oralHistory?.originalFilename || ''),
     fileSize: Number(oralHistory?.fileSize || 0),
     profileIds: normalizeProfileIds(oralHistory?.profileIds),
+    lowResVideoUrl: String(oralHistory?.lowResVideoUrl || ''),
+    lowResOriginalFilename: String(oralHistory?.lowResOriginalFilename || ''),
+    lowResFileSize: Number(oralHistory?.lowResFileSize || 0),
+    lowResMimeType: String(oralHistory?.lowResMimeType || ''),
     preparedAt: oralHistory?.uploadTimestamp || new Date().toISOString(),
   };
 }
@@ -1679,15 +1871,28 @@ function formatFileSize(bytes) {
 }
 
 function formatUploadProgress(uploadProgress) {
+  const progressMetrics = getUploadProgressMetrics(uploadProgress);
+  const prefix = progressMetrics.fileName ? `${progressMetrics.fileName}: ` : '';
+
+  return `${prefix}Uploading ${formatFileSize(progressMetrics.uploadedBytes)} of ${formatFileSize(progressMetrics.totalBytes)} (${progressMetrics.uploadPercent}%, chunk ${progressMetrics.completedChunks} of ${progressMetrics.totalChunks}).`;
+}
+
+function getUploadProgressMetrics(uploadProgress) {
   const uploadedBytes = Number(uploadProgress?.uploadedBytes || 0);
   const totalBytes = Math.max(Number(uploadProgress?.totalBytes || 0), 1);
   const totalChunks = Math.max(Number(uploadProgress?.totalChunks || 0), 1);
   const completedChunks = Math.min(Math.max(Number(uploadProgress?.chunkIndex || -1) + 1, 0), totalChunks);
   const uploadPercent = Math.min(100, Math.round((uploadedBytes / totalBytes) * 100));
   const fileName = String(uploadProgress?.fileName || '').trim();
-  const prefix = fileName ? `${fileName}: ` : '';
 
-  return `${prefix}Uploading ${formatFileSize(uploadedBytes)} of ${formatFileSize(totalBytes)} (${uploadPercent}%, chunk ${completedChunks} of ${totalChunks}).`;
+  return {
+    completedChunks,
+    fileName,
+    totalBytes,
+    totalChunks,
+    uploadedBytes,
+    uploadPercent,
+  };
 }
 
 function formatEpisodeLabel(episode) {
